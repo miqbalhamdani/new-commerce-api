@@ -4,7 +4,7 @@ DB_NAME ?= new_commerce_dev
 # a host install, so a .env is only needed to deviate from them.
 LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: dev db-create generate generated-diff fmt-check vet lint test check
+.PHONY: dev db-create migrate migrate-down generate generated-diff fmt-check vet lint test check
 
 ## dev: run the API against host PostgreSQL and Redis
 dev:
@@ -14,6 +14,14 @@ dev:
 db-create:
 	@psql -lqtA -F'|' | cut -d'|' -f1 | grep -qx '$(DB_NAME)' || createdb '$(DB_NAME)'
 	@echo "$(DB_NAME) ready"
+
+## migrate: apply every migration and exit
+migrate:
+	@$(LOAD_ENV) go run ./cmd/migrate
+
+## migrate-down: roll back N migrations. Local only -- production is forward-only.
+migrate-down:
+	@$(LOAD_ENV) go run ./cmd/migrate -down $(or $(N),1)
 
 ## generate: contracts/openapi.yaml -> internal/http/gen.go
 generate:

@@ -24,10 +24,10 @@ make check        # generate + lint + test. Run before every PR
 
 `make check` green is the bar for a PR. CI runs exactly these.
 
-Where the repo stands today: `migrate` and `test-iso` arrive with P1-006 and P1-008 and are not
-targets yet, and `test` runs against the host services rather than testcontainers -- there are no
-migrations to spin a container for until P1-006. `generate` runs oapi-codegen only; sqlc joins it
-in P1-006, because sqlc exits non-zero when there are no queries to read.
+Where the repo stands today: `test-iso` arrives with P1-008 and is not a target yet, and `test`
+runs against the host services rather than testcontainers. `generate` runs oapi-codegen only --
+sqlc exits non-zero with no queries to read, and P1-006 creates no tables, so it joins at P1-010
+with the first schema and the first query.
 
 The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
 so `make generate` produces the same bytes on every machine without anyone installing anything.
@@ -97,6 +97,13 @@ that cannot serve it is dead weight.
 ## Database
 
 - **Migrations are forward-only in production.** Write a `down` for local use; never rely on it.
+  `make migrate` applies them and exits, `make migrate-down N=1` rolls back locally.
+- **A new tenant table calls `SELECT enable_tenant_rls('<table>');` in its own migration.** That
+  is the whole of the tenancy setup for a table -- the function does `ENABLE`, `FORCE` and the
+  `tenant_isolation` policy, and refuses a table with no `tenant_id`. Do not hand-write the four
+  statements; the failure mode of a missing `FORCE` is silent.
+- **`app_user` is granted new tables automatically** by `ALTER DEFAULT PRIVILEGES` in the
+  bootstrap migration. A schema migration does not need its own `GRANT`.
 - **`sqlc`, not an ORM.** RLS, `FOR UPDATE` and partial indexes need SQL you control.
 - **Keys** are UUID v7, generated in Go (`uuid.NewV7`). Never `gen_random_uuid()` in application
   inserts — time-ordered keys keep B-tree inserts append-only. (Migrations and backfills may use

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 )
 
@@ -22,14 +23,14 @@ import (
 func TestHealthzReportsBothServices(t *testing.T) {
 	ctx := t.Context()
 
-	pool, err := db.New(ctx, getenv("DATABASE_URL", defaultDatabaseURL))
+	pool, err := db.New(ctx, config.DatabaseURL())
 	if err != nil {
 		t.Fatalf("connect postgres: %v\n\nIs it running, and does the database exist?\n"+
 			"  brew services start postgresql@18\n  make db-create", err)
 	}
 	t.Cleanup(pool.Close)
 
-	redis, err := queue.New(ctx, getenv("REDIS_URL", defaultRedisURL))
+	redis, err := queue.New(ctx, config.RedisURL())
 	if err != nil {
 		t.Fatalf("connect redis: %v\n\nIs it running?\n  brew services start redis", err)
 	}
