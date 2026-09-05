@@ -26,7 +26,11 @@ make check        # generate + lint + test. Run before every PR
 
 Where the repo stands today: `migrate` and `test-iso` arrive with P1-006 and P1-008 and are not
 targets yet, and `test` runs against the host services rather than testcontainers -- there are no
-migrations to spin a container for until P1-006.
+migrations to spin a container for until P1-006. `generate` runs oapi-codegen only; sqlc joins it
+in P1-006, because sqlc exits non-zero when there are no queries to read.
+
+The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
+so `make generate` produces the same bytes on every machine without anyone installing anything.
 
 ---
 
@@ -46,7 +50,7 @@ internal/
   queue/          Redis Streams
   http/           chi router, middleware, handlers, DTOs
 db/migrations/    golang-migrate, plain SQL, up + down
-contracts/        submodule — READ ONLY from here
+contracts/        submodule, pinned to a tag — READ ONLY from here
 ```
 
 ### Import rules (enforced by `go-arch-lint` in CI)
