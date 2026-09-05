@@ -1,0 +1,3 @@
+[submodule "contracts"]
+	path = contracts
+	url = git@github.com:miqbalhamdani/new-commerce-contracts.git

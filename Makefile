@@ -4,7 +4,7 @@ DB_NAME ?= new_commerce_dev
 # a host install, so a .env is only needed to deviate from them.
 LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: dev db-create generate fmt-check vet lint test check
+.PHONY: dev db-create generate generated-diff fmt-check vet lint test check
 
 ## dev: run the API against host PostgreSQL and Redis
 dev:
@@ -15,9 +15,16 @@ db-create:
 	@psql -lqtA -F'|' | cut -d'|' -f1 | grep -qx '$(DB_NAME)' || createdb '$(DB_NAME)'
 	@echo "$(DB_NAME) ready"
 
-## generate: no-op until sqlc and oapi-codegen are wired in P1-005
+## generate: contracts/openapi.yaml -> internal/http/gen.go
 generate:
-	@echo "nothing to generate yet -- sqlc and oapi-codegen arrive in P1-005"
+	@test -f contracts/openapi.yaml \
+		|| { echo "contracts/ is empty. Run: git submodule update --init"; exit 1; }
+	@go tool oapi-codegen -config oapi-codegen.yaml contracts/openapi.yaml
+
+## generated-diff: fail if the tree does not match what the generator produces
+generated-diff:
+	@git diff --exit-code -- internal/http/gen.go \
+		|| { echo "internal/http/gen.go is stale -- commit the result of 'make generate'"; exit 1; }
 
 fmt-check:
 	@out=$$(gofmt -l .); \
@@ -34,4 +41,4 @@ test:
 	@$(LOAD_ENV) go test ./...
 
 ## check: the bar for a PR
-check: generate fmt-check vet lint test
+check: generate generated-diff fmt-check vet lint test
