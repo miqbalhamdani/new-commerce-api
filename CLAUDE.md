@@ -1,6 +1,6 @@
 # backend — Go API and worker
 
-Phase 1 · Catalog & Foundation. Go 1.23 · PostgreSQL 16 · Redis 7 · Cloudflare R2.
+Phase 1 · Catalog & Foundation. Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2.
 
 **The contract lives in `contracts/`** (git submodule, pinned to a tag). Read
 `contracts/API spec.md` and `contracts/erd.md` before changing anything they cover. If the code
@@ -12,7 +12,8 @@ there first, in its own PR.
 ## Commands
 
 ```bash
-make dev          # docker compose up: postgres, redis, api, worker
+make dev          # run the API against host PostgreSQL and Redis
+make db-create    # create the local development database
 make migrate      # apply migrations
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
 make test         # unit + integration (testcontainers). Needs docker
@@ -22,6 +23,10 @@ make check        # generate + lint + test. Run before every PR
 ```
 
 `make check` green is the bar for a PR. CI runs exactly these.
+
+Where the repo stands today: `migrate` and `test-iso` arrive with P1-006 and P1-008 and are not
+targets yet, and `test` runs against the host services rather than testcontainers -- there are no
+migrations to spin a container for until P1-006.
 
 ---
 
