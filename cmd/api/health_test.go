@@ -23,7 +23,7 @@ import (
 func TestHealthzReportsBothServices(t *testing.T) {
 	ctx := t.Context()
 
-	pool, err := db.New(ctx, config.DatabaseURL())
+	pool, err := db.New(ctx, config.AppDatabaseURL())
 	if err != nil {
 		t.Fatalf("connect postgres: %v\n\nIs it running, and does the database exist?\n"+
 			"  brew services start postgresql@18\n  make db-create", err)
