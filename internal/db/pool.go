@@ -12,15 +12,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Pool is a PostgreSQL connection pool.
-type Pool struct {
+// Store owns the connection pool and is the entry point for every query.
+//
+// tdd.md 3.2 and CLAUDE.md both call it Store: it is not merely a pool, it is
+// the thing that hands out tenant-scoped transactions. See tx.go.
+type Store struct {
 	pool *pgxpool.Pool
 }
 
 // New opens a pool and verifies the server is reachable before returning it.
 // A pool that cannot be reached is an error here rather than a surprise on the
 // first query.
-func New(ctx context.Context, url string) (*Pool, error) {
+func New(ctx context.Context, url string) (*Store, error) {
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres pool: %w", err)
@@ -29,20 +32,20 @@ func New(ctx context.Context, url string) (*Pool, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
-	return &Pool{pool: pool}, nil
+	return &Store{pool: pool}, nil
 }
 
 // Close releases every connection in the pool.
-func (p *Pool) Close() { p.pool.Close() }
+func (s *Store) Close() { s.pool.Close() }
 
 // ServerVersion reports the version the server itself claims, e.g. "18.4" --
 // which PostgreSQL was actually reached, not which one was configured.
 //
 // Homebrew and Debian builds append a packaging suffix ("18.4 (Homebrew)"), so
 // only the leading version token is returned.
-func (p *Pool) ServerVersion(ctx context.Context) (string, error) {
+func (s *Store) ServerVersion(ctx context.Context) (string, error) {
 	var v string
-	if err := p.pool.QueryRow(ctx, "SHOW server_version").Scan(&v); err != nil {
+	if err := s.pool.QueryRow(ctx, "SHOW server_version").Scan(&v); err != nil {
 		return "", fmt.Errorf("read server_version: %w", err)
 	}
 	if token, _, found := strings.Cut(v, " "); found {

@@ -31,7 +31,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := db.New(ctx, config.DatabaseURL())
+	pool, err := db.New(ctx, config.AppDatabaseURL())
 	if err != nil {
 		return err
 	}

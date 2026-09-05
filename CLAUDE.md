@@ -70,6 +70,11 @@ Every tenant-owned table has `tenant_id`, `ENABLE ROW LEVEL SECURITY` **and** `F
 SECURITY`. `FORCE` matters: without it the table owner bypasses its own policy, and that is the
 role migrations run as. The app connects as `app_user`, which owns nothing.
 
+**Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
+`cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the
+owner is a superuser, and a superuser bypasses RLS outright, `FORCE` included. Point the API at
+`DATABASE_URL` and every policy in the schema becomes decorative.
+
 **Every query goes through `InTenantTx`.** The tenant is set per *transaction* with
 `set_config(..., true)`, never per connection — pgx pools connections and a leaked `SET` follows
 into the next request's tenant.
@@ -112,6 +117,9 @@ that cannot serve it is dead weight.
 - **Timestamps** are `timestamptz`, always UTC.
 - **Soft delete** is `archived_at`, only where an audit trail needs it.
 - **A new table with `tenant_id` and no RLS policy fails CI.** Do not disable that check.
+- **`app_user` reaches a new table through `ALTER DEFAULT PRIVILEGES`**, set in the bootstrap
+  migration. It applies to tables created by the migrating role, so migrations must keep running
+  as the same owner.
 
 ### Category paths
 
