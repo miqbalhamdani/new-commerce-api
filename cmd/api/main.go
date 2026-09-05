@@ -16,16 +16,8 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
-)
-
-// Defaults target a host install -- Homebrew's postgresql@18 and redis on their
-// standard ports (contracts/tdd.md 2.2). They are compiled in so that a clean
-// checkout runs without a .env; anything else overrides via the environment.
-const (
-	defaultDatabaseURL = "postgres://localhost:5432/new_commerce_dev?sslmode=disable"
-	defaultRedisURL    = "redis://localhost:6379/0"
-	defaultPort        = "8080"
 )
 
 func main() {
@@ -39,13 +31,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := db.New(ctx, getenv("DATABASE_URL", defaultDatabaseURL))
+	pool, err := db.New(ctx, config.DatabaseURL())
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	redis, err := queue.New(ctx, getenv("REDIS_URL", defaultRedisURL))
+	redis, err := queue.New(ctx, config.RedisURL())
 	if err != nil {
 		return err
 	}
@@ -57,7 +49,7 @@ func run() error {
 		checker{name: "redis", version: redis.ServerVersion},
 	))
 
-	addr := ":" + getenv("PORT", defaultPort)
+	addr := ":" + config.Getenv("PORT", config.DefaultPort)
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
@@ -82,11 +74,4 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
-}
-
-func getenv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
