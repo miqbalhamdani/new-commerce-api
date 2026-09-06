@@ -19,6 +19,7 @@ make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
 make test         # unit + integration (testcontainers). Needs docker
 make test-iso     # tenant isolation suite over every registered route
 make lint         # golangci-lint + go-arch-lint import rules
+make lint-rls     # fail if a tenant table has no RLS policy
 make check        # generate + lint + test. Run before every PR
 ```
 
@@ -116,7 +117,12 @@ that cannot serve it is dead weight.
 - **Money** is `bigint` minor units + `char(3)`. Never `float`, never `numeric` for money.
 - **Timestamps** are `timestamptz`, always UTC.
 - **Soft delete** is `archived_at`, only where an audit trail needs it.
-- **A new table with `tenant_id` and no RLS policy fails CI.** Do not disable that check.
+- **A new table with `tenant_id` and no RLS policy fails CI.** Do not disable that check. It is
+  `make lint-rls`, part of `make check`, and it reads the live database rather than the migration
+  files -- a migration written correctly and never applied passes a source-level check and still
+  leaves the table open. It also catches the two failures the phrase above does not name: RLS
+  enabled without `FORCE` (which looks entirely healthy and leaks only to the owner), and a policy
+  missing entirely (which filters every row and reads as an empty table).
 - **`app_user` reaches a new table through `ALTER DEFAULT PRIVILEGES`**, set in the bootstrap
   migration. It applies to tables created by the migrating role, so migrations must keep running
   as the same owner.
