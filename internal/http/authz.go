@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 )
 
 // requirePermission wraps a handler so it runs only for a caller whose role
@@ -24,13 +25,11 @@ func requirePermission(permission string, next http.HandlerFunc) http.HandlerFun
 			// No role in the context means the request never passed
 			// authentication. Fail closed rather than treating it as a role
 			// with no permissions, which would report the wrong problem.
-			writeProblem(w, r, http.StatusUnauthorized, "unauthenticated",
-				"Unauthenticated", "A bearer token is required.")
+			writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 			return
 		}
 		if !auth.Can(role, permission) {
-			writeProblem(w, r, http.StatusForbidden, "permission_denied",
-				"Permission denied", "This action requires the "+permission+" permission.")
+			writeError(w, r, apperrors.PermissionDenied(permission))
 			return
 		}
 		next(w, r)

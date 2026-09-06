@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 )
 
 // refreshCookieName is the only place the refresh token lives on a client.
@@ -33,13 +34,16 @@ func NewServer(authSvc *auth.Service, secureCookies bool) *Server {
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	var body LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed",
-			"Validation failed", "The request body is not valid JSON.")
+		// Decoding fails for malformed JSON and for a field the generated
+		// type rejects -- an unparseable email reaches here, not the check
+		// below. Saying "not valid JSON" to that is misleading.
+		writeError(w, r, apperrors.ValidationFailed(
+			"The request body is malformed or a field is not in the expected format.").WithCause(err))
 		return
 	}
 	if body.Email == "" || len(body.Password) < 8 {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "validation_failed",
-			"Validation failed", "email and password are required; password is at least 8 characters.")
+		writeError(w, r, apperrors.ValidationFailed(
+			"email and password are required; password is at least 8 characters."))
 		return
 	}
 
@@ -78,8 +82,7 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 		presented = c.Value
 	}
 	if err := s.auth.Logout(r.Context(), presented); err != nil {
-		writeProblem(w, r, http.StatusInternalServerError, "internal",
-			"Internal error", "Could not complete sign out.")
+		writeError(w, r, err)
 		return
 	}
 	http.SetCookie(w, s.clearRefreshCookie())
@@ -114,14 +117,18 @@ func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session au
 	}
 }
 
+// writeAuthError collapses every authentication failure into one answer.
+//
+// A wrong password, an unknown email, a disabled account and a stolen token are
+// deliberately indistinguishable to a client -- any difference tells an
+// attacker which emails exist. The real cause still reaches the log through the
+// trace id.
 func (s *Server) writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, auth.ErrUnauthenticated) {
-		writeProblem(w, r, http.StatusUnauthorized, "unauthenticated",
-			"Unauthenticated", "Email or password is incorrect.")
+		writeError(w, r, apperrors.Unauthenticated("Email or password is incorrect.").WithCause(err))
 		return
 	}
-	writeProblem(w, r, http.StatusInternalServerError, "internal",
-		"Internal error", "Something went wrong.")
+	writeError(w, r, err)
 }
 
 // refreshCookie builds the cookie the refresh token travels in.

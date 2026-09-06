@@ -19,6 +19,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 )
 
@@ -32,6 +33,18 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Before anything that can fail with a trace id in it.
+	flushTraces, err := telemetry.Setup(ctx,
+		config.ServiceName(), config.ServiceVersion(), config.Environment(), config.OTLPEndpoint())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := flushTraces(context.WithoutCancel(ctx)); err != nil {
+			slog.Warn("flushing traces", "error", err)
+		}
+	}()
 
 	pool, err := db.New(ctx, config.AppDatabaseURL())
 	if err != nil {

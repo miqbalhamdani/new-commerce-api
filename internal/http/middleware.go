@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -29,14 +30,12 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 
 			raw, ok := bearerToken(r)
 			if !ok {
-				writeProblem(w, r, http.StatusUnauthorized, "unauthenticated",
-					"Unauthenticated", "A bearer token is required.")
+				writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 				return
 			}
 			claims, err := signer.Parse(raw)
 			if err != nil {
-				writeProblem(w, r, http.StatusUnauthorized, "unauthenticated",
-					"Unauthenticated", "The access token is invalid or has expired.")
+				writeError(w, r, apperrors.Unauthenticated("The access token is invalid or has expired."))
 				return
 			}
 

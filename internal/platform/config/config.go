@@ -51,6 +51,15 @@ func AppDatabaseURL() string { return Getenv("APP_DATABASE_URL", DefaultAppDatab
 // RedisURL is the Redis DSN.
 func RedisURL() string { return Getenv("REDIS_URL", DefaultRedisURL) }
 
+// OTLPEndpoint is where traces are sent. Empty means nowhere: ids are still
+// real and still land in the logs, which is all there is to do before P1-001
+// provides a collector.
+func OTLPEndpoint() string { return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") }
+
+// ServiceName and ServiceVersion label this process in a trace.
+func ServiceName() string    { return Getenv("OTEL_SERVICE_NAME", "new-commerce-api") }
+func ServiceVersion() string { return Getenv("SERVICE_VERSION", "dev") }
+
 // Environment is "development" unless something says otherwise. Anything else
 // is treated as a deployed environment and held to deployed standards.
 func Environment() string { return Getenv("ENVIRONMENT", "development") }
