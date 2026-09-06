@@ -23,16 +23,19 @@ migrate:
 migrate-down:
 	@$(LOAD_ENV) go run ./cmd/migrate -down $(or $(N),1)
 
-## generate: contracts/openapi.yaml -> internal/http/gen.go
+GENERATED = internal/http/gen.go internal/db/sqlcgen
+
+## generate: contracts/openapi.yaml -> internal/http, db/ -> internal/db/sqlcgen
 generate:
 	@test -f contracts/openapi.yaml \
 		|| { echo "contracts/ is empty. Run: git submodule update --init"; exit 1; }
 	@go tool oapi-codegen -config oapi-codegen.yaml contracts/openapi.yaml
+	@sqlc generate
 
-## generated-diff: fail if the tree does not match what the generator produces
+## generated-diff: fail if the tree does not match what the generators produce
 generated-diff:
-	@git diff --exit-code -- internal/http/gen.go \
-		|| { echo "internal/http/gen.go is stale -- commit the result of 'make generate'"; exit 1; }
+	@git diff --exit-code -- $(GENERATED) \
+		|| { echo "generated code is stale -- commit the result of 'make generate'"; exit 1; }
 
 fmt-check:
 	@out=$$(gofmt -l .); \

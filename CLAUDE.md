@@ -25,10 +25,8 @@ make check        # generate + lint + test. Run before every PR
 
 `make check` green is the bar for a PR. CI runs exactly these.
 
-Where the repo stands today: `test-iso` arrives with P1-008 and is not a target yet, and `test`
-runs against the host services rather than testcontainers. `generate` runs oapi-codegen only --
-sqlc exits non-zero with no queries to read, and P1-006 creates no tables, so it joins at P1-010
-with the first schema and the first query.
+Where the repo stands today: `test` runs against the host services rather than testcontainers.
+Everything else in this list is real.
 
 The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
 so `make generate` produces the same bytes on every machine without anyone installing anything.
@@ -110,7 +108,13 @@ that cannot serve it is dead weight.
   statements; the failure mode of a missing `FORCE` is silent.
 - **`app_user` is granted new tables automatically** by `ALTER DEFAULT PRIVILEGES` in the
   bootstrap migration. A schema migration does not need its own `GRANT`.
-- **`sqlc`, not an ORM.** RLS, `FOR UPDATE` and partial indexes need SQL you control.
+- **`sqlc`, not an ORM.** RLS, `FOR UPDATE` and partial indexes need SQL you control. It reads
+  the schema from `db/migrations/` directly, so the generated types cannot drift from what is
+  applied. Queries live in `db/queries/*.sql`; output is `internal/db/sqlcgen/` and is never
+  edited.
+- **`sqlc.yaml` maps `uuid` to `google/uuid.UUID` and `timestamptz` to `time.Time`**, rather than
+  leaving the `pgtype` wrappers sqlc emits by default. That decision belongs in one file; undoing
+  it means a conversion at every boundary between the database and everything else.
 - **Keys** are UUID v7, generated in Go (`uuid.NewV7`). Never `gen_random_uuid()` in application
   inserts — time-ordered keys keep B-tree inserts append-only. (Migrations and backfills may use
   it; nothing reads those keys for ordering.)
