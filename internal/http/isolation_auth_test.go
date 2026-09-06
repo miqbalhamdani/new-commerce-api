@@ -47,6 +47,17 @@ func init() {
 			},
 		},
 		isolationCase{
+			route: route{method: "GET", pattern: "/v1/roles"},
+			// An admin, because ops would correctly get a 403 and the case
+			// would then be asserting nothing about isolation.
+			seed: func(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID) seeded {
+				return seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleAdmin)
+			},
+			request: func(t *testing.T, s seeded) *http.Request {
+				return bearerRequest(t, http.MethodGet, "/v1/roles", s.accessToken)
+			},
+		},
+		isolationCase{
 			route: route{method: "POST", pattern: "/v1/auth/logout"},
 			seed:  seedSignedInUser,
 			request: func(t *testing.T, s seeded) *http.Request {
@@ -138,4 +149,16 @@ func jsonRequest(t *testing.T, path string, body any) *http.Request {
 	r := httptest.NewRequest(http.MethodPost, path, strings.NewReader(payload))
 	r.Header.Set("Content-Type", "application/json")
 	return r
+}
+
+// setSeededRole changes a seeded user's role. Seeding creates an ops user; the
+// permission tests need one on each side of every check.
+func setSeededRole(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID, email, role string) {
+	t.Helper()
+	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE users SET role = $2 WHERE email = $1`, email, role)
+		return err
+	}); err != nil {
+		t.Fatalf("set role %s: %v", role, err)
+	}
 }

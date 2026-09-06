@@ -247,10 +247,10 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 				ID:   row.UserID,
 				Name: row.UserName,
 				Role: row.Role,
-				// Empty until P1-012 seeds the five roles and their
-				// resource:action grants. The field is in the contract, so it
-				// ships as an empty list rather than being omitted.
-				Permissions: []string{},
+				// The client hides actions it does not find here rather than
+				// disabling them, so this list is part of the UI contract and
+				// not merely informational.
+				Permissions: PermissionsFor(row.Role),
 			},
 			Tenant: SessionTenant{
 				ID:       row.TenantID,
