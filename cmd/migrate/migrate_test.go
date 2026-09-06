@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 )
 
@@ -97,50 +98,25 @@ func TestBootstrapMigration(t *testing.T) {
 	})
 
 	// The acceptance, second clause. Vacuous while no tenant table exists --
-	// P1-010 is the first -- but it is the check that stops one shipping
-	// unprotected, and P1-009 promotes it to `make lint-rls`.
+	// P1-010 is the first -- so the subtest below is what gives it teeth today.
+	//
+	// The query itself moved to db.CheckTenantRLS in P1-009, which is also what
+	// `make lint-rls` runs. One copy, so this test and the guard can never
+	// disagree about what "protected" means.
 	t.Run("every tenant table has forced RLS and a policy", func(t *testing.T) {
-		rows, err := conn.Query(ctx, `
-			SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
-			       EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid)
-			  FROM pg_class c
-			  JOIN pg_namespace n ON n.oid = c.relnamespace
-			 WHERE c.relkind = 'r'
-			   AND n.nspname = 'public'
-			   AND EXISTS (
-			       SELECT 1 FROM pg_attribute a
-			        WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
-			          AND a.attnum > 0 AND NOT a.attisdropped)`)
+		store, err := db.New(ctx, config.DatabaseURL())
 		if err != nil {
-			t.Fatalf("query tenant tables: %v", err)
+			t.Fatalf("open store: %v", err)
 		}
-		defer rows.Close()
+		t.Cleanup(store.Close)
 
-		checked := 0
-		for rows.Next() {
-			var name string
-			var enabled, forced, hasPolicy bool
-			if err := rows.Scan(&name, &enabled, &forced, &hasPolicy); err != nil {
-				t.Fatalf("scan: %v", err)
-			}
-			checked++
-			if !enabled {
-				// The other two are moot until this is fixed, and reporting
-				// them here would read as three separate problems.
-				t.Errorf("%s has tenant_id but RLS is not enabled -- its migration is missing SELECT enable_tenant_rls('%s')", name, name)
-				continue
-			}
-			if !forced {
-				t.Errorf("%s has RLS enabled but not FORCEd -- the owner bypasses its own policy", name)
-			}
-			if !hasPolicy {
-				t.Errorf("%s has RLS enabled but no policy -- every row is filtered out", name)
-			}
+		problems, err := store.CheckTenantRLS(ctx)
+		if err != nil {
+			t.Fatalf("check tenant RLS: %v", err)
 		}
-		if err := rows.Err(); err != nil {
-			t.Fatalf("iterate: %v", err)
+		for _, p := range problems {
+			t.Error(p)
 		}
-		t.Logf("checked %d tenant table(s)", checked)
 	})
 
 	// What keeps the clause above from being an empty assertion today: build a
