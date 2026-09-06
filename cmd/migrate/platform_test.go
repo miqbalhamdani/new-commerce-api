@@ -130,8 +130,10 @@ func TestPlatformSchema(t *testing.T) {
 		}
 	})
 
-	// UNIQUE (tenant_id, email) is what makes "find the user with this email"
-	// answer one row rather than one per tenant.
+	// UNIQUE (email) is global, not per tenant (changed by P1-011). Login carries
+	// only an email and a password, so the user row has to be what says which
+	// tenant it belongs to -- with the same email at two tenants there would be
+	// nothing in the request to choose between them.
 	t.Run("uniqueness matches", func(t *testing.T) {
 		for _, tt := range []struct {
 			table string
@@ -139,7 +141,7 @@ func TestPlatformSchema(t *testing.T) {
 		}{
 			{"tenants", []string{"slug"}},
 			{"tenants", []string{"id"}}, // tenants_id_uq, see the note below
-			{"users", []string{"tenant_id", "email"}},
+			{"users", []string{"email"}},
 			{"refresh_tokens", []string{"token_hash"}},
 			{"api_keys", []string{"key_hash"}},
 		} {

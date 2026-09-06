@@ -15,7 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 )
@@ -43,10 +45,24 @@ func run() error {
 	}
 	defer func() { _ = redis.Close() }()
 
+	secret, err := config.JWTSecret()
+	if err != nil {
+		return err
+	}
+	signer, err := auth.NewSigner(secret)
+	if err != nil {
+		return err
+	}
+
 	mux := http.NewServeMux()
+	// Not a contract endpoint, so not generated and not under /v1.
 	mux.Handle("GET /healthz", newHealthHandler(
 		checker{name: "postgres", version: pool.ServerVersion},
 		checker{name: "redis", version: redis.ServerVersion},
+	))
+	mux.Handle("/v1/", httpapi.NewRouter(
+		httpapi.NewServer(auth.NewService(pool, signer), !config.IsDevelopment()),
+		signer,
 	))
 
 	addr := ":" + config.Getenv("PORT", config.DefaultPort)
@@ -54,6 +70,10 @@ func run() error {
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	if config.IsDevelopment() {
+		slog.Warn("development mode: signing tokens with the built-in key and issuing non-Secure cookies")
 	}
 
 	serveErr := make(chan error, 1)

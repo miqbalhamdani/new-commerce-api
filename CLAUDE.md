@@ -69,6 +69,18 @@ Every tenant-owned table has `tenant_id`, `ENABLE ROW LEVEL SECURITY` **and** `F
 SECURITY`. `FORCE` matters: without it the table owner bypasses its own policy, and that is the
 role migrations run as. The app connects as `app_user`, which owns nothing.
 
+**Two reads in the whole system cross a tenant boundary**, both in
+`internal/db/auth_lookup.go`, both for the auth path, both through a `SECURITY DEFINER` function
+whose returned columns are fixed at definition time. Login has only an email and refresh has only
+a cookie, so neither has a tenant yet and a plain query would match nothing. Hand-written rather
+than generated so they do not blend in with code that all looks alike. Adding a third is a schema
+change, a contract change, and a conversation.
+
+**`SECURITY DEFINER` alone does not defeat `FORCE RLS`** -- the definer is the table's owner, and
+`FORCE` binds the owner. Those functions belong to `auth_lookup`, a `NOLOGIN BYPASSRLS` role that
+owns nothing else. On a developer's machine the schema owner is a superuser and it would appear to
+work without that role; in production it would not.
+
 **Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
 `cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the
 owner is a superuser, and a superuser bypasses RLS outright, `FORCE` included. Point the API at
@@ -166,7 +178,8 @@ full DDL and the reasoning.
 | Isolation | `make test-iso`: two seeded tenants, every registered route, zero leakage |
 | Migration | Every migration applied to a restored snapshot in CI |
 
-A new route without an isolation test is an incomplete route, and `make test-iso` says so rather
+**A route added to `openapi.yaml` needs its isolation case in the same PR.** A new route without
+an isolation test is an incomplete route, and `make test-iso` says so rather
 than leaving it to a reviewer: it walks the routes the generated code registers and fails on any
 that has no entry in `isolationCases` (`internal/http/isolation_test.go`). Add the case in the
 same PR as the route.
