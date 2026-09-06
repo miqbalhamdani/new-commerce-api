@@ -32,9 +32,15 @@ import (
 
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
+)
+
+const (
+	isoSigningKey = "isolation-suite-signing-key-32-bytes"
+	isoPassword   = "isolation suite password"
 )
 
 // route is one method-and-pattern pair registered on the router.
@@ -45,15 +51,25 @@ type route struct {
 
 func (r route) String() string { return r.method + " " + r.pattern }
 
+// seeded is what one tenant's fixture leaves behind for the request builder.
+//
+// marker is the only required field: a string that would appear in a response
+// that leaked this tenant's data. The rest are credentials the route needs to
+// be reached at all, and each case fills in only what it uses.
+type seeded struct {
+	marker       string
+	email        string
+	password     string
+	accessToken  string
+	refreshToken string
+}
+
 // isolationCase says how to exercise one route as tenant A after tenant B owns
 // a row, so the suite can check that B's row does not come back.
-//
-// seed runs as the given tenant and returns a marker -- any string that would
-// appear in a response that leaked that tenant's data, usually a row id.
 type isolationCase struct {
 	route   route
-	seed    func(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID) string
-	request func(t *testing.T, tenantID uuid.UUID) *http.Request
+	seed    func(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID) seeded
+	request func(t *testing.T, s seeded) *http.Request
 }
 
 // isolationCases grows one entry per route, added by the item that adds the
@@ -93,13 +109,13 @@ func TestTenantIsolation(t *testing.T) {
 	for _, c := range isolationCases {
 		t.Run(c.route.String(), func(t *testing.T) {
 			tenantA, tenantB := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
-			c.seed(ctx, t, store, tenantA)
-			markerB := c.seed(ctx, t, store, tenantB)
+			a := c.seed(ctx, t, store, tenantA)
+			b := c.seed(ctx, t, store, tenantB)
 
 			rec := httptest.NewRecorder()
-			srv.ServeHTTP(rec, c.request(t, tenantA))
+			srv.ServeHTTP(rec, c.request(t, a))
 
-			assertNoLeak(t, rec, markerB)
+			assertNoLeak(t, rec, b.marker)
 		})
 	}
 }
@@ -209,14 +225,14 @@ func TestIsolationHarness(t *testing.T) {
 // registeredRoutes lists what the generated code actually registers, so the
 // coverage check cannot drift from the contract.
 //
-// It walks a router built here rather than cmd/api's, because cmd/api still
-// serves a plain mux -- there is nothing in the contract to route yet. Point
-// this at the real server the moment there is.
+// It walks the same registration cmd/api serves -- HandlerFromMuxWithBaseURL
+// via httpapi.NewRouter -- rather than a router built for the test, so a route
+// that exists in production is a route this suite has to cover.
 func registeredRoutes(t *testing.T) []route {
 	t.Helper()
 
 	r := chi.NewRouter()
-	httpapi.HandlerFromMux(stubServer{}, r)
+	httpapi.HandlerFromMuxWithBaseURL(&httpapi.Server{}, r, "/v1")
 	return walkRoutes(t, r)
 }
 
@@ -234,11 +250,6 @@ func walkRoutes(t *testing.T, r chi.Router) []route {
 	}
 	return routes
 }
-
-// stubServer satisfies the generated interface so a router can be built from
-// it. The interface is empty until P1-011; once it is not, this stops compiling
-// and should be replaced by the real handler rather than grown method by method.
-type stubServer struct{}
 
 // routesWithoutCase returns the registered routes that no case covers.
 func routesWithoutCase(registered []route, cases []isolationCase) []route {
@@ -285,13 +296,26 @@ func requestAsTenant(t *testing.T, id uuid.UUID) *http.Request {
 	return req.WithContext(tenant.NewContext(req.Context(), id))
 }
 
-// newServer builds the server the cases run against.
-//
-// Nil until there is one: cmd/api serves a plain mux with only /healthz on it,
-// and the generated router has nothing to mount. P1-011 sets this to the real
-// server. A non-empty case list with this still nil is a mistake, and the suite
-// says so rather than quietly testing a router built for the test.
-var newServer func(t *testing.T) http.Handler
+// newServer builds the server the cases run against: the same router, the same
+// middleware and the same handlers cmd/api serves, so a case cannot pass
+// against a wiring that only exists in tests.
+var newServer = func(t *testing.T) http.Handler {
+	t.Helper()
+
+	store, err := db.New(t.Context(), config.AppDatabaseURL())
+	if err != nil {
+		t.Fatalf("connect as app_user: %v\n\nIs PostgreSQL running and migrated?\n"+
+			"  brew services start postgresql@18\n  make db-create && make migrate", err)
+	}
+	t.Cleanup(store.Close)
+
+	signer, err := auth.NewSigner(isoSigningKey)
+	if err != nil {
+		t.Fatalf("new signer: %v", err)
+	}
+	// secureCookies false: httptest speaks plain HTTP.
+	return httpapi.NewRouter(httpapi.NewServer(auth.NewService(store, signer), false), signer)
+}
 
 // --- fixtures --------------------------------------------------------------
 

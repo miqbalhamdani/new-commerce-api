@@ -6,7 +6,10 @@
 // drift, pointing two binaries at two different databases or the wrong role.
 package config
 
-import "os"
+import (
+	"errors"
+	"os"
+)
 
 // Defaults target a host install -- Homebrew's postgresql@18 and redis on their
 // standard ports (contracts/tdd.md 2.2). They are compiled in so that a clean
@@ -23,6 +26,11 @@ const (
 
 	DefaultRedisURL = "redis://localhost:6379/0"
 	DefaultPort     = "8080"
+
+	// Local development only. There is no safe default for a signing secret,
+	// so this one is obviously not a secret -- JWTSecret refuses it whenever
+	// the environment is not "development".
+	devJWTSecret = "insecure-development-only-signing-key-32b"
 )
 
 // Getenv returns the value of key, or fallback when it is unset or empty.
@@ -42,3 +50,25 @@ func AppDatabaseURL() string { return Getenv("APP_DATABASE_URL", DefaultAppDatab
 
 // RedisURL is the Redis DSN.
 func RedisURL() string { return Getenv("REDIS_URL", DefaultRedisURL) }
+
+// Environment is "development" unless something says otherwise. Anything else
+// is treated as a deployed environment and held to deployed standards.
+func Environment() string { return Getenv("ENVIRONMENT", "development") }
+
+// IsDevelopment reports whether this is a developer's machine.
+func IsDevelopment() bool { return Environment() == "development" }
+
+// JWTSecret returns the access-token signing key.
+//
+// Outside development there is no default and no fallback: a missing secret is
+// a startup failure, not a warning. A service that boots with a well-known key
+// signs tokens anyone can forge, and it boots silently.
+func JWTSecret() (string, error) {
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		return v, nil
+	}
+	if IsDevelopment() {
+		return devJWTSecret, nil
+	}
+	return "", errors.New("JWT_SECRET is required when ENVIRONMENT is not \"development\"")
+}
