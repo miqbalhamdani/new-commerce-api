@@ -4,7 +4,7 @@ DB_NAME ?= new_commerce_dev
 # a host install, so a .env is only needed to deviate from them.
 LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: dev db-create migrate migrate-down generate generated-diff fmt-check vet lint test check
+.PHONY: dev db-create migrate migrate-down generate generated-diff fmt-check vet lint test test-iso check
 
 ## dev: run the API against host PostgreSQL and Redis
 dev:
@@ -48,5 +48,9 @@ lint:
 test:
 	@$(LOAD_ENV) go test ./...
 
-## check: the bar for a PR
+## test-iso: tenant isolation over every registered route, plus the harness's own checks
+test-iso:
+	@$(LOAD_ENV) go test ./internal/http/ -run 'TestTenantIsolation|TestIsolationHarness' -v
+
+## check: the bar for a PR. test covers test-iso -- this is the focused run.
 check: generate generated-diff fmt-check vet lint test

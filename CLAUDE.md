@@ -156,7 +156,15 @@ full DDL and the reasoning.
 | Isolation | `make test-iso`: two seeded tenants, every registered route, zero leakage |
 | Migration | Every migration applied to a restored snapshot in CI |
 
-A new route without an isolation test is an incomplete route.
+A new route without an isolation test is an incomplete route, and `make test-iso` says so rather
+than leaving it to a reviewer: it walks the routes the generated code registers and fails on any
+that has no entry in `isolationCases` (`internal/http/isolation_test.go`). Add the case in the
+same PR as the route.
+
+A case supplies two things -- how to seed a row as a given tenant, returning a marker string, and
+how to build the request tenant A makes. The suite seeds both tenants, sends A's request, and
+fails if B's marker appears anywhere in the response. Searching the raw bytes rather than a parsed
+shape is deliberate: one check covers every route whatever its payload.
 
 ---
 
