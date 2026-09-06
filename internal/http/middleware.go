@@ -40,8 +40,12 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(
-				tenant.NewContext(r.Context(), claims.TenantID)))
+			// Both come from the verified token and from nowhere else. The
+			// role decides what the caller may do; the tenant decides which
+			// rows they may do it to.
+			ctx := tenant.NewContext(r.Context(), claims.TenantID)
+			ctx = auth.NewRoleContext(ctx, claims.Role)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

@@ -158,6 +158,15 @@ full DDL and the reasoning.
   hand-write route registration for a documented endpoint.
 - **Errors are RFC 9457** `application/problem+json` with a `trace_id`. Use `platform/errors`;
   never `http.Error` in a handler.
+- **A permission check goes at the handler boundary**, as `requirePermission("resource:action", …)`
+  wrapping the generated method. Not in a service and not in a query: deeper means every new call
+  path has to remember it, and the one that forgets is a silent authorisation hole rather than a
+  compile error.
+- **The `403` names the permission in `detail`.** `flows.md` §6 makes it an acceptance criterion --
+  it is the difference between "you cannot do this" and "ask your owner for `users:write`".
+- **`internal/auth/roles.go` is the only definition of the matrix.** The handler check, the login
+  response and `GET /roles` all read from it, so they cannot disagree. It mirrors `API spec.md` §3;
+  changing one without the other is the bug.
 - **Server-managed fields are ignored on create and `422` on update**: `id`, `tenant_id`,
   `version`, `created_at`, `updated_at`, `path`.
 - **Omitted ≠ null.** An absent key takes the default; an explicit `null` is a validation error.

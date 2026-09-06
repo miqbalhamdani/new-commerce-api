@@ -44,27 +44,54 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for RoleName.
+const (
+	RoleNameAdmin     RoleName = "admin"
+	RoleNameOps       RoleName = "ops"
+	RoleNameOwner     RoleName = "owner"
+	RoleNameViewer    RoleName = "viewer"
+	RoleNameWarehouse RoleName = "warehouse"
+)
+
+// Valid indicates whether the value is a known member of the RoleName enum.
+func (e RoleName) Valid() bool {
+	switch e {
+	case RoleNameAdmin:
+		return true
+	case RoleNameOps:
+		return true
+	case RoleNameOwner:
+		return true
+	case RoleNameViewer:
+		return true
+	case RoleNameWarehouse:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionUserRole.
 const (
-	Admin     SessionUserRole = "admin"
-	Ops       SessionUserRole = "ops"
-	Owner     SessionUserRole = "owner"
-	Viewer    SessionUserRole = "viewer"
-	Warehouse SessionUserRole = "warehouse"
+	SessionUserRoleAdmin     SessionUserRole = "admin"
+	SessionUserRoleOps       SessionUserRole = "ops"
+	SessionUserRoleOwner     SessionUserRole = "owner"
+	SessionUserRoleViewer    SessionUserRole = "viewer"
+	SessionUserRoleWarehouse SessionUserRole = "warehouse"
 )
 
 // Valid indicates whether the value is a known member of the SessionUserRole enum.
 func (e SessionUserRole) Valid() bool {
 	switch e {
-	case Admin:
+	case SessionUserRoleAdmin:
 		return true
-	case Ops:
+	case SessionUserRoleOps:
 		return true
-	case Owner:
+	case SessionUserRoleOwner:
 		return true
-	case Viewer:
+	case SessionUserRoleViewer:
 		return true
-	case Warehouse:
+	case SessionUserRoleWarehouse:
 		return true
 	default:
 		return false
@@ -73,7 +100,7 @@ func (e SessionUserRole) Valid() bool {
 
 // ErrorCode The canonical error codes for this phase. The code also appears as the last segment of a
 // `Problem.type` URI, and directly in per-row results where an operation partially succeeds
-// — see `API spec.md` §6.2.
+// — see `API spec.md` §7.2.
 type ErrorCode string
 
 // LoginRequest defines model for LoginRequest.
@@ -131,6 +158,17 @@ type ProblemError struct {
 	Field                string                 `json:"field"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
+
+// Role One of the five seeded roles and everything it grants.
+type Role struct {
+	// Description One line a client can show next to the role in a picker.
+	Description *string  `json:"description,omitempty"`
+	Name        RoleName `json:"name"`
+	Permissions []string `json:"permissions"`
+}
+
+// RoleName defines model for Role.Name.
+type RoleName string
 
 // Session Returned by both login and refresh. Carries everything the client needs to render a
 // signed-in shell without a second request.
@@ -323,6 +361,9 @@ type ServerInterface interface {
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(w http.ResponseWriter, r *http.Request)
+	// ListRoles The five seeded roles and the permissions each grants
+	// (GET /roles)
+	ListRoles(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -344,6 +385,12 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 // Refresh Rotate the refresh token and issue a new access token
 // (POST /auth/refresh)
 func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListRoles The five seeded roles and the permissions each grants
+// (GET /roles)
+func (_ Unimplemented) ListRoles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -389,6 +436,20 @@ func (siw *ServerInterfaceWrapper) Refresh(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Refresh(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRoles(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -519,6 +580,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/roles", wrapper.ListRoles)
 	})
 
 	return r
@@ -722,6 +786,59 @@ func (response Refresh401ApplicationProblemPlusJSONResponse) VisitRefreshRespons
 	return err
 }
 
+type ListRolesRequestObject struct {
+}
+
+type ListRolesResponseObject interface {
+	VisitListRolesResponse(w http.ResponseWriter) error
+}
+
+type ListRoles200JSONResponse []Role
+
+func (response ListRoles200JSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRoles401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListRoles401ApplicationProblemPlusJSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRoles403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListRoles403ApplicationProblemPlusJSONResponse) VisitListRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Login Exchange an email and password for an access token
@@ -733,6 +850,9 @@ type StrictServerInterface interface {
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(ctx context.Context, request RefreshRequestObject) (RefreshResponseObject, error)
+	// ListRoles The five seeded roles and the permissions each grants
+	// (GET /roles)
+	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -846,6 +966,30 @@ func (sh *strictHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshResponseObject); ok {
 		if err := validResponse.VisitRefreshResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRoles operation middleware
+func (sh *strictHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	var request ListRolesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRoles(ctx, request.(ListRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRolesResponseObject); ok {
+		if err := validResponse.VisitListRolesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
