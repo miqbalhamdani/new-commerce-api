@@ -12,16 +12,15 @@ import (
 )
 
 type ApiKey struct {
-	ID          uuid.UUID
-	TenantID    uuid.UUID
-	Name        string
-	KeyHash     string
-	KeyPrefix   string
-	Permissions []string
-	CreatedBy   *uuid.UUID
-	LastUsedAt  *time.Time
-	RevokedAt   *time.Time
-	CreatedAt   time.Time
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	Name          string
+	KeyHash       string
+	AllowedOrigin string
+	LastUsedAt    *time.Time
+	RevokedAt     *time.Time
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
 }
 
 type AuditLog struct {

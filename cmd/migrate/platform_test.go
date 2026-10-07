@@ -71,11 +71,10 @@ func TestPlatformSchema(t *testing.T) {
 			{"tenant_id", "uuid", false},
 			{"name", "text", false},
 			{"key_hash", "text", false},
-			{"key_prefix", "text", false},
-			{"permissions", "text[]", false},
-			{"created_by", "uuid", true},
+			{"allowed_origin", "text", false},
 			{"last_used_at", "timestamp with time zone", true},
 			{"revoked_at", "timestamp with time zone", true},
+			{"created_by", "uuid", true},
 			{"created_at", "timestamp with time zone", false},
 		}},
 	} {
@@ -120,7 +119,6 @@ func TestPlatformSchema(t *testing.T) {
 			{"tenants", "status", "'active'"},
 			{"users", "role", "'viewer'"},
 			{"users", "status", "'invited'"},
-			{"api_keys", "permissions", "'{}'"},
 		} {
 			got := columnDefault(ctx, t, conn, tt.table, tt.column)
 			if !strings.Contains(got, tt.want) {
