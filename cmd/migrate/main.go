@@ -19,9 +19,11 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/db/migrations"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 )
 
 func main() {
+	slog.SetDefault(logging.New(os.Stderr))
 	down := flag.Int("down", 0, "roll back this many migrations instead of applying. Local use only -- production is forward-only.")
 	flag.Parse()
 

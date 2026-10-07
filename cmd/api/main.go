@@ -19,11 +19,13 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 )
 
 func main() {
+	slog.SetDefault(logging.New(os.Stderr))
 	if err := run(); err != nil {
 		slog.Error("api exited", "error", err)
 		os.Exit(1)

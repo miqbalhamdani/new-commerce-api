@@ -15,9 +15,11 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 )
 
 func main() {
+	slog.SetDefault(logging.New(os.Stderr))
 	if err := run(context.Background()); err != nil {
 		slog.Error("lint-rls failed", "error", err)
 		os.Exit(1)
