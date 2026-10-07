@@ -3,7 +3,7 @@
 Phase 1 · Catalog & Foundation. Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2.
 
 **The contract lives in `contracts/`** (git submodule, pinned to a tag). Read
-`contracts/API spec.md` and `contracts/erd.md` before changing anything they cover. If the code
+`contracts/04-api-spec.md` and `contracts/03-erd.md` before changing anything they cover. If the code
 and the contract disagree, the code is wrong — unless the contract is, in which case change it
 there first, in its own PR.
 
@@ -147,7 +147,7 @@ that cannot serve it is dead weight.
 
 `categories.path` is an `ltree` maintained by triggers — a `BEFORE` trigger computes the row's
 own path, an `AFTER` trigger rebases descendants, guarded by `pg_trigger_depth() > 1`. Do not
-compute paths in Go, and do not accept `path` from a client. `contracts/erd.md` §3.4 has the
+compute paths in Go, and do not accept `path` from a client. `contracts/03-erd.md` §3.4 has the
 full DDL and the reasoning.
 
 ---
@@ -162,10 +162,10 @@ full DDL and the reasoning.
   wrapping the generated method. Not in a service and not in a query: deeper means every new call
   path has to remember it, and the one that forgets is a silent authorisation hole rather than a
   compile error.
-- **The `403` names the permission in `detail`.** `flows.md` §6 makes it an acceptance criterion --
+- **The `403` names the permission in `detail`.** BR-024 makes it an acceptance criterion --
   it is the difference between "you cannot do this" and "ask your owner for `users:write`".
 - **`internal/auth/roles.go` is the only definition of the matrix.** The handler check, the login
-  response and `GET /roles` all read from it, so they cannot disagree. It mirrors `API spec.md` §3;
+  response and `GET /roles` all read from it, so they cannot disagree. It mirrors `04-api-spec.md` §3;
   changing one without the other is the bug.
 - **Server-managed fields are ignored on create and `422` on update**: `id`, `tenant_id`,
   `version`, `created_at`, `updated_at`, `path`.
@@ -219,7 +219,7 @@ shape is deliberate: one check covers every route whatever its payload.
 No stock. No orders. No marketplace channels. No `Idempotency-Key`. No bulk or CSV import.
 
 If a task implies any of those, it belongs to a later phase — stop and say so rather than
-building a partial version that a later phase then has to unpick. `contracts/BACKLOG.md` has the
+building a partial version that a later phase then has to unpick. `contracts/05-backlog.md` has the
 out-of-scope table.
 
 The one thing that *looks* like a channel feature and is in scope: `GET /v1/products/export`,

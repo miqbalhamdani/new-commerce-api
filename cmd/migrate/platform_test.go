@@ -97,7 +97,7 @@ func TestPlatformSchema(t *testing.T) {
 		rejected      string
 	}{
 		{"tenants", "status", []string{"active", "suspended", "closed"}, "cancelled"},
-		{"users", "role", []string{"owner", "admin", "ops", "warehouse", "viewer"}, "superadmin"},
+		{"users", "role", []string{"owner", "admin", "ops", "viewer"}, "warehouse"},
 		{"users", "status", []string{"invited", "active", "disabled"}, "deleted"},
 	} {
 		t.Run(fmt.Sprintf("%s.%s accepts only its CHECK values", tt.table, tt.column), func(t *testing.T) {

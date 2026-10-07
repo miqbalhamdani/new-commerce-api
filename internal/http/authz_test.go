@@ -94,8 +94,8 @@ func TestPermissionDenied(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&roles); err != nil {
 			t.Fatalf("decode roles: %v", err)
 		}
-		if len(roles) != 5 {
-			t.Errorf("got %d roles, want the 5 seeded ones", len(roles))
+		if len(roles) != 4 {
+			t.Errorf("got %d roles, want the 4 seeded ones", len(roles))
 		}
 	})
 
@@ -112,7 +112,7 @@ func TestPermissionDenied(t *testing.T) {
 	})
 
 	t.Run("every refused role names the same permission", func(t *testing.T) {
-		for _, role := range []string{auth.RoleOps, auth.RoleWarehouse, auth.RoleViewer} {
+		for _, role := range []string{auth.RoleOps, auth.RoleViewer} {
 			s := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), role)
 
 			rec := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestLoginCarriesPermissions(t *testing.T) {
 	t.Cleanup(store.Close)
 	srv := newServer(t)
 
-	for _, role := range []string{auth.RoleOwner, auth.RoleAdmin, auth.RoleOps, auth.RoleWarehouse, auth.RoleViewer} {
+	for _, role := range []string{auth.RoleOwner, auth.RoleAdmin, auth.RoleOps, auth.RoleViewer} {
 		t.Run(role, func(t *testing.T) {
 			s := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), role)
 
