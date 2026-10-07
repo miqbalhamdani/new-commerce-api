@@ -46,10 +46,10 @@ const (
 
 // readAll is what every role can do: see the catalog, the orders and the
 // customers. Nobody has a reason to be in this system and be unable to.
+// Settings are not in it: ops does not read them (04-api-spec.md 3, BR-025).
 var readAll = []string{
 	PermProductsRead, PermVariantsRead, PermCategoriesRead, PermBrandsRead,
 	PermMediaRead, PermOrdersRead, PermCustomersRead, PermExportsRead,
-	PermSettingsRead,
 }
 
 // rolePermissions is 04-api-spec.md 3, in code. It is the only definition --
@@ -63,20 +63,21 @@ var rolePermissions = map[string][]string{
 	RoleAdmin: adminPermissions,
 
 	// Works orders and customers; reads the catalog. v2 took catalog writes
-	// away from ops -- editing it belongs to owner and admin.
+	// away from ops -- editing it belongs to owner and admin -- and it has no
+	// Settings screen, so no settings:read either.
 	RoleOps: concat(readAll, []string{PermOrdersWrite}),
 
 	// Writes nothing, anywhere. A client must not render a save control for
 	// this role -- absent, not disabled (BR-025). Reads channels, which ops
 	// does not: a bookkeeper reconciles marketplace listings, ops does not.
-	RoleViewer: concat(readAll, []string{PermChannelsRead}),
+	RoleViewer: concat(readAll, []string{PermChannelsRead, PermSettingsRead}),
 }
 
 var adminPermissions = concat(readAll, []string{
 	PermProductsWrite, PermVariantsWrite, PermCategoriesWrite, PermBrandsWrite,
 	PermMediaWrite, PermOrdersWrite, PermChannelsRead, PermChannelsWrite,
 	PermUsersRead, PermUsersWrite, PermAPIKeysRead, PermAPIKeysWrite,
-	PermAuditLogRead,
+	PermAuditLogRead, PermSettingsRead,
 })
 
 // PermissionsFor returns everything a role grants.
