@@ -14,11 +14,12 @@ import (
 // The registration itself comes from openapi.yaml via oapi-codegen -- no route
 // in this file, and none hand-written anywhere else. An endpoint exists because
 // the contract says so.
-func NewRouter(srv ServerInterface, signer *auth.Signer) http.Handler {
+func NewRouter(srv ServerInterface, signer *auth.Signer, limiter *RateLimiter) http.Handler {
 	r := chi.NewRouter()
 	// Outermost, so a span exists before anything can fail. An error raised by
 	// the authentication middleware still carries a trace id that resolves.
-	r.Use(tracing, Authenticate(signer))
+	// The limiter keys on the user Authenticate puts in the context.
+	r.Use(tracing, Authenticate(signer), limiter.Middleware)
 	return HandlerFromMuxWithBaseURL(srv, r, "/v1")
 }
 

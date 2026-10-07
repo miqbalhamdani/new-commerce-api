@@ -96,6 +96,13 @@ func NotFound(detail string) *Error {
 		Title: "Not found", Detail: detail}
 }
 
+// RateLimited is the 429 for a caller over its BR-014 limit. The middleware
+// that raises it sets Retry-After and the RateLimit-* headers.
+func RateLimited() *Error {
+	return &Error{Code: CodeRateLimited, Status: http.StatusTooManyRequests,
+		Title: "Rate limited", Detail: "Too many requests. Wait and try again."}
+}
+
 func ValidationFailed(detail string) *Error {
 	return &Error{Code: CodeValidationFailed, Status: http.StatusUnprocessableEntity,
 		Title: "Validation failed", Detail: detail}

@@ -1,6 +1,10 @@
 package auth
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 // roleKey is unexported and of a type declared here, so no other package can
 // construct an equal key and put a role of its own choosing into a request.
@@ -22,4 +26,19 @@ func NewRoleContext(ctx context.Context, role string) context.Context {
 func RoleFromContext(ctx context.Context) (string, bool) {
 	role, ok := ctx.Value(roleKey{}).(string)
 	return role, ok
+}
+
+type userKey struct{}
+
+// NewUserContext returns a copy of ctx carrying the caller's user id, set by
+// the authentication middleware from the verified token's subject.
+func NewUserContext(ctx context.Context, id uuid.UUID) context.Context {
+	return context.WithValue(ctx, userKey{}, id)
+}
+
+// UserIDFromContext returns the caller's user id, if the request was
+// authenticated.
+func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(userKey{}).(uuid.UUID)
+	return id, ok
 }

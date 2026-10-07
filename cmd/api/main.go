@@ -76,6 +76,7 @@ func run() error {
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(auth.NewService(pool, signer), !config.IsDevelopment()),
 		signer,
+		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),
 	))
 
 	addr := ":" + config.Getenv("PORT", config.DefaultPort)

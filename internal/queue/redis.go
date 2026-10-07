@@ -9,7 +9,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -34,6 +36,39 @@ func New(ctx context.Context, url string) (*Client, error) {
 
 // Close releases the connection.
 func (c *Client) Close() error { return c.rdb.Close() }
+
+// slidingWindow is a sliding-window log (BR-014): one sorted-set member per
+// accepted hit, scored by its time in ms. A rejected hit is not recorded, so a
+// caller hammering past the limit does not push its own reset further away.
+// Atomic as a script; a pipeline would let two replicas both see limit-1.
+var slidingWindow = redis.NewScript(`
+local key, now, window, limit = KEYS[1], tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3])
+redis.call('ZREMRANGEBYSCORE', key, '-inf', now - window)
+local count = redis.call('ZCARD', key)
+local allowed = 0
+if count < limit then
+  redis.call('ZADD', key, now, ARGV[4])
+  count = count + 1
+  allowed = 1
+end
+redis.call('PEXPIRE', key, window)
+local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+return {allowed, count, tonumber(oldest[2] or now)}
+`)
+
+// SlidingWindow records one hit against key unless limit hits already fall
+// inside the trailing window. It reports whether the hit was allowed, how many
+// hits the window now holds, and how long until the oldest one leaves it.
+func (c *Client) SlidingWindow(ctx context.Context, key string, limit int, window time.Duration) (bool, int, time.Duration, error) {
+	now := time.Now()
+	res, err := slidingWindow.Run(ctx, c.rdb, []string{key},
+		now.UnixMilli(), window.Milliseconds(), limit, uuid.NewString()).Int64Slice()
+	if err != nil {
+		return false, 0, 0, fmt.Errorf("redis sliding window: %w", err)
+	}
+	resetIn := time.UnixMilli(res[2]).Add(window).Sub(now)
+	return res[0] == 1, int(res[1]), resetIn, nil
+}
 
 // ServerVersion reports the redis_version field of INFO server, e.g. "8.4.0".
 func (c *Client) ServerVersion(ctx context.Context) (string, error) {

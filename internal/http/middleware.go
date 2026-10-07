@@ -44,6 +44,7 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 			// rows they may do it to.
 			ctx := tenant.NewContext(r.Context(), claims.TenantID)
 			ctx = auth.NewRoleContext(ctx, claims.Role)
+			ctx = auth.NewUserContext(ctx, claims.UserID())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
