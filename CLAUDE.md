@@ -131,7 +131,7 @@ that cannot serve it is dead weight.
   inserts — time-ordered keys keep B-tree inserts append-only. (Migrations and backfills may use
   it; nothing reads those keys for ordering.)
 - **Money** is `bigint` minor units + `char(3)`. Never `float`, never `numeric` for money.
-- **Timestamps** are `timestamptz`, always UTC.
+- **Timestamps** are `timestamptz`, and WIB everywhere (BR-007): the pool sets `TimeZone`, scans into WIB, and the wire is `+07:00`, never `Z`. Decode bodies with `decodeJSON`, which 422s a timestamp without an offset.
 - **Soft delete** is `archived_at`, only where an audit trail needs it.
 - **A new table with `tenant_id` and no RLS policy fails CI.** Do not disable that check. It is
   `make lint-rls`, part of `make check`, and it reads the live database rather than the migration

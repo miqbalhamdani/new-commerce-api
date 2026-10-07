@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -117,9 +118,17 @@ func TestTenantIsolation(t *testing.T) {
 			srv.ServeHTTP(rec, c.request(t, a))
 
 			assertNoLeak(t, rec, b.marker)
+			// BR-007, checked on every route the suite already calls: the
+			// wire is +07:00, never Z.
+			if z := utcTimestamp.FindString(rec.Body.String()); z != "" {
+				t.Errorf("response carries a UTC timestamp %s; the wire is WIB, +07:00", z)
+			}
 		})
 	}
 }
+
+// utcTimestamp matches an RFC 3339 time ending in Z inside a JSON string.
+var utcTimestamp = regexp.MustCompile(`\d{2}:\d{2}:\d{2}(\.\d+)?Z"`)
 
 // TestIsolationHarness proves the suite above can fail. Without it, an empty
 // case list and an empty route list would make TestTenantIsolation a test that

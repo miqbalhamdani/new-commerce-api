@@ -33,12 +33,7 @@ func NewServer(authSvc *auth.Service, secureCookies bool) *Server {
 // Login handles POST /auth/login.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	var body LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		// Decoding fails for malformed JSON and for a field the generated
-		// type rejects -- an unparseable email reaches here, not the check
-		// below. Saying "not valid JSON" to that is misleading.
-		writeError(w, r, apperrors.ValidationFailed(
-			"The request body is malformed or a field is not in the expected format.").WithCause(err))
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	if body.Email == "" || len(body.Password) < 8 {
@@ -154,4 +149,18 @@ func (s *Server) clearRefreshCookie() *http.Cookie {
 	c.MaxAge = -1
 	c.Expires = time.Unix(0, 0)
 	return c
+}
+
+// decodeJSON decodes a request body into v, answering 422 itself on failure.
+//
+// Decoding fails for malformed JSON and for a field the generated type
+// rejects -- an unparseable email, or a timestamp with no offset, which
+// time.Time refuses (BR-007). Saying "not valid JSON" to those is misleading.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		writeError(w, r, apperrors.ValidationFailed(
+			"The request body is malformed or a field is not in the expected format.").WithCause(err))
+		return false
+	}
+	return true
 }

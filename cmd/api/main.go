@@ -26,6 +26,9 @@ import (
 
 func main() {
 	slog.SetDefault(logging.New(os.Stderr))
+	// time.Now() and anything built from it serialises as +07:00, like the
+	// timestamps the pool scans (BR-007).
+	time.Local = config.WIB
 	if err := run(); err != nil {
 		slog.Error("api exited", "error", err)
 		os.Exit(1)
