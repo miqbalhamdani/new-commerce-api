@@ -18,7 +18,7 @@ import (
 
 // Store owns the connection pool and is the entry point for every query.
 //
-// tdd.md 3.2 and CLAUDE.md both call it Store: it is not merely a pool, it is
+// CLAUDE.md calls it Store: it is not merely a pool, it is
 // the thing that hands out tenant-scoped transactions. See tx.go.
 type Store struct {
 	pool *pgxpool.Pool

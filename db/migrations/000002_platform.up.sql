@@ -1,6 +1,6 @@
 -- Platform tables: tenants, users, refresh_tokens, api_keys.
 --
--- Transcribed from erd.md 3.2. Where this file and that section disagree, this
+-- Transcribed from 03-erd.md §3.2. Where this file and that section disagree, this
 -- file is the bug.
 
 CREATE TABLE tenants (

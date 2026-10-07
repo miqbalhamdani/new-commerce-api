@@ -1,8 +1,5 @@
-// Command api serves the Phase 1 HTTP API.
-//
-// At P1-000 it exposes only /healthz -- enough to prove the process reaches
-// PostgreSQL and Redis. Documented endpoints arrive with the generated server
-// interface in P1-005.
+// Command api serves the HTTP API: /healthz, and the /v1 routes generated
+// from contracts/openapi.yaml.
 package main
 
 import (

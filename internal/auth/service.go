@@ -133,7 +133,7 @@ func (s *Service) Refresh(ctx context.Context, presented string) (Session, error
 			// chain begins at each login, so someone signed in on a phone and a
 			// laptop has two, and revoking one would leave the thief's other
 			// session alive while claiming they were signed out everywhere.
-			// API spec.md 2 asks for both.
+			// BR-022 asks for both.
 			_, err = q.RevokeAllUserTokens(ctx, stored.UserID)
 			return err
 		}); err != nil {

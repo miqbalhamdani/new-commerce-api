@@ -1,7 +1,7 @@
 // Package tenant carries the current tenant through a request.
 //
 // The tenant is derived from the caller's token and nothing else -- never a
-// header, a query parameter or a request body (API spec.md 1). Accepting it
+// header, a query parameter or a request body (BR-003). Accepting it
 // from the request would make cross-tenant access a matter of editing a header.
 //
 // P1-011's auth middleware is what puts a value in here. Until then the only

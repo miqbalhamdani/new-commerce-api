@@ -113,7 +113,7 @@ func TestErrorsCarryAResolvableTraceID(t *testing.T) {
 			if problem.TraceID == "" {
 				t.Fatal("no trace_id")
 			}
-			// 32 hex characters, per the example in API spec.md 1.1. All zeroes
+			// 32 hex characters, per the example in 04-api-spec.md §1.1. All zeroes
 			// is what the default no-op tracer produces, and it resolves to
 			// nothing -- the exact failure this test exists to catch.
 			if len(problem.TraceID) != 32 {

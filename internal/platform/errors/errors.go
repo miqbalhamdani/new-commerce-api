@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// The canonical codes for this phase (API spec.md 1.1). The code is also the
+// The canonical codes for this phase (04-api-spec.md §1.1). The code is also the
 // last segment of the type URI a client receives.
 const (
 	CodeValidationFailed = "validation_failed"
@@ -84,7 +84,7 @@ func Unauthenticated(detail string) *Error {
 
 // PermissionDenied names the permission that was required.
 //
-// That naming is an acceptance criterion, not a nicety (flows.md 6): it is the
+// That naming is an acceptance criterion, not a nicety (BR-024): it is the
 // difference between "you cannot do this" and "ask your owner for users:write".
 func PermissionDenied(permission string) *Error {
 	return &Error{Code: CodePermissionDenied, Status: http.StatusForbidden,

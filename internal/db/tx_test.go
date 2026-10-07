@@ -136,7 +136,7 @@ func TestInTenantTx(t *testing.T) {
 		}
 	})
 
-	// The specific bug tdd.md 3.2 warns about. is_local = true is one word in
+	// The specific bug BR-002 warns about. is_local = true is one word in
 	// one line, it is invisible if untested, and getting it wrong serves one
 	// tenant's rows to the next request that happens to reuse the connection.
 	t.Run("the tenant setting does not outlive its transaction", func(t *testing.T) {

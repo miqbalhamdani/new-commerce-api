@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// API spec.md 1: 15-minute access token. Short enough that a leaked one is
+	// BR-022: 15-minute access token. Short enough that a leaked one is
 	// briefly useful, long enough that refresh is not on every request.
 	AccessTokenTTL = 15 * time.Minute
 
@@ -31,7 +31,7 @@ const (
 var ErrInvalidToken = errors.New("invalid access token")
 
 // Claims is what an access token carries. The tenant is in here and nowhere
-// else -- API spec.md 1: derived from the token, never accepted from a header,
+// else -- BR-003: derived from the token, never accepted from a header,
 // query parameter or body.
 type Claims struct {
 	TenantID uuid.UUID `json:"tid"`

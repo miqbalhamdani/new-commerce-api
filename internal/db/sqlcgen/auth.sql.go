@@ -101,8 +101,8 @@ UPDATE refresh_tokens SET revoked_at = now()
 `
 
 // Used when a already-rotated token is presented again, which means it was
-// stolen. API spec.md 2: "the whole rotation chain is revoked and the user is
-// signed out everywhere".
+// stolen. BR-022: "its whole rotation chain is revoked and the user is signed
+// out everywhere".
 //
 // This revokes every active token for the user, not only the chain the reused
 // token belongs to. A chain starts at each login, so a user signed in on a

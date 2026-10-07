@@ -21,7 +21,7 @@ const testPassword = "correct horse battery staple"
 //
 // It builds a real chain -- login, then two rotations -- and a second,
 // independent chain from a separate login, then presents the first token again.
-// API spec.md 2 asks for two things on reuse: the chain is revoked, and the user
+// BR-022 asks for two things on reuse: the chain is revoked, and the user
 // is signed out everywhere. The second chain is what tells them apart.
 func TestRefreshReusedTokenRevokesEverything(t *testing.T) {
 	ctx := t.Context()

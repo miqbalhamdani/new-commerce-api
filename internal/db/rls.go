@@ -27,7 +27,7 @@ func (p RLSProblem) String() string { return p.Table + ": " + p.Reason }
 //     out and the table reads as permanently empty.
 //
 // The middle one is why this exists as a check rather than as a code review
-// habit. See tdd.md 3.3.
+// habit. See BR-003.
 func (s *Store) CheckTenantRLS(ctx context.Context) ([]RLSProblem, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,

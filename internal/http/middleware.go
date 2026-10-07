@@ -13,7 +13,7 @@ import (
 // Authenticate reads the bearer token and puts the tenant it names into the
 // request context.
 //
-// This is the only place a tenant enters the system. API spec.md 1: derived
+// This is the only place a tenant enters the system. BR-003: derived
 // from the token, never from a header, query parameter or body -- accepting it
 // from the request would make cross-tenant access a matter of editing one.
 //

@@ -54,7 +54,7 @@ func TestHealthzReportsBothServices(t *testing.T) {
 		t.Errorf("status = %q, want %q", got.Status, "ok")
 	}
 
-	// The contract pins PostgreSQL 18 and Redis 8 (contracts/tdd.md 2.2).
+	// The contract pins PostgreSQL 18 and Redis 8 (05-backlog.md Phase 0, P1-000).
 	// Asserting the major version means a downgraded host install fails here,
 	// rather than in a migration months from now.
 	for _, want := range []struct {

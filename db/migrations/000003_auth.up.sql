@@ -2,7 +2,7 @@
 -- needs.
 
 -- ---------------------------------------------------------------------------
--- Email is unique across the system, not per tenant (erd.md 3.2)
+-- Email is unique across the system, not per tenant (BR-020)
 -- ---------------------------------------------------------------------------
 --
 -- POST /v1/auth/login carries only an email and a password. With the same email
@@ -78,7 +78,7 @@ REVOKE ALL ON FUNCTION auth_lookup_user(citext) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth_lookup_user(citext) TO app_user;
 
 COMMENT ON FUNCTION auth_lookup_user(citext) IS
-    'The single cross-tenant read, for the login path only. Returns five fixed columns and nothing else. See API spec.md section 2.';
+    'Cross-tenant read for the login path only (BR-003). Returns five fixed columns and nothing else.';
 
 -- ---------------------------------------------------------------------------
 -- auth_lookup_refresh_token: the same problem, for POST /v1/auth/refresh
@@ -91,7 +91,7 @@ COMMENT ON FUNCTION auth_lookup_user(citext) IS
 -- The rejected alternative was putting the tenant id in the cookie next to the
 -- token, which needs no function at all. It works, because a wrong tenant makes
 -- the hash lookup miss -- but it means the tenant arrives in the request, and
--- API spec.md 1 says the tenant is derived from the token and never accepted
+-- BR-003 says the tenant is derived from the token and never accepted
 -- from the request. One more narrow function in the same place is more
 -- consistent than a second, different mechanism.
 --

@@ -19,9 +19,9 @@ import (
 // permission in detail.
 //
 // It runs against GET /v1/roles on the real server rather than a handler built
-// for the test, because flows.md 6 states the criterion in those terms -- "an
-// ops user gets 403 with the required permission named in detail on any
-// user-management endpoint" -- and /roles is one.
+// for the test, because BR-024 states the criterion for any route -- a 403
+// names the missing permission in detail -- and /roles is a user-management
+// route an ops user cannot reach (04-api-spec.md 3).
 func TestPermissionDenied(t *testing.T) {
 	ctx := t.Context()
 

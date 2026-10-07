@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-// TestRolePermissions checks the matrix against API spec.md 3 -- not by
+// TestRolePermissions checks the matrix against 04-api-spec.md §3 -- not by
 // restating it, which would only prove the file was copied twice, but by
 // asserting the properties the contract gives reasons for.
 func TestRolePermissions(t *testing.T) {
-	// flows.md 6 is an owner granting a merchandiser access "without giving
-	// away billing". That sentence is the entire difference between the two
-	// roles, so if this ever grows past one permission, the contract moved.
+	// 04-api-spec.md 3: "owner is admin plus settings:write, nothing more."
+	// That sentence is the entire difference between the two roles, so if
+	// this ever grows past one permission, the contract moved.
 	t.Run("owner is admin plus settings:write", func(t *testing.T) {
 		owner := PermissionsFor(RoleOwner)
 		admin := PermissionsFor(RoleAdmin)
@@ -52,7 +52,7 @@ func TestRolePermissions(t *testing.T) {
 		assertNoWrites(t, RoleViewer)
 	})
 
-	// flows.md 6: an ops user gets a 403 on any user-management endpoint.
+	// 04-api-spec.md 3 and BR-024: an ops user gets a 403 on any user-management endpoint.
 	t.Run("only owner and admin manage people and keys", func(t *testing.T) {
 		for _, p := range []string{PermUsersRead, PermUsersWrite, PermAPIKeysRead, PermAPIKeysWrite} {
 			for _, role := range []string{RoleOwner, RoleAdmin} {
@@ -62,7 +62,7 @@ func TestRolePermissions(t *testing.T) {
 			}
 			for _, role := range []string{RoleOps, RoleViewer} {
 				if Can(role, p) {
-					t.Errorf("%s can %s; flows.md 6 says it must not", role, p)
+					t.Errorf("%s can %s; 04-api-spec.md §3 says it must not", role, p)
 				}
 			}
 		}

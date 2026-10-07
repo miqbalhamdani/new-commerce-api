@@ -13,7 +13,7 @@ import (
 )
 
 // TestPlatformSchema is P1-010's acceptance: the four platform tables match
-// erd.md 3.2 exactly.
+// 03-erd.md §3.2 exactly.
 //
 // "Exactly" is checked by reading the schema back out of PostgreSQL rather than
 // by reading the migration file. A migration that was edited but never applied,
@@ -31,7 +31,7 @@ func TestPlatformSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
-	// name | type | nullable, in ordinal order, transcribed from erd.md 3.2.
+	// name | type | nullable, in ordinal order, transcribed from 03-erd.md §3.2.
 	for _, tt := range []struct {
 		table   string
 		columns []column
@@ -84,7 +84,7 @@ func TestPlatformSchema(t *testing.T) {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			got := columnsOf(ctx, t, conn, tt.table)
 			if !slices.Equal(got, tt.columns) {
-				t.Errorf("schema does not match erd.md 3.2\ngot:  %v\nwant: %v",
+				t.Errorf("schema does not match 03-erd.md §3.2\ngot:  %v\nwant: %v",
 					got, tt.columns)
 			}
 		})
@@ -167,7 +167,7 @@ func TestPlatformSchema(t *testing.T) {
 		}
 	})
 
-	// erd.md 3.2 puts RLS on the three tables carrying tenant_id and explicitly
+	// 03-erd.md §3.2 puts RLS on the three tables carrying tenant_id and explicitly
 	// not on tenants -- "it is reached only through the auth path".
 	t.Run("tenants is deliberately not protected", func(t *testing.T) {
 		var enabled bool
@@ -179,12 +179,12 @@ func TestPlatformSchema(t *testing.T) {
 			// Not a leak, but it would break login: the auth path reads tenants
 			// before any tenant context exists, so a policy would filter it to
 			// nothing and every login would fail.
-			t.Error("tenants has RLS enabled; erd.md 3.2 says it must not, " +
+			t.Error("tenants has RLS enabled; 03-erd.md §3.2 says it must not, " +
 				"because auth reads it before a tenant context exists")
 		}
 	})
 
-	// The composite foreign keys of erd.md 3.4 are checked from the child side,
+	// The composite foreign keys of BR-004 (03-erd.md §2.1) are checked from the child side,
 	// but a table's own rows must also be reachable by its FK targets while RLS
 	// is on. PostgreSQL runs referential integrity checks with row security
 	// off; this asserts that rather than trusting it.

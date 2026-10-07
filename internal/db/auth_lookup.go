@@ -41,7 +41,7 @@ type AuthUser struct {
 
 // LookupUserForAuth resolves an email to the one user that owns it.
 //
-// Email is unique across the whole system (erd.md 3.2), which is what makes
+// Email is unique across the whole system (BR-020), which is what makes
 // "one user" true and lets login carry no tenant parameter.
 func (s *Store) LookupUserForAuth(ctx context.Context, email string) (AuthUser, error) {
 	var u AuthUser
