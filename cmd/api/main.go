@@ -1,8 +1,5 @@
-// Command api serves the Phase 1 HTTP API.
-//
-// At P1-000 it exposes only /healthz -- enough to prove the process reaches
-// PostgreSQL and Redis. Documented endpoints arrive with the generated server
-// interface in P1-005.
+// Command api serves the HTTP API: /healthz, and the /v1 routes generated
+// from contracts/openapi.yaml.
 package main
 
 import (
@@ -19,11 +16,16 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 )
 
 func main() {
+	slog.SetDefault(logging.New(os.Stderr))
+	// time.Now() and anything built from it serialises as +07:00, like the
+	// timestamps the pool scans (BR-007).
+	time.Local = config.WIB
 	if err := run(); err != nil {
 		slog.Error("api exited", "error", err)
 		os.Exit(1)
@@ -76,6 +78,7 @@ func run() error {
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(auth.NewService(pool, signer), !config.IsDevelopment()),
 		signer,
+		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),
 	))
 
 	addr := ":" + config.Getenv("PORT", config.DefaultPort)

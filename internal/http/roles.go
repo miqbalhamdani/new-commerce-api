@@ -14,7 +14,7 @@ import (
 // explain what each role means without hardcoding the matrix.
 //
 // It needs users:read because it is part of the team-management surface. That
-// is what makes an ops user's 403 here the exact case flows.md 6 describes.
+// is what makes an ops user's 403 here the exact case BR-024 describes.
 func (s *Server) ListRoles(w http.ResponseWriter, r *http.Request) {
 	requirePermission(auth.PermUsersRead, s.listRoles)(w, r)
 }

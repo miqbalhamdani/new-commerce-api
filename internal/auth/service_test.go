@@ -21,7 +21,7 @@ const testPassword = "correct horse battery staple"
 //
 // It builds a real chain -- login, then two rotations -- and a second,
 // independent chain from a separate login, then presents the first token again.
-// API spec.md 2 asks for two things on reuse: the chain is revoked, and the user
+// BR-022 asks for two things on reuse: the chain is revoked, and the user
 // is signed out everywhere. The second chain is what tells them apart.
 func TestRefreshReusedTokenRevokesEverything(t *testing.T) {
 	ctx := t.Context()
@@ -103,7 +103,7 @@ func TestLogin(t *testing.T) {
 		if s.AccessToken == "" || s.RefreshToken == "" {
 			t.Error("session is missing a token")
 		}
-		if s.Tenant.Currency != "IDR" || s.Tenant.Timezone != "Asia/Jakarta" {
+		if s.Tenant.Timezone != "Asia/Jakarta" {
 			t.Errorf("tenant defaults not carried through: %+v", s.Tenant)
 		}
 		// P1-012 fills this. It is an empty list rather than absent because
@@ -252,7 +252,7 @@ func seedUser(ctx context.Context, t *testing.T, store *db.Store) (tenantID, use
 	// tenants has no RLS by design, so this needs no tenant context.
 	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)`,
+			`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ($1, $2, $3, 'TST')`,
 			tenantID, "Test tenant", "t-"+tenantID.String()); err != nil {
 			return err
 		}

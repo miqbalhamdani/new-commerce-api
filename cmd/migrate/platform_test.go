@@ -13,7 +13,7 @@ import (
 )
 
 // TestPlatformSchema is P1-010's acceptance: the four platform tables match
-// erd.md 3.2 exactly.
+// 03-erd.md §3.2 exactly.
 //
 // "Exactly" is checked by reading the schema back out of PostgreSQL rather than
 // by reading the migration file. A migration that was edited but never applied,
@@ -31,7 +31,7 @@ func TestPlatformSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 
-	// name | type | nullable, in ordinal order, transcribed from erd.md 3.2.
+	// name | type | nullable, in ordinal order, transcribed from 03-erd.md §3.2.
 	for _, tt := range []struct {
 		table   string
 		columns []column
@@ -41,9 +41,12 @@ func TestPlatformSchema(t *testing.T) {
 			{"name", "text", false},
 			{"slug", "text", false},
 			{"timezone", "text", false},
-			{"currency", "character(3)", false},
 			{"status", "text", false},
 			{"created_at", "timestamp with time zone", false},
+			// Added by P1-082, so it sits last rather than after slug as in
+			// the ERD; rebuilding tenants to move it would mean dropping
+			// every foreign key that points at it.
+			{"order_prefix", "text", false},
 		}},
 		{"users", []column{
 			{"id", "uuid", false},
@@ -71,18 +74,17 @@ func TestPlatformSchema(t *testing.T) {
 			{"tenant_id", "uuid", false},
 			{"name", "text", false},
 			{"key_hash", "text", false},
-			{"key_prefix", "text", false},
-			{"permissions", "text[]", false},
-			{"created_by", "uuid", true},
+			{"allowed_origin", "text", false},
 			{"last_used_at", "timestamp with time zone", true},
 			{"revoked_at", "timestamp with time zone", true},
+			{"created_by", "uuid", true},
 			{"created_at", "timestamp with time zone", false},
 		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			got := columnsOf(ctx, t, conn, tt.table)
 			if !slices.Equal(got, tt.columns) {
-				t.Errorf("schema does not match erd.md 3.2\ngot:  %v\nwant: %v",
+				t.Errorf("schema does not match 03-erd.md §3.2\ngot:  %v\nwant: %v",
 					got, tt.columns)
 			}
 		})
@@ -97,7 +99,7 @@ func TestPlatformSchema(t *testing.T) {
 		rejected      string
 	}{
 		{"tenants", "status", []string{"active", "suspended", "closed"}, "cancelled"},
-		{"users", "role", []string{"owner", "admin", "ops", "warehouse", "viewer"}, "superadmin"},
+		{"users", "role", []string{"owner", "admin", "ops", "viewer"}, "warehouse"},
 		{"users", "status", []string{"invited", "active", "disabled"}, "deleted"},
 	} {
 		t.Run(fmt.Sprintf("%s.%s accepts only its CHECK values", tt.table, tt.column), func(t *testing.T) {
@@ -113,14 +115,28 @@ func TestPlatformSchema(t *testing.T) {
 		})
 	}
 
+	// BR-077: the order-number prefix is 2-6 uppercase letters or digits.
+	t.Run("tenants.order_prefix refuses anything else", func(t *testing.T) {
+		for _, bad := range []string{"T", "tka", "TOOLONG", "TK-A"} {
+			tx, err := conn.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, order_prefix)
+				VALUES (gen_random_uuid(), 'Prefix probe', gen_random_uuid()::text, $1)`, bad)
+			_ = tx.Rollback(ctx)
+			if err == nil {
+				t.Errorf("order_prefix %q was accepted", bad)
+			}
+		}
+	})
+
 	t.Run("defaults match", func(t *testing.T) {
 		for _, tt := range []struct{ table, column, want string }{
 			{"tenants", "timezone", "'Asia/Jakarta'"},
-			{"tenants", "currency", "'IDR'"},
 			{"tenants", "status", "'active'"},
 			{"users", "role", "'viewer'"},
 			{"users", "status", "'invited'"},
-			{"api_keys", "permissions", "'{}'"},
 		} {
 			got := columnDefault(ctx, t, conn, tt.table, tt.column)
 			if !strings.Contains(got, tt.want) {
@@ -151,7 +167,7 @@ func TestPlatformSchema(t *testing.T) {
 		}
 	})
 
-	// erd.md 3.2 puts RLS on the three tables carrying tenant_id and explicitly
+	// 03-erd.md §3.2 puts RLS on the three tables carrying tenant_id and explicitly
 	// not on tenants -- "it is reached only through the auth path".
 	t.Run("tenants is deliberately not protected", func(t *testing.T) {
 		var enabled bool
@@ -163,12 +179,12 @@ func TestPlatformSchema(t *testing.T) {
 			// Not a leak, but it would break login: the auth path reads tenants
 			// before any tenant context exists, so a policy would filter it to
 			// nothing and every login would fail.
-			t.Error("tenants has RLS enabled; erd.md 3.2 says it must not, " +
+			t.Error("tenants has RLS enabled; 03-erd.md §3.2 says it must not, " +
 				"because auth reads it before a tenant context exists")
 		}
 	})
 
-	// The composite foreign keys of erd.md 3.4 are checked from the child side,
+	// The composite foreign keys of BR-004 (03-erd.md §2.1) are checked from the child side,
 	// but a table's own rows must also be reachable by its FK targets while RLS
 	// is on. PostgreSQL runs referential integrity checks with row security
 	// off; this asserts that rather than trusting it.
@@ -285,7 +301,7 @@ func assertFKCrossesRLS(ctx context.Context, t *testing.T, conn *pgx.Conn) {
 
 	var tenantID, userID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'FK probe', $1)
+		INSERT INTO tenants (id, name, slug, order_prefix) VALUES (gen_random_uuid(), 'FK probe', $1, 'FKP')
 		RETURNING id`, "fk-probe-"+t.Name()).Scan(&tenantID); err != nil {
 		t.Fatalf("insert tenant: %v", err)
 	}

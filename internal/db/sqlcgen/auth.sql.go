@@ -41,7 +41,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const getSession = `-- name: GetSession :one
 
 SELECT u.id AS user_id, u.name AS user_name, u.role,
-       t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.currency
+       t.id AS tenant_id, t.name AS tenant_name, t.timezone
   FROM users u
   JOIN tenants t ON t.id = u.tenant_id
  WHERE u.id = $1
@@ -54,7 +54,6 @@ type GetSessionRow struct {
 	TenantID   uuid.UUID
 	TenantName string
 	Timezone   string
-	Currency   string
 }
 
 // Queries over the auth tables.
@@ -75,7 +74,6 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (GetSessionRow, 
 		&i.TenantID,
 		&i.TenantName,
 		&i.Timezone,
-		&i.Currency,
 	)
 	return i, err
 }
@@ -103,8 +101,8 @@ UPDATE refresh_tokens SET revoked_at = now()
 `
 
 // Used when a already-rotated token is presented again, which means it was
-// stolen. API spec.md 2: "the whole rotation chain is revoked and the user is
-// signed out everywhere".
+// stolen. BR-022: "its whole rotation chain is revoked and the user is signed
+// out everywhere".
 //
 // This revokes every active token for the user, not only the chain the reused
 // token belongs to. A chain starts at each login, so a user signed in on a

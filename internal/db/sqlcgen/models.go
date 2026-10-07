@@ -5,21 +5,34 @@
 package sqlcgen
 
 import (
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type ApiKey struct {
-	ID          uuid.UUID
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	Name          string
+	KeyHash       string
+	AllowedOrigin string
+	LastUsedAt    *time.Time
+	RevokedAt     *time.Time
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
+}
+
+type AuditLog struct {
+	ID          int64
 	TenantID    uuid.UUID
-	Name        string
-	KeyHash     string
-	KeyPrefix   string
-	Permissions []string
-	CreatedBy   *uuid.UUID
-	LastUsedAt  *time.Time
-	RevokedAt   *time.Time
+	ActorID     *uuid.UUID
+	Action      string
+	SubjectType string
+	SubjectID   string
+	Before      []byte
+	After       []byte
+	Ip          *netip.Addr
 	CreatedAt   time.Time
 }
 
@@ -35,13 +48,13 @@ type RefreshToken struct {
 }
 
 type Tenant struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	Timezone  string
-	Currency  string
-	Status    string
-	CreatedAt time.Time
+	ID          uuid.UUID
+	Name        string
+	Slug        string
+	Timezone    string
+	Status      string
+	CreatedAt   time.Time
+	OrderPrefix string
 }
 
 type User struct {

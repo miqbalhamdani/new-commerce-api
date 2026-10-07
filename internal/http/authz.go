@@ -17,7 +17,7 @@ import (
 //
 // The 403 names the permission that was missing. That is the difference between
 // "you cannot do this" and "you cannot do this yet, ask your owner for
-// users:write", and flows.md 6 makes it an acceptance criterion.
+// users:write", and BR-024 makes it an acceptance criterion.
 func requirePermission(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role, ok := auth.RoleFromContext(r.Context())

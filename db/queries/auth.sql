@@ -9,7 +9,7 @@
 -- Everything the Session response needs, in one round trip. Runs inside
 -- InTenantTx, so RLS has already scoped users; tenants has no RLS by design.
 SELECT u.id AS user_id, u.name AS user_name, u.role,
-       t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.currency
+       t.id AS tenant_id, t.name AS tenant_name, t.timezone
   FROM users u
   JOIN tenants t ON t.id = u.tenant_id
  WHERE u.id = $1;
@@ -37,8 +37,8 @@ SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE rotated_from = $1);
 
 -- name: RevokeAllUserTokens :execrows
 -- Used when a already-rotated token is presented again, which means it was
--- stolen. API spec.md 2: "the whole rotation chain is revoked and the user is
--- signed out everywhere".
+-- stolen. BR-022: "its whole rotation chain is revoked and the user is signed
+-- out everywhere".
 --
 -- This revokes every active token for the user, not only the chain the reused
 -- token belongs to. A chain starts at each login, so a user signed in on a

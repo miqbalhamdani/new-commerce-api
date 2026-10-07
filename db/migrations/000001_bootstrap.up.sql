@@ -5,7 +5,7 @@
 -- app_user automatically, and that turning on tenant isolation is one line.
 
 -- ---------------------------------------------------------------------------
--- Extensions (erd.md 3.1)
+-- Extensions (03-erd.md §3.1)
 -- ---------------------------------------------------------------------------
 
 CREATE EXTENSION IF NOT EXISTS ltree;      -- categories.path
@@ -14,7 +14,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;    -- product title search
 CREATE EXTENSION IF NOT EXISTS citext;     -- users.email
 
 -- ---------------------------------------------------------------------------
--- app_user (tdd.md 3.1)
+-- app_user (BR-001)
 -- ---------------------------------------------------------------------------
 --
 -- The application connects as this role. It owns nothing, which is the whole
@@ -51,7 +51,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 -- schema has no sequences and is not going to grow any.
 
 -- ---------------------------------------------------------------------------
--- enable_tenant_rls (tdd.md 3.1)
+-- enable_tenant_rls (03-erd.md §3.1)
 -- ---------------------------------------------------------------------------
 --
 -- The pattern is four statements and every tenant table needs all four. Copied
@@ -92,7 +92,7 @@ BEGIN
     -- internal/db turns that into ErrNoTenantContext (P1-007) so it presents as
     -- an error rather than as a baffling empty result.
     --
-    -- The predicate is written exactly as tdd.md 3.1 specifies. Wrapping the
+    -- The predicate is written exactly as 03-erd.md §3.1 specifies. Wrapping the
     -- setting in a scalar subquery to force one evaluation per query is a known
     -- RLS optimisation, but it is a contract deviation and unproven here --
     -- P1-030 is where product-list latency gets measured.
@@ -105,4 +105,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION enable_tenant_rls(regclass) IS
-    'Enable + FORCE row level security and the tenant_isolation policy on a table with a tenant_id column. See tdd.md 3.1.';
+    'Enable + FORCE row level security and the tenant_isolation policy on a table with a tenant_id column. See 03-erd.md section 3.1.';

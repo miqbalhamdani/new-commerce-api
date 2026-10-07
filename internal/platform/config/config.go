@@ -12,7 +12,7 @@ import (
 )
 
 // Defaults target a host install -- Homebrew's postgresql@18 and redis on their
-// standard ports (contracts/tdd.md 2.2). They are compiled in so that a clean
+// standard ports (05-backlog.md Phase 0, P1-000). They are compiled in so that a clean
 // checkout runs without a .env; anything else overrides via the environment.
 const (
 	// The schema owner. Migrations run as this role; the API never does.
@@ -21,7 +21,7 @@ const (
 	// app_user, which owns nothing. FORCE ROW LEVEL SECURITY binds a table's
 	// owner too, but a superuser bypasses RLS outright -- and the local owner
 	// is one. Connecting the API as app_user is what makes the policies real
-	// rather than decorative. See tdd.md 3.1.
+	// rather than decorative. See BR-001.
 	DefaultAppDatabaseURL = "postgres://app_user@localhost:5432/new_commerce_dev?sslmode=disable"
 
 	DefaultRedisURL = "redis://localhost:6379/0"

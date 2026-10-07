@@ -15,10 +15,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// The canonical codes for this phase (API spec.md 1.1). The code is also the
+// The canonical codes for this phase (04-api-spec.md §1.1). The code is also the
 // last segment of the type URI a client receives.
 const (
 	CodeValidationFailed = "validation_failed"
+	CodeUnknownField     = "unknown_field"
 	CodeVersionConflict  = "version_conflict"
 	CodeDuplicateSKU     = "duplicate_sku"
 	CodePermissionDenied = "permission_denied"
@@ -83,7 +84,7 @@ func Unauthenticated(detail string) *Error {
 
 // PermissionDenied names the permission that was required.
 //
-// That naming is an acceptance criterion, not a nicety (flows.md 6): it is the
+// That naming is an acceptance criterion, not a nicety (BR-024): it is the
 // difference between "you cannot do this" and "ask your owner for users:write".
 func PermissionDenied(permission string) *Error {
 	return &Error{Code: CodePermissionDenied, Status: http.StatusForbidden,
@@ -94,6 +95,22 @@ func PermissionDenied(permission string) *Error {
 func NotFound(detail string) *Error {
 	return &Error{Code: CodeNotFound, Status: http.StatusNotFound,
 		Title: "Not found", Detail: detail}
+}
+
+// RateLimited is the 429 for a caller over its BR-014 limit. The middleware
+// that raises it sets Retry-After and the RateLimit-* headers.
+func RateLimited() *Error {
+	return &Error{Code: CodeRateLimited, Status: http.StatusTooManyRequests,
+		Title: "Rate limited", Detail: "Too many requests. Wait and try again."}
+}
+
+// UnknownField is the 422 for a request field the endpoint does not define
+// (04-api-spec.md 1.1). Never silently ignored: a client sending "price" to a
+// cart would otherwise believe it had set one (BR-089).
+func UnknownField(name string) *Error {
+	return (&Error{Code: CodeUnknownField, Status: http.StatusUnprocessableEntity,
+		Title: "Unknown field", Detail: "The request has a field this endpoint does not accept: " + name + "."}).
+		WithFields(Field{Name: name, Detail: "not a field of this request"})
 }
 
 func ValidationFailed(detail string) *Error {

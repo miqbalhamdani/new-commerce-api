@@ -10,20 +10,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The two reads in this file are the only ones in the system that cross a
-// tenant boundary, and they are hand-written rather than generated so that they
-// are visible as such -- generated queries all look alike, and these two must
-// not blend in.
+// The three reads in this file are the only ones in the system that cross a
+// tenant boundary (BR-003), and they are hand-written rather than generated so
+// that they are visible as such -- generated queries all look alike, and these
+// must not blend in.
 //
-// Both go through a SECURITY DEFINER function owned by a role with BYPASSRLS
-// (migration 000003). The function fixes the returned columns at definition
-// time; widening either is a schema change, a contract change, and a security
-// review. Nothing else may read across tenants from a request path -- tdd.md
-// 3.3.
+// Each goes through a SECURITY DEFINER function owned by a role with BYPASSRLS
+// (migrations 000003 and 000006). The function fixes the returned columns at
+// definition time; widening one is a schema change, a contract change, and a
+// security review. Nothing else may read across tenants from a request path.
 //
-// They exist because both callers run before a tenant is known. Login has only
-// an email; refresh has only a cookie. A plain query at that point matches zero
-// rows, because FORCE RLS compares tenant_id against a NULL setting.
+// They exist because every caller runs before a tenant is known. Login has
+// only an email; refresh has only a cookie; a storefront request has only an
+// API key. A plain query at that point matches zero rows, because FORCE RLS
+// compares tenant_id against a NULL setting.
 
 // ErrNotFound is returned when a lookup matches nothing. Callers must not
 // distinguish it from a wrong password in anything they send to a client.
@@ -41,7 +41,7 @@ type AuthUser struct {
 
 // LookupUserForAuth resolves an email to the one user that owns it.
 //
-// Email is unique across the whole system (erd.md 3.2), which is what makes
+// Email is unique across the whole system (BR-020), which is what makes
 // "one user" true and lets login carry no tenant parameter.
 func (s *Store) LookupUserForAuth(ctx context.Context, email string) (AuthUser, error) {
 	var u AuthUser
@@ -84,4 +84,31 @@ func (s *Store) LookupRefreshToken(ctx context.Context, tokenHash string) (AuthR
 		return AuthRefreshToken{}, fmt.Errorf("look up refresh token: %w", err)
 	}
 	return t, nil
+}
+
+// APIKey is what the storefront middleware learns from a key before it has a
+// tenant (BR-003): no name, no hash, nothing a caller could list keys with.
+type APIKey struct {
+	ID            uuid.UUID
+	TenantID      uuid.UUID
+	AllowedOrigin string
+	RevokedAt     *time.Time
+}
+
+// ResolveAPIKey resolves a key's SHA-256 hash to its tenant and allowed origin.
+// A revoked key still resolves; refusing it is the caller's decision, so the
+// answer can be cached (BR-085).
+func (s *Store) ResolveAPIKey(ctx context.Context, keyHash string) (APIKey, error) {
+	var k APIKey
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, tenant_id, allowed_origin, revoked_at FROM resolve_api_key($1)`,
+		keyHash,
+	).Scan(&k.ID, &k.TenantID, &k.AllowedOrigin, &k.RevokedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return APIKey{}, ErrNotFound
+	}
+	if err != nil {
+		return APIKey{}, fmt.Errorf("resolve api key: %w", err)
+	}
+	return k, nil
 }

@@ -19,9 +19,9 @@ import (
 // permission in detail.
 //
 // It runs against GET /v1/roles on the real server rather than a handler built
-// for the test, because flows.md 6 states the criterion in those terms -- "an
-// ops user gets 403 with the required permission named in detail on any
-// user-management endpoint" -- and /roles is one.
+// for the test, because BR-024 states the criterion for any route -- a 403
+// names the missing permission in detail -- and /roles is a user-management
+// route an ops user cannot reach (04-api-spec.md 3).
 func TestPermissionDenied(t *testing.T) {
 	ctx := t.Context()
 
@@ -94,8 +94,8 @@ func TestPermissionDenied(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&roles); err != nil {
 			t.Fatalf("decode roles: %v", err)
 		}
-		if len(roles) != 5 {
-			t.Errorf("got %d roles, want the 5 seeded ones", len(roles))
+		if len(roles) != 4 {
+			t.Errorf("got %d roles, want the 4 seeded ones", len(roles))
 		}
 	})
 
@@ -112,7 +112,7 @@ func TestPermissionDenied(t *testing.T) {
 	})
 
 	t.Run("every refused role names the same permission", func(t *testing.T) {
-		for _, role := range []string{auth.RoleOps, auth.RoleWarehouse, auth.RoleViewer} {
+		for _, role := range []string{auth.RoleOps, auth.RoleViewer} {
 			s := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), role)
 
 			rec := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestLoginCarriesPermissions(t *testing.T) {
 	t.Cleanup(store.Close)
 	srv := newServer(t)
 
-	for _, role := range []string{auth.RoleOwner, auth.RoleAdmin, auth.RoleOps, auth.RoleWarehouse, auth.RoleViewer} {
+	for _, role := range []string{auth.RoleOwner, auth.RoleAdmin, auth.RoleOps, auth.RoleViewer} {
 		t.Run(role, func(t *testing.T) {
 			s := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), role)
 

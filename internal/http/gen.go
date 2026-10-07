@@ -16,24 +16,69 @@ import (
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeDuplicateSku     ErrorCode = "duplicate_sku"
-	ErrorCodeNotFound         ErrorCode = "not_found"
-	ErrorCodePermissionDenied ErrorCode = "permission_denied"
-	ErrorCodeRateLimited      ErrorCode = "rate_limited"
-	ErrorCodeValidationFailed ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict  ErrorCode = "version_conflict"
+	ErrorCodeCategoryInUse            ErrorCode = "category_in_use"
+	ErrorCodeChannelUnavailable       ErrorCode = "channel_unavailable"
+	ErrorCodeCustomerAuthRequired     ErrorCode = "customer_auth_required"
+	ErrorCodeDuplicateSku             ErrorCode = "duplicate_sku"
+	ErrorCodeEmptyCart                ErrorCode = "empty_cart"
+	ErrorCodeIllegalTransition        ErrorCode = "illegal_transition"
+	ErrorCodeInternal                 ErrorCode = "internal"
+	ErrorCodeInvalidApiKey            ErrorCode = "invalid_api_key"
+	ErrorCodeItemUnavailable          ErrorCode = "item_unavailable"
+	ErrorCodeNotFound                 ErrorCode = "not_found"
+	ErrorCodeOriginNotAllowed         ErrorCode = "origin_not_allowed"
+	ErrorCodePaymentUnavailable       ErrorCode = "payment_unavailable"
+	ErrorCodePermissionDenied         ErrorCode = "permission_denied"
+	ErrorCodePublishCheckFailed       ErrorCode = "publish_check_failed"
+	ErrorCodeRateLimited              ErrorCode = "rate_limited"
+	ErrorCodeShippingRatesUnavailable ErrorCode = "shipping_rates_unavailable"
+	ErrorCodeShippingUnavailable      ErrorCode = "shipping_unavailable"
+	ErrorCodeUnauthenticated          ErrorCode = "unauthenticated"
+	ErrorCodeUnknownField             ErrorCode = "unknown_field"
+	ErrorCodeValidationFailed         ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict          ErrorCode = "version_conflict"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeCategoryInUse:
+		return true
+	case ErrorCodeChannelUnavailable:
+		return true
+	case ErrorCodeCustomerAuthRequired:
+		return true
 	case ErrorCodeDuplicateSku:
+		return true
+	case ErrorCodeEmptyCart:
+		return true
+	case ErrorCodeIllegalTransition:
+		return true
+	case ErrorCodeInternal:
+		return true
+	case ErrorCodeInvalidApiKey:
+		return true
+	case ErrorCodeItemUnavailable:
 		return true
 	case ErrorCodeNotFound:
 		return true
+	case ErrorCodeOriginNotAllowed:
+		return true
+	case ErrorCodePaymentUnavailable:
+		return true
 	case ErrorCodePermissionDenied:
 		return true
+	case ErrorCodePublishCheckFailed:
+		return true
 	case ErrorCodeRateLimited:
+		return true
+	case ErrorCodeShippingRatesUnavailable:
+		return true
+	case ErrorCodeShippingUnavailable:
+		return true
+	case ErrorCodeUnauthenticated:
+		return true
+	case ErrorCodeUnknownField:
 		return true
 	case ErrorCodeValidationFailed:
 		return true
@@ -46,11 +91,10 @@ func (e ErrorCode) Valid() bool {
 
 // Defines values for RoleName.
 const (
-	RoleNameAdmin     RoleName = "admin"
-	RoleNameOps       RoleName = "ops"
-	RoleNameOwner     RoleName = "owner"
-	RoleNameViewer    RoleName = "viewer"
-	RoleNameWarehouse RoleName = "warehouse"
+	RoleNameAdmin  RoleName = "admin"
+	RoleNameOps    RoleName = "ops"
+	RoleNameOwner  RoleName = "owner"
+	RoleNameViewer RoleName = "viewer"
 )
 
 // Valid indicates whether the value is a known member of the RoleName enum.
@@ -64,8 +108,6 @@ func (e RoleName) Valid() bool {
 		return true
 	case RoleNameViewer:
 		return true
-	case RoleNameWarehouse:
-		return true
 	default:
 		return false
 	}
@@ -73,11 +115,10 @@ func (e RoleName) Valid() bool {
 
 // Defines values for SessionUserRole.
 const (
-	SessionUserRoleAdmin     SessionUserRole = "admin"
-	SessionUserRoleOps       SessionUserRole = "ops"
-	SessionUserRoleOwner     SessionUserRole = "owner"
-	SessionUserRoleViewer    SessionUserRole = "viewer"
-	SessionUserRoleWarehouse SessionUserRole = "warehouse"
+	SessionUserRoleAdmin  SessionUserRole = "admin"
+	SessionUserRoleOps    SessionUserRole = "ops"
+	SessionUserRoleOwner  SessionUserRole = "owner"
+	SessionUserRoleViewer SessionUserRole = "viewer"
 )
 
 // Valid indicates whether the value is a known member of the SessionUserRole enum.
@@ -91,16 +132,14 @@ func (e SessionUserRole) Valid() bool {
 		return true
 	case SessionUserRoleViewer:
 		return true
-	case SessionUserRoleWarehouse:
-		return true
 	default:
 		return false
 	}
 }
 
-// ErrorCode The canonical error codes for this phase. The code also appears as the last segment of a
-// `Problem.type` URI, and directly in per-row results where an operation partially succeeds
-// — see `API spec.md` §7.2.
+// ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
+// The code also appears as the last segment of a `Problem.type` URI, and directly in
+// per-row results where an operation partially succeeds (§7.3, §7.5).
 type ErrorCode string
 
 // LoginRequest defines model for LoginRequest.
@@ -110,18 +149,12 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
-// Money An integer amount in **minor units** plus an ISO 4217 currency. `2000000` + `IDR` is
-// Rp 20.000.
+// Money An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+// a float, a decimal string or an object; there is no currency field because there is only
+// one currency (BR-006, BR-029). Clients divide by 100 to display.
 //
-// Never a float and never a decimal string. IDR has no minor unit in practice, but the
-// scale of 2 is kept uniform so multi-currency is not a migration.
-type Money struct {
-	// Amount Examples: 19900000
-	Amount int64 `json:"amount"`
-
-	// Currency Examples: IDR
-	Currency string `json:"currency"`
-}
+// Examples: 19900000
+type Money = int64
 
 // Problem RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
@@ -144,7 +177,7 @@ type Problem struct {
 	// TraceId Examples: 4bf92f3577b34da6a3ce929d0e0e4736
 	TraceId string `json:"trace_id"`
 
-	// Type Examples: https://docs.example.com/errors/version-conflict
+	// Type Examples: https://docs.example.com/errors/version_conflict
 	Type string `json:"type"`
 }
 
@@ -159,7 +192,7 @@ type ProblemError struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
-// Role One of the five seeded roles and everything it grants.
+// Role One of the four seeded roles and everything it grants.
 type Role struct {
 	// Description One line a client can show next to the role in a picker.
 	Description *string  `json:"description,omitempty"`
@@ -189,12 +222,10 @@ type Session struct {
 
 // SessionTenant defines model for SessionTenant.
 type SessionTenant struct {
-	// Currency Examples: IDR
-	Currency string             `json:"currency"`
-	Id       openapi_types.UUID `json:"id"`
-	Name     string             `json:"name"`
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
 
-	// Timezone IANA name. Applied at render time only; the wire is always UTC.
+	// Timezone IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
 	//
 	// Examples: Asia/Jakarta
 	Timezone string `json:"timezone"`
@@ -361,7 +392,7 @@ type ServerInterface interface {
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(w http.ResponseWriter, r *http.Request)
-	// ListRoles The five seeded roles and the permissions each grants
+	// ListRoles The four seeded roles and the permissions each grants
 	// (GET /roles)
 	ListRoles(w http.ResponseWriter, r *http.Request)
 }
@@ -388,7 +419,7 @@ func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListRoles The five seeded roles and the permissions each grants
+// ListRoles The four seeded roles and the permissions each grants
 // (GET /roles)
 func (_ Unimplemented) ListRoles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -600,6 +631,7 @@ type TooManyRequestsResponseHeaders struct {
 	RateLimitLimit     *int
 	RateLimitRemaining *int
 	RateLimitReset     *int
+	RetryAfter         *int
 }
 type TooManyRequestsApplicationProblemPlusJSONResponse struct {
 	Body Problem
@@ -694,6 +726,9 @@ func (response Login429ApplicationProblemPlusJSONResponse) VisitLoginResponse(w 
 	}
 	if response.Headers.RateLimitReset != nil {
 		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
 	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
@@ -850,7 +885,7 @@ type StrictServerInterface interface {
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(ctx context.Context, request RefreshRequestObject) (RefreshResponseObject, error)
-	// ListRoles The five seeded roles and the permissions each grants
+	// ListRoles The four seeded roles and the permissions each grants
 	// (GET /roles)
 	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
 }

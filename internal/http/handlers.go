@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
@@ -33,12 +34,7 @@ func NewServer(authSvc *auth.Service, secureCookies bool) *Server {
 // Login handles POST /auth/login.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	var body LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		// Decoding fails for malformed JSON and for a field the generated
-		// type rejects -- an unparseable email reaches here, not the check
-		// below. Saying "not valid JSON" to that is misleading.
-		writeError(w, r, apperrors.ValidationFailed(
-			"The request body is malformed or a field is not in the expected format.").WithCause(err))
+	if !decodeJSON(w, r, &body) {
 		return
 	}
 	if body.Email == "" || len(body.Password) < 8 {
@@ -105,7 +101,6 @@ func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session au
 			Id:       session.Tenant.ID,
 			Name:     session.Tenant.Name,
 			Timezone: session.Tenant.Timezone,
-			Currency: session.Tenant.Currency,
 		},
 	}
 
@@ -154,4 +149,26 @@ func (s *Server) clearRefreshCookie() *http.Cookie {
 	c.MaxAge = -1
 	c.Expires = time.Unix(0, 0)
 	return c
+}
+
+// decodeJSON decodes a request body into v, answering 422 itself on failure.
+//
+// A field v does not define is 422 unknown_field, naming it (04-api-spec.md
+// 1.1). Anything else that fails -- malformed JSON, an unparseable email, a
+// timestamp with no offset (BR-007) -- is validation_failed. Saying "not valid
+// JSON" to those is misleading.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		// encoding/json has no typed error for this; the message is its API.
+		if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			writeError(w, r, apperrors.UnknownField(strings.Trim(name, `"`)).WithCause(err))
+			return false
+		}
+		writeError(w, r, apperrors.ValidationFailed(
+			"The request body is malformed or a field is not in the expected format.").WithCause(err))
+		return false
+	}
+	return true
 }

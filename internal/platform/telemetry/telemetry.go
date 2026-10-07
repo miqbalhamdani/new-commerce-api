@@ -24,7 +24,7 @@ import (
 //
 // The provider is installed whether or not anything is collecting. That matters
 // more than it looks: OpenTelemetry's default global provider is a no-op whose
-// spans carry an all-zero trace id, so an API spec.md 1.1 trace_id would come
+// spans carry an all-zero trace id, so a 04-api-spec.md §1.1 trace_id would come
 // out as thirty-two zeroes on every response and correlate with nothing. A real
 // SDK provider mints real ids regardless of where -- or whether -- they are
 // exported.

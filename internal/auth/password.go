@@ -15,7 +15,7 @@ import (
 // point is that verifying a password is slow enough that guessing at scale is
 // impractical. RFC 9106's second recommended option -- 64 MiB, three passes --
 // which is the memory-constrained profile, chosen because the API shares a box
-// with PostgreSQL and the worker (tdd.md 2.2).
+// with PostgreSQL and the worker (BR-022).
 const (
 	argonTime    = 3
 	argonMemory  = 64 * 1024 // KiB
