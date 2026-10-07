@@ -48,13 +48,13 @@ type RefreshToken struct {
 }
 
 type Tenant struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	Timezone  string
-	Currency  string
-	Status    string
-	CreatedAt time.Time
+	ID          uuid.UUID
+	Name        string
+	Slug        string
+	Timezone    string
+	Status      string
+	CreatedAt   time.Time
+	OrderPrefix string
 }
 
 type User struct {

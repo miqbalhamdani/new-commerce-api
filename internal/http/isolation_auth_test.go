@@ -85,7 +85,7 @@ func seedAuthUser(ctx context.Context, t *testing.T, store *db.Store, tenantID u
 	tenantCtx := tenant.NewContext(ctx, tenantID)
 	if err := store.InTenantTx(tenantCtx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)`,
+			`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ($1, $2, $3, 'TST')`,
 			tenantID, "Isolation "+tenantID.String(), "iso-"+tenantID.String()); err != nil {
 			return err
 		}

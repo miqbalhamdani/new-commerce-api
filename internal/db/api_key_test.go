@@ -27,7 +27,7 @@ func TestResolveAPIKey(t *testing.T) {
 	hash := "test-hash-" + keyID.String()
 	tctx := tenant.NewContext(ctx, tenantID)
 	if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug) VALUES ($1, 'Toko ABC', $2)`,
+		if _, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, order_prefix) VALUES ($1, 'Toko ABC', $2, 'TKA')`,
 			tenantID, "toko-"+tenantID.String()); err != nil {
 			return err
 		}

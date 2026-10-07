@@ -100,7 +100,6 @@ func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session au
 			Id:       session.Tenant.ID,
 			Name:     session.Tenant.Name,
 			Timezone: session.Tenant.Timezone,
-			Currency: session.Tenant.Currency,
 		},
 	}
 

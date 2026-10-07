@@ -44,7 +44,6 @@ type SessionTenant struct {
 	ID       uuid.UUID
 	Name     string
 	Timezone string
-	Currency string
 }
 
 // Service is the auth use cases. Everything it does that touches a tenant's
@@ -256,7 +255,6 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 				ID:       row.TenantID,
 				Name:     row.TenantName,
 				Timezone: row.Timezone,
-				Currency: row.Currency,
 			},
 		}
 		return nil

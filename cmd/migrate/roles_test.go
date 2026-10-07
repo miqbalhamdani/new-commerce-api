@@ -46,7 +46,7 @@ func TestFourRolesMigrationRefusesWarehouse(t *testing.T) {
 	tenantID, userID := uuid.New(), uuid.New()
 	for _, stmt := range []string{
 		string(down),
-		`INSERT INTO tenants (id, name, slug) VALUES ('` + tenantID.String() + `', 'Warehouse Co', 'wh-` + tenantID.String() + `')`,
+		`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ('` + tenantID.String() + `', 'Warehouse Co', 'wh-` + tenantID.String() + `', 'WHC')`,
 		`INSERT INTO users (id, tenant_id, email, name, role) VALUES ('` + userID.String() + `', '` +
 			tenantID.String() + `', 'wh-` + userID.String() + `@example.com', 'Wawan', 'warehouse')`,
 	} {

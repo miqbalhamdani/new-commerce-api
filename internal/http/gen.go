@@ -31,7 +31,6 @@ const (
 	ErrorCodePermissionDenied         ErrorCode = "permission_denied"
 	ErrorCodePublishCheckFailed       ErrorCode = "publish_check_failed"
 	ErrorCodeRateLimited              ErrorCode = "rate_limited"
-	ErrorCodeSecretKeyInBrowser       ErrorCode = "secret_key_in_browser"
 	ErrorCodeShippingRatesUnavailable ErrorCode = "shipping_rates_unavailable"
 	ErrorCodeShippingUnavailable      ErrorCode = "shipping_unavailable"
 	ErrorCodeUnauthenticated          ErrorCode = "unauthenticated"
@@ -72,8 +71,6 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePublishCheckFailed:
 		return true
 	case ErrorCodeRateLimited:
-		return true
-	case ErrorCodeSecretKeyInBrowser:
 		return true
 	case ErrorCodeShippingRatesUnavailable:
 		return true
@@ -152,18 +149,12 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
-// Money An integer amount in **minor units** plus an ISO 4217 currency. `2000000` + `IDR` is
-// Rp 20.000.
+// Money An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+// a float, a decimal string or an object; there is no currency field because there is only
+// one currency (BR-006, BR-029). Clients divide by 100 to display.
 //
-// Never a float and never a decimal string. IDR has no minor unit in practice, but the
-// scale of 2 is kept uniform so multi-currency is not a migration.
-type Money struct {
-	// Amount Examples: 19900000
-	Amount int64 `json:"amount"`
-
-	// Currency Examples: IDR
-	Currency string `json:"currency"`
-}
+// Examples: 19900000
+type Money = int64
 
 // Problem RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
@@ -231,10 +222,8 @@ type Session struct {
 
 // SessionTenant defines model for SessionTenant.
 type SessionTenant struct {
-	// Currency Examples: IDR
-	Currency string             `json:"currency"`
-	Id       openapi_types.UUID `json:"id"`
-	Name     string             `json:"name"`
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
 
 	// Timezone IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
 	//

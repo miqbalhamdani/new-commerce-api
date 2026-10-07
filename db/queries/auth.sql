@@ -9,7 +9,7 @@
 -- Everything the Session response needs, in one round trip. Runs inside
 -- InTenantTx, so RLS has already scoped users; tenants has no RLS by design.
 SELECT u.id AS user_id, u.name AS user_name, u.role,
-       t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.currency
+       t.id AS tenant_id, t.name AS tenant_name, t.timezone
   FROM users u
   JOIN tenants t ON t.id = u.tenant_id
  WHERE u.id = $1;

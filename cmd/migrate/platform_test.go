@@ -41,9 +41,12 @@ func TestPlatformSchema(t *testing.T) {
 			{"name", "text", false},
 			{"slug", "text", false},
 			{"timezone", "text", false},
-			{"currency", "character(3)", false},
 			{"status", "text", false},
 			{"created_at", "timestamp with time zone", false},
+			// Added by P1-082, so it sits last rather than after slug as in
+			// the ERD; rebuilding tenants to move it would mean dropping
+			// every foreign key that points at it.
+			{"order_prefix", "text", false},
 		}},
 		{"users", []column{
 			{"id", "uuid", false},
@@ -112,10 +115,25 @@ func TestPlatformSchema(t *testing.T) {
 		})
 	}
 
+	// BR-077: the order-number prefix is 2-6 uppercase letters or digits.
+	t.Run("tenants.order_prefix refuses anything else", func(t *testing.T) {
+		for _, bad := range []string{"T", "tka", "TOOLONG", "TK-A"} {
+			tx, err := conn.Begin(ctx)
+			if err != nil {
+				t.Fatalf("begin: %v", err)
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, order_prefix)
+				VALUES (gen_random_uuid(), 'Prefix probe', gen_random_uuid()::text, $1)`, bad)
+			_ = tx.Rollback(ctx)
+			if err == nil {
+				t.Errorf("order_prefix %q was accepted", bad)
+			}
+		}
+	})
+
 	t.Run("defaults match", func(t *testing.T) {
 		for _, tt := range []struct{ table, column, want string }{
 			{"tenants", "timezone", "'Asia/Jakarta'"},
-			{"tenants", "currency", "'IDR'"},
 			{"tenants", "status", "'active'"},
 			{"users", "role", "'viewer'"},
 			{"users", "status", "'invited'"},
@@ -283,7 +301,7 @@ func assertFKCrossesRLS(ctx context.Context, t *testing.T, conn *pgx.Conn) {
 
 	var tenantID, userID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'FK probe', $1)
+		INSERT INTO tenants (id, name, slug, order_prefix) VALUES (gen_random_uuid(), 'FK probe', $1, 'FKP')
 		RETURNING id`, "fk-probe-"+t.Name()).Scan(&tenantID); err != nil {
 		t.Fatalf("insert tenant: %v", err)
 	}
