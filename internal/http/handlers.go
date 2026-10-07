@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
@@ -152,11 +153,19 @@ func (s *Server) clearRefreshCookie() *http.Cookie {
 
 // decodeJSON decodes a request body into v, answering 422 itself on failure.
 //
-// Decoding fails for malformed JSON and for a field the generated type
-// rejects -- an unparseable email, or a timestamp with no offset, which
-// time.Time refuses (BR-007). Saying "not valid JSON" to those is misleading.
+// A field v does not define is 422 unknown_field, naming it (04-api-spec.md
+// 1.1). Anything else that fails -- malformed JSON, an unparseable email, a
+// timestamp with no offset (BR-007) -- is validation_failed. Saying "not valid
+// JSON" to those is misleading.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		// encoding/json has no typed error for this; the message is its API.
+		if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			writeError(w, r, apperrors.UnknownField(strings.Trim(name, `"`)).WithCause(err))
+			return false
+		}
 		writeError(w, r, apperrors.ValidationFailed(
 			"The request body is malformed or a field is not in the expected format.").WithCause(err))
 		return false

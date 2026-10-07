@@ -35,3 +35,22 @@ func TestTimestampWithoutOffsetIs422(t *testing.T) {
 		}
 	}
 }
+
+// TestUnknownFieldIs422: a field the endpoint does not define is
+// 422 unknown_field naming it, never silently dropped (04-api-spec.md 1.1).
+func TestUnknownFieldIs422(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login",
+		strings.NewReader(`{"email":"budi@example.com","password":"long-enough","tenant_id":"x"}`))
+	var v LoginRequest
+	if decodeJSON(rec, req, &v) {
+		t.Fatal("decoded a body with an unknown field")
+	}
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status %d, want 422", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "/errors/unknown_field") || !strings.Contains(body, `"field":"tenant_id"`) {
+		t.Errorf("body does not name unknown_field and tenant_id: %s", body)
+	}
+}

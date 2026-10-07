@@ -19,6 +19,7 @@ import (
 // last segment of the type URI a client receives.
 const (
 	CodeValidationFailed = "validation_failed"
+	CodeUnknownField     = "unknown_field"
 	CodeVersionConflict  = "version_conflict"
 	CodeDuplicateSKU     = "duplicate_sku"
 	CodePermissionDenied = "permission_denied"
@@ -101,6 +102,15 @@ func NotFound(detail string) *Error {
 func RateLimited() *Error {
 	return &Error{Code: CodeRateLimited, Status: http.StatusTooManyRequests,
 		Title: "Rate limited", Detail: "Too many requests. Wait and try again."}
+}
+
+// UnknownField is the 422 for a request field the endpoint does not define
+// (04-api-spec.md 1.1). Never silently ignored: a client sending "price" to a
+// cart would otherwise believe it had set one (BR-089).
+func UnknownField(name string) *Error {
+	return (&Error{Code: CodeUnknownField, Status: http.StatusUnprocessableEntity,
+		Title: "Unknown field", Detail: "The request has a field this endpoint does not accept: " + name + "."}).
+		WithFields(Field{Name: name, Detail: "not a field of this request"})
 }
 
 func ValidationFailed(detail string) *Error {
