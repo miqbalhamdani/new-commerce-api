@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // Admin session limit (BR-014): 100 requests a minute per user.
@@ -47,12 +47,12 @@ func NewRateLimiter(counter WindowCounter, limit int, window time.Duration) *Rat
 // are per email and IP and arrive with P1-209.
 func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := auth.UserIDFromContext(r.Context())
+		actor, ok := tenant.ActorFromContext(r.Context())
 		if !ok {
 			next.ServeHTTP(w, r)
 			return
 		}
-		key := "rl:admin:user:" + userID.String()
+		key := "rl:admin:user:" + actor.UserID.String()
 
 		allowed, count, resetIn, err := l.counter.SlidingWindow(r.Context(), key, l.limit, l.window)
 		if err != nil {

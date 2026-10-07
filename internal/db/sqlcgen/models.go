@@ -5,6 +5,7 @@
 package sqlcgen
 
 import (
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,19 @@ type ApiKey struct {
 	CreatedBy   *uuid.UUID
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time
+	CreatedAt   time.Time
+}
+
+type AuditLog struct {
+	ID          int64
+	TenantID    uuid.UUID
+	ActorID     *uuid.UUID
+	Action      string
+	SubjectType string
+	SubjectID   string
+	Before      []byte
+	After       []byte
+	Ip          *netip.Addr
 	CreatedAt   time.Time
 }
 

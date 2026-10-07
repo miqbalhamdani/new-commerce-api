@@ -10,6 +10,7 @@ package tenant
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/google/uuid"
 )
@@ -35,4 +36,28 @@ func NewContext(ctx context.Context, id uuid.UUID) context.Context {
 func FromContext(ctx context.Context) (uuid.UUID, bool) {
 	id, ok := ctx.Value(key).(uuid.UUID)
 	return id, ok
+}
+
+// Actor is who is acting inside the tenant: the signed-in user and the address
+// the request came from. The audit log records both (BR-018); the rate limiter
+// keys on the user (BR-014).
+type Actor struct {
+	UserID uuid.UUID
+	IP     netip.Addr // zero when the address could not be parsed
+}
+
+type actorKey struct{}
+
+// NewActorContext returns a copy of ctx carrying the acting user, set by the
+// authentication middleware from the verified token.
+func NewActorContext(ctx context.Context, a Actor) context.Context {
+	return context.WithValue(ctx, actorKey{}, a)
+}
+
+// ActorFromContext returns the acting user. False means no user: an
+// unauthenticated route, or a system job (import worker, retention), which the
+// audit log records with a NULL actor.
+func ActorFromContext(ctx context.Context) (Actor, bool) {
+	a, ok := ctx.Value(actorKey{}).(Actor)
+	return a, ok
 }

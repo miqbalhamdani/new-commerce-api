@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // TestAdminRateLimit is P1-015's acceptance against real Redis: 100 requests a
@@ -55,7 +55,7 @@ func TestRateLimitSkipsAnonymous(t *testing.T) {
 
 func assertLimits(t *testing.T, h http.Handler, limit int) {
 	t.Helper()
-	ctx := auth.NewUserContext(context.Background(), uuid.New())
+	ctx := tenant.NewActorContext(context.Background(), tenant.Actor{UserID: uuid.New()})
 
 	for i := 1; i <= limit; i++ {
 		rec := httptest.NewRecorder()

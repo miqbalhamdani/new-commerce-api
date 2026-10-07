@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
@@ -44,7 +45,7 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 			// rows they may do it to.
 			ctx := tenant.NewContext(r.Context(), claims.TenantID)
 			ctx = auth.NewRoleContext(ctx, claims.Role)
-			ctx = auth.NewUserContext(ctx, claims.UserID())
+			ctx = tenant.NewActorContext(ctx, tenant.Actor{UserID: claims.UserID(), IP: clientIP(r)})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -76,4 +77,18 @@ func bearerToken(r *http.Request) (string, bool) {
 	}
 	token := strings.TrimSpace(header[7:])
 	return token, token != ""
+}
+
+// clientIP is the peer address of the connection.
+//
+// ponytail: RemoteAddr only. Behind Caddy (P1-001) that is the proxy's address;
+// once the proxy is fixed, trust its X-Forwarded-For hop and nothing further
+// left -- trusting the header from anyone lets a client write its own IP into
+// the audit log.
+func clientIP(r *http.Request) netip.Addr {
+	ap, err := netip.ParseAddrPort(r.RemoteAddr)
+	if err != nil {
+		return netip.Addr{}
+	}
+	return ap.Addr().Unmap()
 }
