@@ -150,3 +150,55 @@ func productOut(v catalog.ProductView) Product {
 
 // mediaOut renders a product's images. ponytail: empty until P1-043.
 func mediaOut([]catalog.Media) []Media { return []Media{} }
+
+func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
+	requirePermission(auth.PermProductsRead, func(w http.ResponseWriter, r *http.Request) {
+		f := catalog.ProductFilter{BrandID: params.BrandId, CategoryID: params.CategoryId, Q: params.Q,
+			Limit: pageLimit(params.Limit)}
+		if params.Status != nil {
+			if !params.Status.Valid() {
+				writeError(w, r, fieldErr("status", "status is draft, active or archived"))
+				return
+			}
+			st := string(*params.Status)
+			f.Status = &st
+		}
+		if params.Sort != nil {
+			if !params.Sort.Valid() {
+				writeError(w, r, fieldErr("sort", "sort is -created_at, -updated_at or title"))
+				return
+			}
+			f.Sort = string(*params.Sort)
+		}
+		if params.Cursor != nil {
+			f.After = &catalog.ProductCursor{}
+			if err := decodeCursor(params.Cursor, f.After); err != nil {
+				writeError(w, r, err)
+				return
+			}
+		}
+		rows, next, err := s.catalog.ListProducts(r.Context(), f)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		page := ProductPage{Data: make([]ProductListItem, 0, len(rows))}
+		for _, p := range rows {
+			item := ProductListItem{Id: p.ID, Version: p.Version, Title: p.Title, Slug: p.Slug,
+				Status: ProductStatus(p.Status), VariantCount: p.VariantCount, PriceMin: p.PriceMin,
+				PriceMax: p.PriceMax, CoverUrl: p.CoverURL, UpdatedAt: p.UpdatedAt}
+			if p.BrandID != nil && p.BrandName != nil {
+				item.Brand = &Ref{Id: *p.BrandID, Name: *p.BrandName}
+			}
+			item.Categories = make([]CategoryBrief, 0, len(p.Categories))
+			for _, c := range p.Categories {
+				item.Categories = append(item.Categories, CategoryBrief{Id: c.ID, Name: c.Name, Path: c.Path})
+			}
+			page.Data = append(page.Data, item)
+		}
+		if next != nil {
+			page.NextCursor = encodeCursor(next)
+		}
+		writeJSON(w, http.StatusOK, page)
+	})(w, r)
+}

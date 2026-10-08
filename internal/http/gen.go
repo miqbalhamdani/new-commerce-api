@@ -206,6 +206,27 @@ func (e SessionUserRole) Valid() bool {
 	}
 }
 
+// Defines values for ListProductsParamsSort.
+const (
+	MinusCreatedAt ListProductsParamsSort = "-created_at"
+	MinusUpdatedAt ListProductsParamsSort = "-updated_at"
+	Title          ListProductsParamsSort = "title"
+)
+
+// Valid indicates whether the value is a known member of the ListProductsParamsSort enum.
+func (e ListProductsParamsSort) Valid() bool {
+	switch e {
+	case MinusCreatedAt:
+		return true
+	case MinusUpdatedAt:
+		return true
+	case Title:
+		return true
+	default:
+		return false
+	}
+}
+
 // Brand defines model for Brand.
 type Brand struct {
 	ArchivedAt *time.Time         `json:"archived_at"`
@@ -247,6 +268,13 @@ type Category struct {
 	// Examples: apparel.outerwear.jackets
 	Path      string    `json:"path"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CategoryBrief defines model for CategoryBrief.
+type CategoryBrief struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+	Path string             `json:"path"`
 }
 
 // CategoryCreate defines model for CategoryCreate.
@@ -407,6 +435,32 @@ type ProductCreate struct {
 	CategoryIds *[]openapi_types.UUID   `json:"category_ids,omitempty"`
 	Description *string                 `json:"description,omitempty"`
 	Title       string                  `json:"title"`
+}
+
+// ProductListItem defines model for ProductListItem.
+type ProductListItem struct {
+	Brand *Ref `json:"brand"`
+
+	// Categories Main-tree categories only (`kind = category`), by path.
+	Categories []CategoryBrief `json:"categories"`
+
+	// CoverUrl The first image's 200 px derivative, once made (BR-052).
+	CoverUrl     *string            `json:"cover_url"`
+	Id           openapi_types.UUID `json:"id"`
+	PriceMax     *Money             `json:"price_max"`
+	PriceMin     *Money             `json:"price_min"`
+	Slug         string             `json:"slug"`
+	Status       ProductStatus      `json:"status"`
+	Title        string             `json:"title"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+	VariantCount int                `json:"variant_count"`
+	Version      int                `json:"version"`
+}
+
+// ProductPage defines model for ProductPage.
+type ProductPage struct {
+	Data       []ProductListItem `json:"data"`
+	NextCursor *string           `json:"next_cursor"`
 }
 
 // ProductStatus defines model for ProductStatus.
@@ -645,6 +699,25 @@ type ListCategoriesParams struct {
 	Depth    *int                `form:"depth,omitempty" json:"depth,omitempty"`
 }
 
+// ListProductsParams defines parameters for ListProducts.
+type ListProductsParams struct {
+	Status     *ProductStatus          `form:"status,omitempty" json:"status,omitempty"`
+	BrandId    *openapi_types.UUID     `form:"brand_id,omitempty" json:"brand_id,omitempty"`
+	CategoryId *openapi_types.UUID     `form:"category_id,omitempty" json:"category_id,omitempty"`
+	Q          *string                 `form:"q,omitempty" json:"q,omitempty"`
+	Sort       *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListProductsParamsSort defines parameters for ListProducts.
+type ListProductsParamsSort string
+
 // UpdateProductParams defines parameters for UpdateProduct.
 type UpdateProductParams struct {
 	// IfMatch The `version` read from the resource. Required on every `PATCH`. The server checks it in
@@ -819,6 +892,9 @@ type ServerInterface interface {
 	// UpdateCategory Rename or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// ListProducts Products, filtered and cursor-paginated
+	// (GET /products)
+	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
 	// CreateProduct Create a product
 	// (POST /products)
 	CreateProduct(w http.ResponseWriter, r *http.Request)
@@ -927,6 +1003,12 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id Id
 // UpdateCategory Rename or move a category
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListProducts Products, filtered and cursor-paginated
+// (GET /products)
+func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1341,6 +1423,117 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProducts operation middleware
+func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProductsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "brand_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "brand_id", r.URL.Query(), &params.BrandId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "brand_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "brand_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category_id", r.URL.Query(), &params.CategoryId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProducts(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1786,6 +1979,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/products", wrapper.ListProducts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/products", wrapper.CreateProduct)
@@ -2755,6 +2951,76 @@ func (response UpdateCategory422ApplicationProblemPlusJSONResponse) VisitUpdateC
 	return err
 }
 
+type ListProductsRequestObject struct {
+	Params ListProductsParams
+}
+
+type ListProductsResponseObject interface {
+	VisitListProductsResponse(w http.ResponseWriter) error
+}
+
+type ListProducts200JSONResponse ProductPage
+
+func (response ListProducts200JSONResponse) VisitListProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProducts401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListProducts401ApplicationProblemPlusJSONResponse) VisitListProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProducts403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListProducts403ApplicationProblemPlusJSONResponse) VisitListProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProducts422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListProducts422ApplicationProblemPlusJSONResponse) VisitListProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateProductRequestObject struct {
 	Body *CreateProductJSONRequestBody
 }
@@ -3499,6 +3765,9 @@ type StrictServerInterface interface {
 	// UpdateCategory Rename or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
+	// ListProducts Products, filtered and cursor-paginated
+	// (GET /products)
+	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
 	// CreateProduct Create a product
 	// (POST /products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
@@ -3923,6 +4192,32 @@ func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCategoryResponseObject); ok {
 		if err := validResponse.VisitUpdateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListProducts operation middleware
+func (sh *strictHandler) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
+	var request ListProductsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProducts(ctx, request.(ListProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListProductsResponseObject); ok {
+		if err := validResponse.VisitListProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
