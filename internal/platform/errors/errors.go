@@ -123,6 +123,17 @@ func CategoryInUse(children, products int32) *Error {
 			Field{Name: "products", Extra: map[string]any{"count": products}})
 }
 
+// DuplicateSKU is the 409 for a SKU another variant of this tenant holds,
+// naming the product that holds it when known (BR-039).
+func DuplicateSKU(sku, holder string) *Error {
+	detail := "This SKU is already used by another product."
+	if holder != "" {
+		detail = "SKU " + sku + " is used by " + holder + "."
+	}
+	return (&Error{Code: CodeDuplicateSKU, Status: http.StatusConflict, Title: "Duplicate SKU", Detail: detail}).
+		WithFields(Field{Name: "sku", Detail: detail})
+}
+
 func ValidationFailed(detail string) *Error {
 	return &Error{Code: CodeValidationFailed, Status: http.StatusUnprocessableEntity,
 		Title: "Validation failed", Detail: detail}

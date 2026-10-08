@@ -71,6 +71,11 @@ type seeded struct {
 	// request can aim at a row it must not reach.
 	id      string
 	otherID string
+
+	// product and otherProduct are the same pair for routes nested under a
+	// product (its variants, media).
+	product      string
+	otherProduct string
 }
 
 // isolationCase says how to exercise one route as tenant A after tenant B owns
@@ -122,7 +127,7 @@ func TestTenantIsolation(t *testing.T) {
 			b := c.seed(ctx, t, store, tenantB)
 
 			rec := httptest.NewRecorder()
-			a.otherID = b.id
+			a.otherID, a.otherProduct = b.id, b.product
 			srv.ServeHTTP(rec, c.request(t, a))
 
 			assertNoLeak(t, rec, b.marker)

@@ -486,6 +486,91 @@ type SessionUser struct {
 // SessionUserRole defines model for SessionUser.Role.
 type SessionUserRole string
 
+// Variant defines model for Variant.
+type Variant struct {
+	ArchivedAt *time.Time         `json:"archived_at"`
+	Barcode    *string            `json:"barcode"`
+	CreatedAt  time.Time          `json:"created_at"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// OnSale Read-only. True while the sale's schedule is running (BR-046).
+	OnSale       bool     `json:"on_sale"`
+	OptionValues []string `json:"option_values"`
+
+	// Price An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Price     Money              `json:"price"`
+	ProductId openapi_types.UUID `json:"product_id"`
+
+	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	RegularPrice Money      `json:"regular_price"`
+	SaleEndsAt   *time.Time `json:"sale_ends_at"`
+	SalePrice    *Money     `json:"sale_price"`
+	SaleStartsAt *time.Time `json:"sale_starts_at"`
+	Sku          *string    `json:"sku"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	Version      int        `json:"version"`
+	WeightGrams  int        `json:"weight_grams"`
+}
+
+// VariantCreate defines model for VariantCreate.
+type VariantCreate struct {
+	Barcode      *string  `json:"barcode,omitempty"`
+	OptionValues []string `json:"option_values"`
+
+	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	RegularPrice *Money     `json:"regular_price,omitempty"`
+	SaleEndsAt   *time.Time `json:"sale_ends_at,omitempty"`
+
+	// SalePrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	SalePrice    *Money     `json:"sale_price,omitempty"`
+	SaleStartsAt *time.Time `json:"sale_starts_at,omitempty"`
+	Sku          *string    `json:"sku,omitempty"`
+	WeightGrams  *int       `json:"weight_grams,omitempty"`
+}
+
+// VariantList defines model for VariantList.
+type VariantList struct {
+	Data []Variant `json:"data"`
+}
+
+// VariantUpdate defines model for VariantUpdate.
+type VariantUpdate struct {
+	Barcode *string `json:"barcode,omitempty"`
+
+	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	RegularPrice *Money     `json:"regular_price,omitempty"`
+	SaleEndsAt   *time.Time `json:"sale_ends_at,omitempty"`
+	SalePrice    *Money     `json:"sale_price,omitempty"`
+	SaleStartsAt *time.Time `json:"sale_starts_at,omitempty"`
+	Sku          *string    `json:"sku,omitempty"`
+	WeightGrams  *int       `json:"weight_grams,omitempty"`
+}
+
 // Cursor defines model for Cursor.
 type Cursor = string
 
@@ -570,6 +655,21 @@ type UpdateProductParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// ListVariantsParams defines parameters for ListVariants.
+type ListVariantsParams struct {
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
+// UpdateVariantParams defines parameters for UpdateVariant.
+type UpdateVariantParams struct {
+	// IfMatch The `version` read from the resource. Required on every `PATCH`. The server checks it in
+	// the `UPDATE … WHERE version = $n` predicate; a stale value is `409 version_conflict`, not
+	// a silent no-op.
+	//
+	// `version` travels here and never in the request body.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -590,6 +690,12 @@ type CreateProductJSONRequestBody = ProductCreate
 
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductUpdate
+
+// CreateVariantJSONRequestBody defines body for CreateVariant for application/json ContentType.
+type CreateVariantJSONRequestBody = VariantCreate
+
+// UpdateVariantJSONRequestBody defines body for UpdateVariant for application/json ContentType.
+type UpdateVariantJSONRequestBody = VariantUpdate
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -725,9 +831,21 @@ type ServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams)
+	// ListVariants A product's variants, in grid order
+	// (GET /products/{id}/variants)
+	ListVariants(w http.ResponseWriter, r *http.Request, id Id, params ListVariantsParams)
+	// CreateVariant Add one variant
+	// (POST /products/{id}/variants)
+	CreateVariant(w http.ResponseWriter, r *http.Request, id Id)
 	// ListRoles The four seeded roles and the permissions each grants
 	// (GET /roles)
 	ListRoles(w http.ResponseWriter, r *http.Request)
+	// ArchiveVariant Archive one variant
+	// (DELETE /variants/{id})
+	ArchiveVariant(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdateVariant Edit one variant
+	// (PATCH /variants/{id})
+	UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -836,9 +954,33 @@ func (_ Unimplemented) UpdateProduct(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListVariants A product's variants, in grid order
+// (GET /products/{id}/variants)
+func (_ Unimplemented) ListVariants(w http.ResponseWriter, r *http.Request, id Id, params ListVariantsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateVariant Add one variant
+// (POST /products/{id}/variants)
+func (_ Unimplemented) CreateVariant(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListRoles The four seeded roles and the permissions each grants
 // (GET /roles)
 func (_ Unimplemented) ListRoles(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ArchiveVariant Archive one variant
+// (DELETE /variants/{id})
+func (_ Unimplemented) ArchiveVariant(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateVariant Edit one variant
+// (PATCH /variants/{id})
+func (_ Unimplemented) UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1328,11 +1470,159 @@ func (siw *ServerInterfaceWrapper) UpdateProduct(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListVariants operation middleware
+func (siw *ServerInterfaceWrapper) ListVariants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListVariantsParams
+
+	// ------------- Optional query parameter "archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVariants(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateVariant operation middleware
+func (siw *ServerInterfaceWrapper) CreateVariant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateVariant(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoles operation middleware
 func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListRoles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveVariant operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveVariant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveVariant(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateVariant operation middleware
+func (siw *ServerInterfaceWrapper) UpdateVariant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateVariantParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateVariant(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1508,6 +1798,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/products/{id}", wrapper.UpdateProduct)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/products/{id}/variants", wrapper.ListVariants)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/products/{id}/variants", wrapper.CreateVariant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/variants/{id}", wrapper.ArchiveVariant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/variants/{id}", wrapper.UpdateVariant)
 	})
 
 	return r
@@ -2761,6 +3063,180 @@ func (response UpdateProduct422ApplicationProblemPlusJSONResponse) VisitUpdatePr
 	return err
 }
 
+type ListVariantsRequestObject struct {
+	Id     Id `json:"id"`
+	Params ListVariantsParams
+}
+
+type ListVariantsResponseObject interface {
+	VisitListVariantsResponse(w http.ResponseWriter) error
+}
+
+type ListVariants200JSONResponse VariantList
+
+func (response ListVariants200JSONResponse) VisitListVariantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListVariants401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListVariants401ApplicationProblemPlusJSONResponse) VisitListVariantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListVariants403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListVariants403ApplicationProblemPlusJSONResponse) VisitListVariantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListVariants404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListVariants404ApplicationProblemPlusJSONResponse) VisitListVariantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariantRequestObject struct {
+	Id   Id `json:"id"`
+	Body *CreateVariantJSONRequestBody
+}
+
+type CreateVariantResponseObject interface {
+	VisitCreateVariantResponse(w http.ResponseWriter) error
+}
+
+type CreateVariant201JSONResponse Variant
+
+func (response CreateVariant201JSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariant401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVariant401ApplicationProblemPlusJSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVariant403ApplicationProblemPlusJSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVariant404ApplicationProblemPlusJSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariant409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVariant409ApplicationProblemPlusJSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateVariant422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreateVariant422ApplicationProblemPlusJSONResponse) VisitCreateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRolesRequestObject struct {
 }
 
@@ -2810,6 +3286,174 @@ func (response ListRoles403ApplicationProblemPlusJSONResponse) VisitListRolesRes
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveVariantRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ArchiveVariantResponseObject interface {
+	VisitArchiveVariantResponse(w http.ResponseWriter) error
+}
+
+type ArchiveVariant204Response struct {
+}
+
+func (response ArchiveVariant204Response) VisitArchiveVariantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ArchiveVariant401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveVariant401ApplicationProblemPlusJSONResponse) VisitArchiveVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveVariant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveVariant403ApplicationProblemPlusJSONResponse) VisitArchiveVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveVariant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveVariant404ApplicationProblemPlusJSONResponse) VisitArchiveVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariantRequestObject struct {
+	Id     Id `json:"id"`
+	Params UpdateVariantParams
+	Body   *UpdateVariantJSONRequestBody
+}
+
+type UpdateVariantResponseObject interface {
+	VisitUpdateVariantResponse(w http.ResponseWriter) error
+}
+
+type UpdateVariant200JSONResponse Variant
+
+func (response UpdateVariant200JSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariant401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVariant401ApplicationProblemPlusJSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariant403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVariant403ApplicationProblemPlusJSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariant404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVariant404ApplicationProblemPlusJSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariant409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVariant409ApplicationProblemPlusJSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateVariant422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateVariant422ApplicationProblemPlusJSONResponse) VisitUpdateVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2867,9 +3511,21 @@ type StrictServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(ctx context.Context, request UpdateProductRequestObject) (UpdateProductResponseObject, error)
+	// ListVariants A product's variants, in grid order
+	// (GET /products/{id}/variants)
+	ListVariants(ctx context.Context, request ListVariantsRequestObject) (ListVariantsResponseObject, error)
+	// CreateVariant Add one variant
+	// (POST /products/{id}/variants)
+	CreateVariant(ctx context.Context, request CreateVariantRequestObject) (CreateVariantResponseObject, error)
 	// ListRoles The four seeded roles and the permissions each grants
 	// (GET /roles)
 	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
+	// ArchiveVariant Archive one variant
+	// (DELETE /variants/{id})
+	ArchiveVariant(ctx context.Context, request ArchiveVariantRequestObject) (ArchiveVariantResponseObject, error)
+	// UpdateVariant Edit one variant
+	// (PATCH /variants/{id})
+	UpdateVariant(ctx context.Context, request UpdateVariantRequestObject) (UpdateVariantResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -3391,6 +4047,66 @@ func (sh *strictHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, i
 	}
 }
 
+// ListVariants operation middleware
+func (sh *strictHandler) ListVariants(w http.ResponseWriter, r *http.Request, id Id, params ListVariantsParams) {
+	var request ListVariantsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListVariants(ctx, request.(ListVariantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListVariants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListVariantsResponseObject); ok {
+		if err := validResponse.VisitListVariantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateVariant operation middleware
+func (sh *strictHandler) CreateVariant(w http.ResponseWriter, r *http.Request, id Id) {
+	var request CreateVariantRequestObject
+
+	request.Id = id
+
+	var body CreateVariantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateVariant(ctx, request.(CreateVariantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateVariant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateVariantResponseObject); ok {
+		if err := validResponse.VisitCreateVariantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRoles operation middleware
 func (sh *strictHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	var request ListRolesRequestObject
@@ -3408,6 +4124,66 @@ func (sh *strictHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRolesResponseObject); ok {
 		if err := validResponse.VisitListRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveVariant operation middleware
+func (sh *strictHandler) ArchiveVariant(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ArchiveVariantRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveVariant(ctx, request.(ArchiveVariantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveVariant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveVariantResponseObject); ok {
+		if err := validResponse.VisitArchiveVariantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateVariant operation middleware
+func (sh *strictHandler) UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams) {
+	var request UpdateVariantRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdateVariantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateVariant(ctx, request.(UpdateVariantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateVariant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateVariantResponseObject); ok {
+		if err := validResponse.VisitUpdateVariantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
