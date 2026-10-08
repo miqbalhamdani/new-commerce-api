@@ -28,21 +28,40 @@ func NewRouter(srv ServerInterface, signer *auth.Signer, limiter *RateLimiter) h
 	})
 }
 
-// paramError answers a path or query parameter the generated binder could not
-// parse. An id that is not a UUID names no row, so it is the same 404 as a row
-// that does not exist; a bad query parameter is 422 naming it.
+// paramError answers a path, query or header parameter the generated binder
+// could not take. An id that is not a UUID names no row, so it is the same 404
+// as a row that does not exist; anything else is 422 naming the parameter.
 func paramError(w http.ResponseWriter, r *http.Request, err error) {
-	var bad *InvalidParamFormatError
-	if errors.As(err, &bad) && bad.ParamName == "id" {
+	name := paramName(err)
+	if name == "id" {
 		writeError(w, r, apperrors.NotFound("No such resource."))
 		return
 	}
-	name := "query"
-	if errors.As(err, &bad) {
-		name = bad.ParamName
-	}
 	writeError(w, r, apperrors.ValidationFailed(err.Error()).
-		WithFields(apperrors.Field{Name: name, Detail: "invalid"}).WithCause(err))
+		WithFields(apperrors.Field{Name: name, Detail: "invalid or missing"}).WithCause(err))
+}
+
+func paramName(err error) string {
+	var (
+		format   *InvalidParamFormatError
+		required *RequiredParamError
+		header   *RequiredHeaderError
+		decode   *UnmarshalingParamError
+		many     *TooManyValuesForParamError
+	)
+	switch {
+	case errors.As(err, &format):
+		return format.ParamName
+	case errors.As(err, &required):
+		return required.ParamName
+	case errors.As(err, &header):
+		return header.ParamName
+	case errors.As(err, &decode):
+		return decode.ParamName
+	case errors.As(err, &many):
+		return many.ParamName
+	}
+	return "query"
 }
 
 // tracing starts a span per request and names it after the matched route

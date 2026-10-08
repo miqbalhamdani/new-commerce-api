@@ -217,6 +217,21 @@ func apiCreate(t *testing.T, s seeded, path string, body any) string {
 	return b.ID
 }
 
+// doWithHeaders sends one JSON request as s with extra headers and decodes
+// the answer.
+func doWithHeaders(t *testing.T, s seeded, method, path string, body any, headers map[string]string) (int, map[string]any) {
+	t.Helper()
+	r := bodyRequest(t, method, path, s.accessToken, body)
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	newServer(t).ServeHTTP(rec, r)
+	var out map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return rec.Code, out
+}
+
 // apiClient returns a function that sends a request as s and decodes the
 // JSON answer.
 func apiClient(t *testing.T, s seeded) func(method, path string, body any) (int, map[string]any) {
