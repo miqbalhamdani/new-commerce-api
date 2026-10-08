@@ -41,6 +41,9 @@ func TestKilledJobIsRedeliveredAndFinishesOnce(t *testing.T) {
 	started := make(chan struct{}, 4)
 	var finished atomic.Int32
 	handler := func(ctx context.Context, j jobs.Job, _ jobs.Progress) (any, error) {
+		if j.ID != job.ID { // the shared stream may hold other tests' jobs
+			return nil, nil
+		}
 		started <- struct{}{}
 		select {
 		case <-ctx.Done(): // the first worker is killed here
@@ -112,7 +115,10 @@ func TestFailingJobGivesUp(t *testing.T) {
 	var calls atomic.Int32
 	r := &jobs.Runner{Store: store, Queue: redis, Consumer: "failing-" + job.ID.String(),
 		ClaimIdle: 100 * time.Millisecond, MaxDeliveries: 3,
-		Handlers: map[string]jobs.Handler{"product_import": func(context.Context, jobs.Job, jobs.Progress) (any, error) {
+		Handlers: map[string]jobs.Handler{"product_import": func(_ context.Context, j jobs.Job, _ jobs.Progress) (any, error) {
+			if j.ID != job.ID {
+				return nil, nil
+			}
 			calls.Add(1)
 			return nil, errors.New("boom")
 		}}}
