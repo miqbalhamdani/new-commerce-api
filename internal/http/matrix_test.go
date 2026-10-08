@@ -1,9 +1,11 @@
 package httpapi_test
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -114,4 +116,40 @@ func TestVariantMatrix(t *testing.T) {
 		code, p := put(1, map[string]any{"option_names": names, "rows": []any{}, "archive_missing": false})
 		assertProblem(t, code, p, 409, "version_conflict", "version")
 	})
+}
+
+// TestVariantMatrixPartialFailure is P1-041's acceptance: one duplicate SKU
+// fails only its row and the rest save; 100 cells save in under 2 s.
+func TestVariantMatrixPartialFailure(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	admin := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), auth.RoleAdmin)
+	other := apiCreate(t, admin, "/v1/products", map[string]any{"title": "Erigo Oversize Tee"})
+	apiCreate(t, admin, "/v1/products/"+other+"/variants", map[string]any{"option_values": []string{}, "sku": "TAKEN"})
+	product := apiCreate(t, admin, "/v1/products", map[string]any{"title": "Erigo Basic Tee"})
+
+	var rows []any
+	for i := 0; i < 100; i++ {
+		sku := fmt.Sprintf("BIG-%03d", i)
+		if i == 42 {
+			sku = "TAKEN"
+		}
+		rows = append(rows, map[string]any{"option_values": []string{strconv.Itoa(i)}, "sku": sku,
+			"regular_price": 19900000, "weight_grams": 200})
+	}
+	start := time.Now()
+	code, r := doWithHeaders(t, admin, http.MethodPut, "/v1/products/"+product+"/variant-matrix",
+		map[string]any{"option_names": []string{"Size"}, "rows": rows, "archive_missing": true}, map[string]string{"If-Match": "1"})
+	took := time.Since(start)
+	if code != 200 || r["created"] != float64(99) || r["failed"] != float64(1) {
+		t.Fatalf("%d %v", code, r)
+	}
+	bad := r["results"].([]any)[42].(map[string]any)
+	if bad["status"] != "error" || bad["code"] != "duplicate_sku" || bad["detail"] != "SKU TAKEN is used by Erigo Oversize Tee." {
+		t.Errorf("row 42: %v", bad)
+	}
+	t.Logf("100 rows saved in %s", took)
+	if took > 2*time.Second {
+		t.Errorf("100 cells took %s, want under 2s", took)
+	}
 }
