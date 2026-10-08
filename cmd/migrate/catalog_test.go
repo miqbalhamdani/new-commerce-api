@@ -42,6 +42,21 @@ func TestCatalogSchema(t *testing.T) {
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
 		}},
+		{"products", []column{
+			{"id", "uuid", false},
+			{"tenant_id", "uuid", false},
+			{"title", "text", false},
+			{"slug", "text", false},
+			{"description", "text", true},
+			{"brand_id", "uuid", true},
+			{"status", "text", false},
+			{"attributes", "jsonb", false},
+			{"option_names", "text[]", false},
+			{"version", "integer", false},
+			{"archived_at", "timestamp with time zone", true},
+			{"created_at", "timestamp with time zone", false},
+			{"updated_at", "timestamp with time zone", false},
+		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			if got := columnsOf(ctx, t, conn, tt.table); !slices.Equal(got, tt.columns) {
@@ -76,6 +91,58 @@ func TestCatalogSchema(t *testing.T) {
 		}
 		if err := insert(b, false); err != nil {
 			t.Errorf("the same slug at another tenant was refused: %v", err)
+		}
+	})
+
+	// BR-017: stock is not tracked in any form, so no catalog table carries a
+	// quantity, stock or inventory column -- now or in any later migration.
+	t.Run("no quantity column anywhere", func(t *testing.T) {
+		rows, err := conn.Query(ctx, `SELECT table_name || '.' || column_name FROM information_schema.columns
+			WHERE table_schema = 'public' AND column_name ~ '(qty|quantity|stock|inventory)'
+			  AND table_name IN ('brands','categories','products','variants','product_categories','product_media')`)
+		if err != nil {
+			t.Fatalf("query columns: %v", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c string
+			_ = rows.Scan(&c)
+			t.Errorf("%s exists; BR-017 forbids stock in any form", c)
+		}
+	})
+
+	// BR-042: a product slug is unique per tenant, archived products included.
+	// BR-004: a product's brand belongs to the same tenant.
+	t.Run("product slug and brand", func(t *testing.T) {
+		tx := beginRolledBack(ctx, t, conn)
+		a, b := seedTenant(ctx, t, tx), seedTenant(ctx, t, tx)
+		brandB := uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO brands (id, tenant_id, name, slug) VALUES ($1, $2, 'B', 'b')`, brandB, b); err != nil {
+			t.Fatalf("brand: %v", err)
+		}
+		insert := func(tenantID uuid.UUID, slug string, brand *uuid.UUID, archived bool) error {
+			if _, err := tx.Exec(ctx, `SAVEPOINT s`); err != nil {
+				t.Fatalf("savepoint: %v", err)
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO products (id, tenant_id, title, slug, brand_id, archived_at)
+				VALUES ($1, $2, 'Tee', $3, $4, CASE WHEN $5 THEN now() END)`,
+				uuid.Must(uuid.NewV7()), tenantID, slug, brand, archived)
+			if err != nil {
+				_, _ = tx.Exec(ctx, `ROLLBACK TO SAVEPOINT s`)
+			}
+			return err
+		}
+		if err := insert(a, "tee", nil, true); err != nil {
+			t.Fatalf("first product: %v", err)
+		}
+		if insert(a, "tee", nil, false) == nil {
+			t.Error("a second 'tee' slug in one tenant was accepted while the first is archived")
+		}
+		if err := insert(b, "tee", &brandB, false); err != nil {
+			t.Errorf("same slug at another tenant, own brand: %v", err)
+		}
+		if insert(a, "other-tee", &brandB, false) == nil {
+			t.Error("a product took another tenant's brand")
 		}
 	})
 
