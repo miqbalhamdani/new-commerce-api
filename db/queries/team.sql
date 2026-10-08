@@ -37,3 +37,12 @@ SELECT count(*)::int FROM users WHERE role = 'owner' AND status = 'active' AND i
 UPDATE users SET password_hash = sqlc.arg(password_hash), status = 'active'
 WHERE id = sqlc.arg(id) AND status = 'invited'
 RETURNING *;
+
+-- name: UpdateSettings :one
+-- tenants has no RLS, so the WHERE names the caller's own tenant explicitly.
+UPDATE tenants SET
+  name         = coalesce(sqlc.narg(name), name),
+  timezone     = coalesce(sqlc.narg(timezone), timezone),
+  order_prefix = coalesce(sqlc.narg(order_prefix), order_prefix)
+WHERE id = current_setting('app.tenant_id')::uuid
+RETURNING *;

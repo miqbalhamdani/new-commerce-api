@@ -241,3 +241,12 @@ func signInAnotherUser(ctx context.Context, t *testing.T, store *db.Store, tenan
 	}
 	return seeded{email: email, password: isoPassword, accessToken: session.AccessToken, refreshToken: session.RefreshToken}
 }
+
+// seedSignedOwner is a signed-in owner whose tenant id is the marker: what a
+// settings route that read the wrong tenant would return.
+func seedSignedOwner(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID) seeded {
+	t.Helper()
+	s := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleOwner)
+	s.marker, s.tenantID = tenantID.String(), tenantID.String()
+	return s
+}

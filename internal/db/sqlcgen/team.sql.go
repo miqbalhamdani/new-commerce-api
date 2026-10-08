@@ -237,3 +237,34 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (U
 	)
 	return i, err
 }
+
+const updateSettings = `-- name: UpdateSettings :one
+UPDATE tenants SET
+  name         = coalesce($1, name),
+  timezone     = coalesce($2, timezone),
+  order_prefix = coalesce($3, order_prefix)
+WHERE id = current_setting('app.tenant_id')::uuid
+RETURNING id, name, slug, timezone, status, created_at, order_prefix
+`
+
+type UpdateSettingsParams struct {
+	Name        *string
+	Timezone    *string
+	OrderPrefix *string
+}
+
+// tenants has no RLS, so the WHERE names the caller's own tenant explicitly.
+func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Tenant, error) {
+	row := q.db.QueryRow(ctx, updateSettings, arg.Name, arg.Timezone, arg.OrderPrefix)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Timezone,
+		&i.Status,
+		&i.CreatedAt,
+		&i.OrderPrefix,
+	)
+	return i, err
+}

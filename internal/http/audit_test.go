@@ -75,6 +75,7 @@ func TestEveryMutatingRouteIsAudited(t *testing.T) {
 		t.Run(c.route.String(), func(t *testing.T) {
 			tenantID := uuid.Must(uuid.NewV7())
 			s := seedSignedInUserWithRole(ctx, t, store, tenantID, "owner")
+			s.tenantID = tenantID.String()
 			req, subjectType, subjectID := c.request(t, s)
 			count := func(subjectID string) int {
 				var n int

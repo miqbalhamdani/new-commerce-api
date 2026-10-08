@@ -83,6 +83,9 @@ type seeded struct {
 	// key and otherKey are an object key per tenant, for media routes.
 	key      string
 	otherKey string
+
+	// tenantID is the seeded tenant, for routes about the tenant itself.
+	tenantID string
 }
 
 // isolationCase says how to exercise one route as tenant A after tenant B owns
