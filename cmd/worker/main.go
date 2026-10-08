@@ -100,12 +100,16 @@ func run() error {
 	return runner.Run(ctx)
 }
 
-// mailSender is Resend when a key is set. Without one, development prints
-// mail to stdout; anywhere else that is a startup failure, since printed mail
-// would put invitation tokens in a deployed log (BR-013).
+// mailSender is Resend when a key is set. Without one, development sends to a
+// local SMTP inbox (Mailpit) when SMTP_ADDR is set and otherwise prints mail to
+// stdout; anywhere else that is a startup failure, since printed mail would put
+// invitation tokens in a deployed log (BR-013).
 func mailSender() (email.Sender, error) {
 	if key := config.ResendAPIKey(); key != "" {
 		return email.Resend{APIKey: key, Domain: config.EmailDomain(), URL: "https://api.resend.com/emails"}, nil
+	}
+	if config.IsDevelopment() && config.SMTPAddr() != "" {
+		return email.SMTP{Addr: config.SMTPAddr(), Domain: config.EmailDomain()}, nil
 	}
 	if config.IsDevelopment() {
 		return email.Log{Out: os.Stdout}, nil

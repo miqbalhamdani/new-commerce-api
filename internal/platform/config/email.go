@@ -2,9 +2,13 @@ package config
 
 import "errors"
 
-// ResendAPIKey sends email through Resend (BR-128). Empty means log-only:
-// the worker logs who would have been emailed, never the body.
+// ResendAPIKey sends email through Resend (BR-128). Empty is development
+// only: mail goes to SMTPAddr, or to stdout without one.
 func ResendAPIKey() string { return Getenv("RESEND_API_KEY", "") }
+
+// SMTPAddr is a local SMTP server (Mailpit) for development mail. Empty means
+// the worker prints mail instead. Ignored once RESEND_API_KEY is set.
+func SMTPAddr() string { return Getenv("SMTP_ADDR", "") }
 
 // EmailDomain is what no-reply@ is sent from; the real one arrives with P1-225.
 func EmailDomain() string { return Getenv("EMAIL_DOMAIN", "example.com") }

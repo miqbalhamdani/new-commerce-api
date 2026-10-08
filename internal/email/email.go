@@ -14,7 +14,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net/http"
+	"net/mail"
+	"net/smtp"
+	"net/textproto"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +106,47 @@ func (r Resend) Send(ctx context.Context, m Message) error {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode >= 300 {
 		return fmt.Errorf("resend: status %d", res.StatusCode)
+	}
+	return nil
+}
+
+// SMTP sends through a plain SMTP server: Mailpit on a developer's machine,
+// so an invitation lands in a real inbox (http://localhost:8025) with its
+// HTML rendered. Development only, like Log; Resend is the production path.
+type SMTP struct {
+	Addr   string // host:port, e.g. localhost:1025
+	Domain string
+}
+
+func (s SMTP) Send(_ context.Context, m Message) error {
+	from := mail.Address{Name: m.FromName, Address: "no-reply@" + s.Domain}
+	var body bytes.Buffer
+	parts := multipart.NewWriter(&body)
+	for _, p := range []struct{ kind, content string }{{"text/plain", m.Text}, {"text/html", m.HTML}} {
+		w, err := parts.CreatePart(textproto.MIMEHeader{"Content-Type": {p.kind + "; charset=utf-8"},
+			"Content-Transfer-Encoding": {"quoted-printable"}})
+		if err != nil {
+			return err
+		}
+		qp := quotedprintable.NewWriter(w)
+		if _, err := io.WriteString(qp, p.content); err != nil {
+			return err
+		}
+		if err := qp.Close(); err != nil {
+			return err
+		}
+	}
+	if err := parts.Close(); err != nil {
+		return err
+	}
+
+	var msg bytes.Buffer
+	fmt.Fprintf(&msg, "From: %s\r\nTo: %s\r\nReply-To: %s\r\nSubject: %s\r\nDate: %s\r\n",
+		from.String(), m.To, m.ReplyTo, mime.QEncoding.Encode("utf-8", m.Subject), time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&msg, "MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n", parts.Boundary())
+	msg.Write(body.Bytes())
+	if err := smtp.SendMail(s.Addr, nil, from.Address, []string{m.To}, msg.Bytes()); err != nil {
+		return fmt.Errorf("smtp %s: %w", s.Addr, err)
 	}
 	return nil
 }
