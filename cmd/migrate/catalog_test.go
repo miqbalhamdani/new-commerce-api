@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -202,4 +203,46 @@ func TestCategoryPaths(t *testing.T) {
 	other := seedTenant(ctx, t, tx)
 	refused("a parent at another tenant (BR-004)", `INSERT INTO categories (id, tenant_id, parent_id, kind, name)
 		VALUES ($1, $2, $3, 'category', 'Foreign')`, uuid.Must(uuid.NewV7()), other, apparel)
+}
+
+// TestCategoryGuards is P1-023's acceptance: moving a node beneath its own
+// descendant errors (BR-034), and siblings named alike get _1 labels (BR-035).
+func TestCategoryGuards(t *testing.T) {
+	ctx := t.Context()
+	tx := beginRolledBack(ctx, t, migratedOwner(ctx, t))
+	tenantID := seedTenant(ctx, t, tx)
+
+	add := func(name string, parent *uuid.UUID) (uuid.UUID, string) {
+		t.Helper()
+		id := uuid.Must(uuid.NewV7())
+		var path string
+		if err := tx.QueryRow(ctx, `INSERT INTO categories (id, tenant_id, parent_id, name)
+			VALUES ($1, $2, $3, $4) RETURNING path::text`, id, tenantID, parent, name).Scan(&path); err != nil {
+			t.Fatalf("insert %s: %v", name, err)
+		}
+		return id, path
+	}
+
+	root, _ := add("Apparel", nil)
+	_, first := add("Jackets", &root)
+	_, second := add("jackets!", &root)
+	_, third := add("Jackets", &root)
+	if first != "apparel.jackets" || second != "apparel.jackets_1" || third != "apparel.jackets_2" {
+		t.Errorf("sibling paths %s, %s, %s", first, second, third)
+	}
+
+	child, _ := add("Kids", &root)
+	grandchild, _ := add("Tees", &child)
+	for _, target := range []uuid.UUID{grandchild, root} {
+		if _, err := tx.Exec(ctx, `SAVEPOINT s`); err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		_, err := tx.Exec(ctx, `UPDATE categories SET parent_id = $1 WHERE id = $2`, target, root)
+		if err == nil || !strings.Contains(err.Error(), "beneath its own descendant") {
+			t.Errorf("moving the root beneath %s: %v", target, err)
+		}
+		if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT s`); err != nil {
+			t.Fatalf("rollback to savepoint: %v", err)
+		}
+	}
 }
