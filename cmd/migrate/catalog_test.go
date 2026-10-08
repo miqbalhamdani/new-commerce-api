@@ -75,6 +75,21 @@ func TestCatalogSchema(t *testing.T) {
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
 		}},
+		{"product_media", []column{
+			{"id", "uuid", false},
+			{"tenant_id", "uuid", false},
+			{"product_id", "uuid", false},
+			{"variant_id", "uuid", true},
+			{"r2_key", "text", false},
+			{"mime_type", "text", false},
+			{"bytes", "bigint", false},
+			{"width", "integer", true},
+			{"height", "integer", true},
+			{"position", "integer", false},
+			{"derivatives", "jsonb", false},
+			{"source_url", "text", true},
+			{"created_at", "timestamp with time zone", false},
+		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			if got := columnsOf(ctx, t, conn, tt.table); !slices.Equal(got, tt.columns) {
@@ -446,5 +461,49 @@ func TestProductCategories(t *testing.T) {
 	if _, err := tx.Exec(ctx, `INSERT INTO product_categories (tenant_id, product_id, category_id) VALUES ($1, $2, $3)`,
 		a, product, foreign); err == nil {
 		t.Error("a product was linked to another tenant's category")
+	}
+}
+
+// TestProductMedia is P1-042's acceptance: media belong to their product's
+// tenant, and a variant link is held to the same tenant (BR-004).
+func TestProductMedia(t *testing.T) {
+	ctx := t.Context()
+	tx := beginRolledBack(ctx, t, migratedOwner(ctx, t))
+	a, b := seedTenant(ctx, t, tx), seedTenant(ctx, t, tx)
+	product := func(tenantID uuid.UUID) uuid.UUID {
+		id := uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO products (id, tenant_id, title, slug) VALUES ($1, $2, 'Tee', $3)`,
+			id, tenantID, "t-"+id.String()); err != nil {
+			t.Fatalf("product: %v", err)
+		}
+		return id
+	}
+	pa, pb := product(a), product(b)
+	vb := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO variants (id, tenant_id, product_id) VALUES ($1, $2, $3)`, vb, b, pb); err != nil {
+		t.Fatalf("variant: %v", err)
+	}
+	insert := func(tenantID, productID uuid.UUID, variant *uuid.UUID, key string) error {
+		if _, err := tx.Exec(ctx, `SAVEPOINT s`); err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO product_media (id, tenant_id, product_id, variant_id, r2_key, mime_type, bytes)
+			VALUES ($1, $2, $3, $4, $5, 'image/jpeg', 1)`, uuid.Must(uuid.NewV7()), tenantID, productID, variant, key)
+		if err != nil {
+			_, _ = tx.Exec(ctx, `ROLLBACK TO SAVEPOINT s`)
+		}
+		return err
+	}
+	if err := insert(a, pa, nil, "a/1.jpg"); err != nil {
+		t.Fatalf("own product: %v", err)
+	}
+	if insert(a, pa, nil, "a/1.jpg") == nil {
+		t.Error("the same key twice on one product was accepted")
+	}
+	if insert(a, pb, nil, "a/2.jpg") == nil {
+		t.Error("media at tenant A on tenant B's product was accepted")
+	}
+	if insert(a, pa, &vb, "a/3.jpg") == nil {
+		t.Error("media linked to another tenant's variant was accepted")
 	}
 }

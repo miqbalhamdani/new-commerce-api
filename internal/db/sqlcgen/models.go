@@ -96,6 +96,22 @@ type ProductCategory struct {
 	CategoryID uuid.UUID
 }
 
+type ProductMedium struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	ProductID   uuid.UUID
+	VariantID   *uuid.UUID
+	R2Key       string
+	MimeType    string
+	Bytes       int64
+	Width       *int32
+	Height      *int32
+	Position    int32
+	Derivatives []byte
+	SourceUrl   *string
+	CreatedAt   time.Time
+}
+
 type RefreshToken struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
