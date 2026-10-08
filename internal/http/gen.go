@@ -580,6 +580,25 @@ type AcceptInvite struct {
 	Token string `json:"token"`
 }
 
+// AuditEntry defines model for AuditEntry.
+type AuditEntry struct {
+	// Action Examples: order.transition
+	Action      string                  `json:"action"`
+	Actor       *Ref                    `json:"actor"`
+	After       *map[string]interface{} `json:"after"`
+	Before      *map[string]interface{} `json:"before"`
+	CreatedAt   time.Time               `json:"created_at"`
+	Ip          *string                 `json:"ip"`
+	SubjectId   string                  `json:"subject_id"`
+	SubjectType string                  `json:"subject_type"`
+}
+
+// AuditPage defines model for AuditPage.
+type AuditPage struct {
+	Data       []AuditEntry `json:"data"`
+	NextCursor *string      `json:"next_cursor"`
+}
+
 // Brand defines model for Brand.
 type Brand struct {
 	ArchivedAt *time.Time         `json:"archived_at"`
@@ -1302,6 +1321,22 @@ type Unauthorized = Problem
 // the span. There is no separate `code` field: the code is the last segment of `type`.
 type UnprocessableEntity = Problem
 
+// ListAuditLogParams defines parameters for ListAuditLog.
+type ListAuditLogParams struct {
+	SubjectType *string             `form:"subject_type,omitempty" json:"subject_type,omitempty"`
+	SubjectId   *string             `form:"subject_id,omitempty" json:"subject_id,omitempty"`
+	ActorId     *openapi_types.UUID `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	From        *string             `form:"from,omitempty" json:"from,omitempty"`
+	To          *string             `form:"to,omitempty" json:"to,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListBrandsParams defines parameters for ListBrands.
 type ListBrandsParams struct {
 	Q        *string `form:"q,omitempty" json:"q,omitempty"`
@@ -1538,6 +1573,9 @@ func (a ProblemError) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAuditLog Who changed what, newest first
+	// (GET /audit-log)
+	ListAuditLog(w http.ResponseWriter, r *http.Request, params ListAuditLogParams)
 	// AcceptInvite Set a password from an invitation link and sign in
 	// (POST /auth/accept-invite)
 	AcceptInvite(w http.ResponseWriter, r *http.Request)
@@ -1663,6 +1701,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListAuditLog Who changed what, newest first
+// (GET /audit-log)
+func (_ Unimplemented) ListAuditLog(w http.ResponseWriter, r *http.Request, params ListAuditLogParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // AcceptInvite Set a password from an invitation link and sign in
 // (POST /auth/accept-invite)
@@ -1912,6 +1956,117 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAuditLog operation middleware
+func (siw *ServerInterfaceWrapper) ListAuditLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAuditLogParams
+
+	// ------------- Optional query parameter "subject_type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subject_type", r.URL.Query(), &params.SubjectType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject_type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject_type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subject_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subject_id", r.URL.Query(), &params.SubjectId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "actor_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "actor_id", r.URL.Query(), &params.ActorId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "actor_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actor_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAuditLog(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // AcceptInvite operation middleware
 func (siw *ServerInterfaceWrapper) AcceptInvite(w http.ResponseWriter, r *http.Request) {
@@ -3316,6 +3471,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/settings", wrapper.UpdateSettings)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/audit-log", wrapper.ListAuditLog)
+	})
 
 	return r
 }
@@ -3343,6 +3501,76 @@ type TooManyRequestsApplicationProblemPlusJSONResponse struct {
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
 
 type UnprocessableEntityApplicationProblemPlusJSONResponse Problem
+
+type ListAuditLogRequestObject struct {
+	Params ListAuditLogParams
+}
+
+type ListAuditLogResponseObject interface {
+	VisitListAuditLogResponse(w http.ResponseWriter) error
+}
+
+type ListAuditLog200JSONResponse AuditPage
+
+func (response ListAuditLog200JSONResponse) VisitListAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuditLog401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListAuditLog401ApplicationProblemPlusJSONResponse) VisitListAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuditLog403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListAuditLog403ApplicationProblemPlusJSONResponse) VisitListAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAuditLog422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListAuditLog422ApplicationProblemPlusJSONResponse) VisitListAuditLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type AcceptInviteRequestObject struct {
 	Body *AcceptInviteJSONRequestBody
@@ -6285,6 +6513,9 @@ func (response UpdateVariant422ApplicationProblemPlusJSONResponse) VisitUpdateVa
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListAuditLog Who changed what, newest first
+	// (GET /audit-log)
+	ListAuditLog(ctx context.Context, request ListAuditLogRequestObject) (ListAuditLogResponseObject, error)
 	// AcceptInvite Set a password from an invitation link and sign in
 	// (POST /auth/accept-invite)
 	AcceptInvite(ctx context.Context, request AcceptInviteRequestObject) (AcceptInviteResponseObject, error)
@@ -6444,6 +6675,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAuditLog operation middleware
+func (sh *strictHandler) ListAuditLog(w http.ResponseWriter, r *http.Request, params ListAuditLogParams) {
+	var request ListAuditLogRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAuditLog(ctx, request.(ListAuditLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAuditLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAuditLogResponseObject); ok {
+		if err := validResponse.VisitListAuditLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // AcceptInvite operation middleware

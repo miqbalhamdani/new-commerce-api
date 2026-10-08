@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"net/netip"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -43,4 +44,86 @@ func (q *Queries) InsertAuditLog(ctx context.Context, arg InsertAuditLogParams) 
 		arg.Ip,
 	)
 	return err
+}
+
+const listAudit = `-- name: ListAudit :many
+SELECT a.id, a.action, a.actor_id, u.name AS actor_name, a.subject_type, a.subject_id,
+       a.before, a.after, coalesce(host(a.ip), '')::text AS ip, a.created_at
+FROM audit_log a
+LEFT JOIN users u ON u.id = a.actor_id
+WHERE ($1::text IS NULL OR a.subject_type = $1::text)
+  AND ($2::text IS NULL OR a.subject_id = $2::text)
+  AND ($3::uuid IS NULL OR a.actor_id = $3::uuid)
+  AND ($4::timestamptz IS NULL OR a.created_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR a.created_at < $5::timestamptz)
+  AND ($6::timestamptz IS NULL
+       OR (a.created_at, a.id) < ($6::timestamptz, $7::bigint))
+ORDER BY a.created_at DESC, a.id DESC
+LIMIT $8
+`
+
+type ListAuditParams struct {
+	SubjectType *string
+	SubjectID   *string
+	ActorID     *uuid.UUID
+	FromAt      *time.Time
+	ToAt        *time.Time
+	BeforeAt    *time.Time
+	BeforeID    *int64
+	Lim         int32
+}
+
+type ListAuditRow struct {
+	ID          int64
+	Action      string
+	ActorID     *uuid.UUID
+	ActorName   *string
+	SubjectType string
+	SubjectID   string
+	Before      []byte
+	After       []byte
+	Ip          string
+	CreatedAt   time.Time
+}
+
+// Newest first over (created_at, id); the id stays internal (BR-005) and is
+// only the cursor's tie-break.
+func (q *Queries) ListAudit(ctx context.Context, arg ListAuditParams) ([]ListAuditRow, error) {
+	rows, err := q.db.Query(ctx, listAudit,
+		arg.SubjectType,
+		arg.SubjectID,
+		arg.ActorID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.BeforeAt,
+		arg.BeforeID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAuditRow
+	for rows.Next() {
+		var i ListAuditRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Action,
+			&i.ActorID,
+			&i.ActorName,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.Before,
+			&i.After,
+			&i.Ip,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
