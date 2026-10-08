@@ -30,6 +30,17 @@ func TestCatalogSchema(t *testing.T) {
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
 		}},
+		{"categories", []column{
+			{"id", "uuid", false},
+			{"tenant_id", "uuid", false},
+			{"parent_id", "uuid", true},
+			{"kind", "text", false},
+			{"name", "text", false},
+			{"path", "ltree", false},
+			{"archived_at", "timestamp with time zone", true},
+			{"created_at", "timestamp with time zone", false},
+			{"updated_at", "timestamp with time zone", false},
+		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			if got := columnsOf(ctx, t, conn, tt.table); !slices.Equal(got, tt.columns) {
@@ -118,4 +129,77 @@ func seedTenant(ctx context.Context, t *testing.T, tx pgx.Tx) uuid.UUID {
 		t.Fatalf("seed tenant: %v", err)
 	}
 	return id
+}
+
+// TestCategoryPaths is P1-022's acceptance: the trigger derives path from name
+// and parent, and one UPDATE of a node rewrites every descendant (BR-032).
+func TestCategoryPaths(t *testing.T) {
+	ctx := t.Context()
+	tx := beginRolledBack(ctx, t, migratedOwner(ctx, t))
+	tenantID := seedTenant(ctx, t, tx)
+
+	add := func(name, kind string, parent *uuid.UUID) uuid.UUID {
+		t.Helper()
+		id := uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO categories (id, tenant_id, parent_id, kind, name)
+			VALUES ($1, $2, $3, $4, $5)`, id, tenantID, parent, kind, name); err != nil {
+			t.Fatalf("insert %s: %v", name, err)
+		}
+		return id
+	}
+	pathOf := func(id uuid.UUID) string {
+		t.Helper()
+		var p string
+		if err := tx.QueryRow(ctx, `SELECT path::text FROM categories WHERE id = $1`, id).Scan(&p); err != nil {
+			t.Fatalf("read path: %v", err)
+		}
+		return p
+	}
+
+	apparel := add("Apparel", "category", nil)
+	outer := add("Outerwear", "category", &apparel)
+	jackets := add("Jackets", "category", &outer)
+	rain := add("Rain Jackets", "category", &jackets)
+	// A second tree of another kind with the same label path must not move.
+	seriesApparel := add("Apparel", "series", nil)
+	seriesOuter := add("Outerwear", "series", &seriesApparel)
+
+	if got := pathOf(rain); got != "apparel.outerwear.jackets.rain_jackets" {
+		t.Fatalf("derived path %q", got)
+	}
+
+	technical := add("Technical", "category", &apparel)
+	if _, err := tx.Exec(ctx, `UPDATE categories SET parent_id = $1 WHERE id = $2`, technical, outer); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := pathOf(rain); got != "apparel.technical.outerwear.jackets.rain_jackets" {
+		t.Errorf("after one move, descendant path %q", got)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE categories SET name = 'Coats & Jackets' WHERE id = $1`, jackets); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if got := pathOf(rain); got != "apparel.technical.outerwear.coats_jackets.rain_jackets" {
+		t.Errorf("after rename, descendant path %q", got)
+	}
+	if got := pathOf(seriesOuter); got != "apparel.outerwear" {
+		t.Errorf("the series tree moved with the category tree: %q", got)
+	}
+
+	refused := func(what, sql string, args ...any) {
+		t.Helper()
+		if _, err := tx.Exec(ctx, `SAVEPOINT s`); err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		if _, err := tx.Exec(ctx, sql, args...); err == nil {
+			t.Errorf("%s was accepted", what)
+		}
+		if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT s`); err != nil {
+			t.Fatalf("rollback to savepoint: %v", err)
+		}
+	}
+	refused("a parent of another kind", `INSERT INTO categories (id, tenant_id, parent_id, kind, name)
+		VALUES ($1, $2, $3, 'category', 'Mixed')`, uuid.Must(uuid.NewV7()), tenantID, seriesApparel)
+	other := seedTenant(ctx, t, tx)
+	refused("a parent at another tenant (BR-004)", `INSERT INTO categories (id, tenant_id, parent_id, kind, name)
+		VALUES ($1, $2, $3, 'category', 'Foreign')`, uuid.Must(uuid.NewV7()), other, apparel)
 }

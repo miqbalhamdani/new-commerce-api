@@ -46,6 +46,18 @@ type Brand struct {
 	UpdatedAt  time.Time
 }
 
+type Category struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	ParentID   *uuid.UUID
+	Kind       string
+	Name       string
+	Path       string
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type RefreshToken struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
