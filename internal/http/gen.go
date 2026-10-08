@@ -17,6 +17,63 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BulkItemStatus.
+const (
+	BulkItemStatusActive BulkItemStatus = "active"
+	BulkItemStatusDraft  BulkItemStatus = "draft"
+)
+
+// Valid indicates whether the value is a known member of the BulkItemStatus enum.
+func (e BulkItemStatus) Valid() bool {
+	switch e {
+	case BulkItemStatusActive:
+		return true
+	case BulkItemStatusDraft:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BulkRequestOnConflict.
+const (
+	BulkRequestOnConflictError  BulkRequestOnConflict = "error"
+	BulkRequestOnConflictUpdate BulkRequestOnConflict = "update"
+)
+
+// Valid indicates whether the value is a known member of the BulkRequestOnConflict enum.
+func (e BulkRequestOnConflict) Valid() bool {
+	switch e {
+	case BulkRequestOnConflictError:
+		return true
+	case BulkRequestOnConflictUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BulkRowResultStatus.
+const (
+	BulkRowResultStatusCreated BulkRowResultStatus = "created"
+	BulkRowResultStatusError   BulkRowResultStatus = "error"
+	BulkRowResultStatusUpdated BulkRowResultStatus = "updated"
+)
+
+// Valid indicates whether the value is a known member of the BulkRowResultStatus enum.
+func (e BulkRowResultStatus) Valid() bool {
+	switch e {
+	case BulkRowResultStatusCreated:
+		return true
+	case BulkRowResultStatusError:
+		return true
+	case BulkRowResultStatusUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CategoryKind.
 const (
 	CategoryKindActivity   CategoryKind = "activity"
@@ -274,25 +331,25 @@ func (e SessionUserRole) Valid() bool {
 
 // Defines values for VariantMatrixRowResultStatus.
 const (
-	Created   VariantMatrixRowResultStatus = "created"
-	Error     VariantMatrixRowResultStatus = "error"
-	Restored  VariantMatrixRowResultStatus = "restored"
-	Unchanged VariantMatrixRowResultStatus = "unchanged"
-	Updated   VariantMatrixRowResultStatus = "updated"
+	VariantMatrixRowResultStatusCreated   VariantMatrixRowResultStatus = "created"
+	VariantMatrixRowResultStatusError     VariantMatrixRowResultStatus = "error"
+	VariantMatrixRowResultStatusRestored  VariantMatrixRowResultStatus = "restored"
+	VariantMatrixRowResultStatusUnchanged VariantMatrixRowResultStatus = "unchanged"
+	VariantMatrixRowResultStatusUpdated   VariantMatrixRowResultStatus = "updated"
 )
 
 // Valid indicates whether the value is a known member of the VariantMatrixRowResultStatus enum.
 func (e VariantMatrixRowResultStatus) Valid() bool {
 	switch e {
-	case Created:
+	case VariantMatrixRowResultStatusCreated:
 		return true
-	case Error:
+	case VariantMatrixRowResultStatusError:
 		return true
-	case Restored:
+	case VariantMatrixRowResultStatusRestored:
 		return true
-	case Unchanged:
+	case VariantMatrixRowResultStatusUnchanged:
 		return true
-	case Updated:
+	case VariantMatrixRowResultStatusUpdated:
 		return true
 	default:
 		return false
@@ -344,6 +401,62 @@ type BrandPage struct {
 type BrandWrite struct {
 	Name string `json:"name"`
 }
+
+// BulkItem defines model for BulkItem.
+type BulkItem struct {
+	Barcode *string `json:"barcode,omitempty"`
+
+	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	RegularPrice *Money          `json:"regular_price,omitempty"`
+	SaleEndsAt   *time.Time      `json:"sale_ends_at,omitempty"`
+	SalePrice    *Money          `json:"sale_price,omitempty"`
+	SaleStartsAt *time.Time      `json:"sale_starts_at,omitempty"`
+	Sku          *string         `json:"sku,omitempty"`
+	Status       *BulkItemStatus `json:"status,omitempty"`
+	Title        *string         `json:"title,omitempty"`
+	WeightGrams  *int            `json:"weight_grams,omitempty"`
+}
+
+// BulkItemStatus defines model for BulkItem.Status.
+type BulkItemStatus string
+
+// BulkRequest defines model for BulkRequest.
+type BulkRequest struct {
+	Items      []BulkItem            `json:"items"`
+	OnConflict BulkRequestOnConflict `json:"on_conflict"`
+}
+
+// BulkRequestOnConflict defines model for BulkRequest.OnConflict.
+type BulkRequestOnConflict string
+
+// BulkResult defines model for BulkResult.
+type BulkResult struct {
+	Created int             `json:"created"`
+	Failed  int             `json:"failed"`
+	Results []BulkRowResult `json:"results"`
+	Updated int             `json:"updated"`
+}
+
+// BulkRowResult defines model for BulkRowResult.
+type BulkRowResult struct {
+	// Code The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
+	// The code also appears as the last segment of a `Problem.type` URI, and directly in
+	// per-row results where an operation partially succeeds (§7.3, §7.5).
+	Code      *ErrorCode          `json:"code,omitempty"`
+	Detail    *string             `json:"detail,omitempty"`
+	Index     int                 `json:"index"`
+	Sku       *string             `json:"sku"`
+	Status    BulkRowResultStatus `json:"status"`
+	VariantId *openapi_types.UUID `json:"variant_id"`
+}
+
+// BulkRowResultStatus defines model for BulkRowResult.Status.
+type BulkRowResultStatus string
 
 // Category defines model for Category.
 type Category struct {
@@ -995,6 +1108,9 @@ type UpdateMediaJSONRequestBody = MediaUpdate
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductCreate
 
+// BulkProductsJSONRequestBody defines body for BulkProducts for application/json ContentType.
+type BulkProductsJSONRequestBody = BulkRequest
+
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductUpdate
 
@@ -1153,6 +1269,9 @@ type ServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /products)
 	CreateProduct(w http.ResponseWriter, r *http.Request)
+	// BulkProducts Create or update up to 500 rows keyed on SKU
+	// (POST /products/bulk)
+	BulkProducts(w http.ResponseWriter, r *http.Request)
 	// ArchiveProduct Archive a product
 	// (DELETE /products/{id})
 	ArchiveProduct(w http.ResponseWriter, r *http.Request, id Id)
@@ -1306,6 +1425,12 @@ func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, para
 // CreateProduct Create a product
 // (POST /products)
 func (_ Unimplemented) CreateProduct(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// BulkProducts Create or update up to 500 rows keyed on SKU
+// (POST /products/bulk)
+func (_ Unimplemented) BulkProducts(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1966,6 +2091,20 @@ func (siw *ServerInterfaceWrapper) CreateProduct(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// BulkProducts operation middleware
+func (siw *ServerInterfaceWrapper) BulkProducts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkProducts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ArchiveProduct operation middleware
 func (siw *ServerInterfaceWrapper) ArchiveProduct(w http.ResponseWriter, r *http.Request) {
 
@@ -2474,6 +2613,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/products", wrapper.CreateProduct)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/products/bulk", wrapper.BulkProducts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/products/{id}", wrapper.ArchiveProduct)
@@ -3962,6 +4104,76 @@ func (response CreateProduct422ApplicationProblemPlusJSONResponse) VisitCreatePr
 	return err
 }
 
+type BulkProductsRequestObject struct {
+	Body *BulkProductsJSONRequestBody
+}
+
+type BulkProductsResponseObject interface {
+	VisitBulkProductsResponse(w http.ResponseWriter) error
+}
+
+type BulkProducts200JSONResponse BulkResult
+
+func (response BulkProducts200JSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkProducts401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response BulkProducts401ApplicationProblemPlusJSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkProducts403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response BulkProducts403ApplicationProblemPlusJSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BulkProducts422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response BulkProducts422ApplicationProblemPlusJSONResponse) VisitBulkProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ArchiveProductRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -4848,6 +5060,9 @@ type StrictServerInterface interface {
 	// CreateProduct Create a product
 	// (POST /products)
 	CreateProduct(ctx context.Context, request CreateProductRequestObject) (CreateProductResponseObject, error)
+	// BulkProducts Create or update up to 500 rows keyed on SKU
+	// (POST /products/bulk)
+	BulkProducts(ctx context.Context, request BulkProductsRequestObject) (BulkProductsResponseObject, error)
 	// ArchiveProduct Archive a product
 	// (DELETE /products/{id})
 	ArchiveProduct(ctx context.Context, request ArchiveProductRequestObject) (ArchiveProductResponseObject, error)
@@ -5479,6 +5694,37 @@ func (sh *strictHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateProductResponseObject); ok {
 		if err := validResponse.VisitCreateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BulkProducts operation middleware
+func (sh *strictHandler) BulkProducts(w http.ResponseWriter, r *http.Request) {
+	var request BulkProductsRequestObject
+
+	var body BulkProductsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BulkProducts(ctx, request.(BulkProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BulkProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BulkProductsResponseObject); ok {
+		if err := validResponse.VisitBulkProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -48,3 +48,6 @@ SELECT v.*, variant_price(v)::bigint AS price FROM variants v WHERE v.product_id
 
 -- name: RestoreVariant :exec
 UPDATE variants SET archived_at = NULL, version = version + 1, updated_at = now() WHERE id = $1;
+
+-- name: VariantBySKU :one
+SELECT v.*, variant_price(v)::bigint AS price FROM variants v WHERE v.sku = sqlc.arg(sku)::text;

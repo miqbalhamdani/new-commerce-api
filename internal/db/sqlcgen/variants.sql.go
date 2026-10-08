@@ -330,3 +330,52 @@ func (q *Queries) UpdateVariant(ctx context.Context, arg UpdateVariantParams) (u
 	err := row.Scan(&id)
 	return id, err
 }
+
+const variantBySKU = `-- name: VariantBySKU :one
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v WHERE v.sku = $1::text
+`
+
+type VariantBySKURow struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	Barcode            *string
+	OptionValues       []string
+	RegularPriceAmount int64
+	SalePriceAmount    *int64
+	SaleStartsAt       *time.Time
+	SaleEndsAt         *time.Time
+	Currency           string
+	WeightGrams        int32
+	ArchivedAt         *time.Time
+	Version            int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	Price              int64
+}
+
+func (q *Queries) VariantBySKU(ctx context.Context, sku string) (VariantBySKURow, error) {
+	row := q.db.QueryRow(ctx, variantBySKU, sku)
+	var i VariantBySKURow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.ProductID,
+		&i.Sku,
+		&i.Barcode,
+		&i.OptionValues,
+		&i.RegularPriceAmount,
+		&i.SalePriceAmount,
+		&i.SaleStartsAt,
+		&i.SaleEndsAt,
+		&i.Currency,
+		&i.WeightGrams,
+		&i.ArchivedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Price,
+	)
+	return i, err
+}

@@ -69,3 +69,7 @@ SELECT
   (SELECT count(*) FROM product_media m WHERE m.product_id = sqlc.arg(id))::int AS media,
   (SELECT count(*) FROM product_categories pc JOIN categories c ON c.id = pc.category_id
     WHERE pc.product_id = sqlc.arg(id) AND c.kind = 'category')::int AS main_categories;
+
+-- name: SetProductStatus :exec
+UPDATE products SET status = sqlc.arg(status), version = version + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND archived_at IS NULL;

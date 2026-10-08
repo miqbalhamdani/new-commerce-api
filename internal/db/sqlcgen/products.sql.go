@@ -278,6 +278,21 @@ func (q *Queries) PublishFacts(ctx context.Context, id uuid.UUID) (PublishFactsR
 	return i, err
 }
 
+const setProductStatus = `-- name: SetProductStatus :exec
+UPDATE products SET status = $1, version = version + 1, updated_at = now()
+WHERE id = $2 AND archived_at IS NULL
+`
+
+type SetProductStatusParams struct {
+	Status string
+	ID     uuid.UUID
+}
+
+func (q *Queries) SetProductStatus(ctx context.Context, arg SetProductStatusParams) error {
+	_, err := q.db.Exec(ctx, setProductStatus, arg.Status, arg.ID)
+	return err
+}
+
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE products SET
   title       = coalesce($1, title),
