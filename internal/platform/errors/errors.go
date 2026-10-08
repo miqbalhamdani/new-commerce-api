@@ -22,6 +22,7 @@ const (
 	CodeUnknownField     = "unknown_field"
 	CodeVersionConflict  = "version_conflict"
 	CodeDuplicateSKU     = "duplicate_sku"
+	CodeCategoryInUse    = "category_in_use"
 	CodePermissionDenied = "permission_denied"
 	CodeNotFound         = "not_found"
 	CodeRateLimited      = "rate_limited"
@@ -111,6 +112,15 @@ func UnknownField(name string) *Error {
 	return (&Error{Code: CodeUnknownField, Status: http.StatusUnprocessableEntity,
 		Title: "Unknown field", Detail: "The request has a field this endpoint does not accept: " + name + "."}).
 		WithFields(Field{Name: name, Detail: "not a field of this request"})
+}
+
+// CategoryInUse is the 409 for archiving a category that still has live
+// children or products in its subtree, with both counts (BR-036).
+func CategoryInUse(children, products int32) *Error {
+	return (&Error{Code: CodeCategoryInUse, Status: http.StatusConflict,
+		Title: "Category in use", Detail: "Move or archive its subcategories and products first."}).
+		WithFields(Field{Name: "children", Extra: map[string]any{"count": children}},
+			Field{Name: "products", Extra: map[string]any{"count": products}})
 }
 
 func ValidationFailed(detail string) *Error {

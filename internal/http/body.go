@@ -127,3 +127,8 @@ func pageLimit(l *int) int {
 	}
 	return *l
 }
+
+// fieldErr is a 422 naming one field.
+func fieldErr(field, detail string) error {
+	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
+}

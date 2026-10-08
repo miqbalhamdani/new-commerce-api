@@ -58,6 +58,28 @@ type Category struct {
 	UpdatedAt  time.Time
 }
 
+type Product struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Title       string
+	Slug        string
+	Description *string
+	BrandID     *uuid.UUID
+	Status      string
+	Attributes  []byte
+	OptionNames []string
+	Version     int32
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ProductCategory struct {
+	TenantID   uuid.UUID
+	ProductID  uuid.UUID
+	CategoryID uuid.UUID
+}
+
 type RefreshToken struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -89,4 +111,23 @@ type User struct {
 	Status       string
 	LastLoginAt  *time.Time
 	CreatedAt    time.Time
+}
+
+type Variant struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	Barcode            *string
+	OptionValues       []string
+	RegularPriceAmount int64
+	SalePriceAmount    *int64
+	SaleStartsAt       *time.Time
+	SaleEndsAt         *time.Time
+	Currency           string
+	WeightGrams        int32
+	ArchivedAt         *time.Time
+	Version            int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }

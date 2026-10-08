@@ -199,16 +199,42 @@ func bodyRequest(t *testing.T, method, path, token string, body any) *http.Reque
 // createBrand makes a brand through the API and returns its id.
 func createBrand(t *testing.T, s seeded, name string) string {
 	t.Helper()
+	return apiCreate(t, s, "/v1/brands", map[string]string{"name": name})
+}
+
+// apiCreate POSTs body as s and returns the created resource's id.
+func apiCreate(t *testing.T, s seeded, path string, body any) string {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	newServer(t).ServeHTTP(rec, bodyRequest(t, http.MethodPost, "/v1/brands", s.accessToken, map[string]string{"name": name}))
+	newServer(t).ServeHTTP(rec, bodyRequest(t, http.MethodPost, path, s.accessToken, body))
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("create brand: %d %s", rec.Code, rec.Body)
+		t.Fatalf("create %s: %d %s", path, rec.Code, rec.Body)
 	}
 	var b struct {
 		ID string `json:"id"`
 	}
 	_ = json.NewDecoder(io.Reader(rec.Body)).Decode(&b)
 	return b.ID
+}
+
+// apiClient returns a function that sends a request as s and decodes the
+// JSON answer.
+func apiClient(t *testing.T, s seeded) func(method, path string, body any) (int, map[string]any) {
+	srv := newServer(t)
+	return func(method, path string, body any) (int, map[string]any) {
+		t.Helper()
+		var r *http.Request
+		if body == nil {
+			r = bearerRequest(t, method, path, s.accessToken)
+		} else {
+			r = bodyRequest(t, method, path, s.accessToken, body)
+		}
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, r)
+		var out map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out
+	}
 }
 
 // assertProblem checks a problem response's status, code and (when given) the
