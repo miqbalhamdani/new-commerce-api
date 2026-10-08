@@ -13,12 +13,16 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 func main() {
@@ -60,11 +64,25 @@ func run() error {
 	}
 	defer func() { _ = redis.Close() }()
 
+	files, err := storage.FromEnv()
+	if err != nil {
+		return err
+	}
+	jobsSvc := jobs.NewService(pool, redis)
+
 	secret, err := config.JWTSecret()
 	if err != nil {
 		return err
 	}
 	signer, err := auth.NewSigner(secret)
+	if err != nil {
+		return err
+	}
+	inviteSecret, err := config.InviteSecret()
+	if err != nil {
+		return err
+	}
+	invites, err := auth.NewInviteSigner(inviteSecret)
 	if err != nil {
 		return err
 	}
@@ -76,7 +94,13 @@ func run() error {
 		checker{name: "redis", version: redis.ServerVersion},
 	))
 	mux.Handle("/v1/", httpapi.NewRouter(
-		httpapi.NewServer(auth.NewService(pool, signer), !config.IsDevelopment()),
+		httpapi.NewServer(httpapi.Services{
+			Auth:    auth.NewService(pool, signer),
+			Catalog: catalog.NewService(pool, files, jobsSvc),
+			Jobs:    jobsSvc,
+			Team:    team.NewService(pool, redis),
+			Invites: invites,
+		}, !config.IsDevelopment()),
 		signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),
 	))

@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 // refreshCookieName is the only place the refresh token lives on a client.
@@ -16,19 +18,34 @@ const refreshCookieName = "refresh_token"
 
 // Server implements the generated ServerInterface.
 //
-// It is deliberately thin: decode, call internal/auth, encode. Anything that
+// It is deliberately thin: decode, call a service, encode. Anything that
 // looks like a decision belongs in the service, where it can be tested without
 // an HTTP request.
 type Server struct {
-	auth *auth.Service
+	auth    *auth.Service
+	catalog *catalog.Service
+	jobs    *jobs.Service
+	team    *team.Service
+	invites *auth.InviteSigner
 
 	// secureCookies is false only for local development over plain HTTP, where
 	// a Secure cookie would be dropped by the browser and nothing would work.
 	secureCookies bool
 }
 
-func NewServer(authSvc *auth.Service, secureCookies bool) *Server {
-	return &Server{auth: authSvc, secureCookies: secureCookies}
+// Services are the use cases the server composes. One field per domain
+// package, so adding a domain does not change NewServer's signature.
+type Services struct {
+	Auth    *auth.Service
+	Catalog *catalog.Service
+	Jobs    *jobs.Service
+	Team    *team.Service
+	Invites *auth.InviteSigner
+}
+
+func NewServer(svc Services, secureCookies bool) *Server {
+	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, invites: svc.Invites,
+		secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.
@@ -149,26 +166,4 @@ func (s *Server) clearRefreshCookie() *http.Cookie {
 	c.MaxAge = -1
 	c.Expires = time.Unix(0, 0)
 	return c
-}
-
-// decodeJSON decodes a request body into v, answering 422 itself on failure.
-//
-// A field v does not define is 422 unknown_field, naming it (04-api-spec.md
-// 1.1). Anything else that fails -- malformed JSON, an unparseable email, a
-// timestamp with no offset (BR-007) -- is validation_failed. Saying "not valid
-// JSON" to those is misleading.
-func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		// encoding/json has no typed error for this; the message is its API.
-		if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
-			writeError(w, r, apperrors.UnknownField(strings.Trim(name, `"`)).WithCause(err))
-			return false
-		}
-		writeError(w, r, apperrors.ValidationFailed(
-			"The request body is malformed or a field is not in the expected format.").WithCause(err))
-		return false
-	}
-	return true
 }

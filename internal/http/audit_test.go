@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -74,21 +75,35 @@ func TestEveryMutatingRouteIsAudited(t *testing.T) {
 		t.Run(c.route.String(), func(t *testing.T) {
 			tenantID := uuid.Must(uuid.NewV7())
 			s := seedSignedInUserWithRole(ctx, t, store, tenantID, "owner")
+			s.tenantID = tenantID.String()
 			req, subjectType, subjectID := c.request(t, s)
+			count := func(subjectID string) int {
+				var n int
+				if err := owner.QueryRow(ctx, `SELECT count(*) FROM audit_log
+					WHERE tenant_id = $1 AND subject_type = $2 AND subject_id = $3`,
+					tenantID, subjectType, subjectID).Scan(&n); err != nil {
+					t.Fatalf("count audit rows: %v", err)
+				}
+				return n
+			}
+			// A case may set its subject up through the API first, which
+			// audits too; only the rows this request adds count.
+			before := count(subjectID)
 
 			rec := httptest.NewRecorder()
 			srv.ServeHTTP(rec, req)
 			if rec.Code >= 300 {
 				t.Fatalf("status %d: %s", rec.Code, rec.Body)
 			}
-
-			var n int
-			if err := owner.QueryRow(ctx, `SELECT count(*) FROM audit_log
-				WHERE tenant_id = $1 AND subject_type = $2 AND subject_id = $3`,
-				tenantID, subjectType, subjectID).Scan(&n); err != nil {
-				t.Fatalf("count audit rows: %v", err)
+			if subjectID == "" { // a create: the subject is in the response
+				var created struct {
+					ID string `json:"id"`
+				}
+				_ = json.Unmarshal(rec.Body.Bytes(), &created)
+				subjectID = created.ID
 			}
-			if n != 1 {
+
+			if n := count(subjectID) - before; n != 1 {
 				t.Errorf("%d audit rows, want exactly 1", n)
 			}
 		})

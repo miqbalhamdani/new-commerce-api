@@ -26,6 +26,9 @@ done; an item is done only when its Acceptance is proven, with a test wherever a
 
 ```bash
 make dev          # run the API against host PostgreSQL and Redis
+make worker       # run the background job worker (cmd/worker)
+make storage-init # create the dev bucket in MinIO: public product images, expiry rules (R2 stand-in)
+make dev-seed     # a demo shop to sign in as: owner@example.com / development-password
 make db-create    # create the local development database
 make migrate      # apply migrations
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
@@ -37,7 +40,10 @@ make check        # generate, generated-diff, fmt-check, vet, lint, lint-rls, te
 ```
 
 `make check` green is the bar for a PR. There is no CI yet (P1-004, Phase 6); run it locally.
-Tests need PostgreSQL and Redis running on the host (`brew services start postgresql@18 redis`).
+Tests need PostgreSQL, Redis and MinIO running on the host
+(`brew services start postgresql@18 redis minio`, then `make storage-init` once), and libvips
+for the worker's image derivatives (`brew install vips pkg-config`). Local mail goes to Mailpit
+(`brew services start mailpit`, inbox at http://localhost:8025) when `SMTP_ADDR` is set.
 
 The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
 so `make generate` produces the same bytes on every machine without anyone installing anything.
@@ -51,7 +57,7 @@ cmd/api/          HTTP API: /v1 admin, /v1/storefront from Phase 3. Stateless; 2
                   behind Caddy in production (P1-001).
 cmd/migrate/      Runs migrations to completion, exits.
 cmd/lint-rls/     RLS policy guard (make lint-rls).
-cmd/worker/       (P1-060) Redis Streams consumer. Phase 1: image derivatives, product CSV
+cmd/worker/       Redis Streams consumer (P1-060). Phase 1: image derivatives, product CSV
                   import, invitation email. Later: order export, channel import, retention.
 internal/
   platform/       config, errors, logging, telemetry — imported by everything
@@ -61,7 +67,11 @@ internal/
   queue/          Redis: rate-limit windows now, Redis Streams from P1-060
   http/           chi router, middleware, handlers, DTOs (admin)
   catalog/        (Phase 1) products, variants, categories, brands, media
-  storage/        (P1-043) R2 presign, HEAD validation
+  storage/        object store (R2 / MinIO): presign, HEAD, public URLs, lifecycle rules
+  images/         WebP derivatives via libvips (cgo). Worker only -- cmd/api never imports it
+  email/          senders (Resend; SMTP and stdout in development) and templates
+  jobs/           jobs rows + Redis Streams runner (BR-060)
+  team/           users, invitations, settings, audit-log reads
   storefront/     (P1-202) storefront routes; never imports the admin http package, nor it this
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries

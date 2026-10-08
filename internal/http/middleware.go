@@ -61,7 +61,7 @@ func unauthenticated(r *http.Request) bool {
 		return false
 	}
 	switch r.URL.Path {
-	case "/v1/auth/login", "/v1/auth/refresh":
+	case "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/accept-invite":
 		return true
 	default:
 		return false

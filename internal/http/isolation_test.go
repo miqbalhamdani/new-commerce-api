@@ -34,9 +34,13 @@ import (
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -64,6 +68,24 @@ type seeded struct {
 	password     string
 	accessToken  string
 	refreshToken string
+
+	// id is the row this tenant's seed created, for routes addressed by id.
+	// otherID is filled in by the suite with the other tenant's id, so a
+	// request can aim at a row it must not reach.
+	id      string
+	otherID string
+
+	// product and otherProduct are the same pair for routes nested under a
+	// product (its variants, media).
+	product      string
+	otherProduct string
+
+	// key and otherKey are an object key per tenant, for media routes.
+	key      string
+	otherKey string
+
+	// tenantID is the seeded tenant, for routes about the tenant itself.
+	tenantID string
 }
 
 // isolationCase says how to exercise one route as tenant A after tenant B owns
@@ -115,6 +137,7 @@ func TestTenantIsolation(t *testing.T) {
 			b := c.seed(ctx, t, store, tenantB)
 
 			rec := httptest.NewRecorder()
+			a.otherID, a.otherProduct, a.otherKey = b.id, b.product, b.key
 			srv.ServeHTTP(rec, c.request(t, a))
 
 			assertNoLeak(t, rec, b.marker)
@@ -323,15 +346,54 @@ var newServer = func(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}
+	redis := testRedis(t)
+	jobsSvc := jobs.NewService(store, redis)
+
+	// secureCookies false: httptest speaks plain HTTP.
+	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
+		Auth:    auth.NewService(store, signer),
+		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
+		Jobs:    jobsSvc,
+		Team:    team.NewService(store, redis),
+		Invites: testInvites(t),
+	}, false), signer,
+		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
+}
+
+// testInvites signs invitation tokens with the development key, as the
+// worker that mints them does.
+func testInvites(t *testing.T) *auth.InviteSigner {
+	t.Helper()
+	secret, err := config.InviteSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := auth.NewInviteSigner(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// testFiles is the development bucket in MinIO (make storage-init).
+func testFiles(t *testing.T) *storage.Store {
+	t.Helper()
+	files, err := storage.FromEnv()
+	if err != nil {
+		t.Fatalf("object store: %v", err)
+	}
+	return files
+}
+
+// testRedis connects to the host Redis for the life of the test.
+func testRedis(t *testing.T) *queue.Client {
+	t.Helper()
 	redis, err := queue.New(t.Context(), config.RedisURL())
 	if err != nil {
 		t.Fatalf("connect redis: %v\n\nIs it running?\n  brew services start redis", err)
 	}
 	t.Cleanup(func() { _ = redis.Close() })
-
-	// secureCookies false: httptest speaks plain HTTP.
-	return httpapi.NewRouter(httpapi.NewServer(auth.NewService(store, signer), false), signer,
-		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
+	return redis
 }
 
 // --- fixtures --------------------------------------------------------------

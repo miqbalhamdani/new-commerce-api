@@ -20,8 +20,10 @@ import (
 const (
 	CodeValidationFailed = "validation_failed"
 	CodeUnknownField     = "unknown_field"
+	CodePublishCheck     = "publish_check_failed"
 	CodeVersionConflict  = "version_conflict"
 	CodeDuplicateSKU     = "duplicate_sku"
+	CodeCategoryInUse    = "category_in_use"
 	CodePermissionDenied = "permission_denied"
 	CodeNotFound         = "not_found"
 	CodeRateLimited      = "rate_limited"
@@ -92,6 +94,12 @@ func PermissionDenied(permission string) *Error {
 		Detail: "This action requires the " + permission + " permission."}
 }
 
+// Forbidden is a 403 whose rule is not a single permission -- only an owner
+// can grant or change the owner role (BR-023).
+func Forbidden(detail string) *Error {
+	return &Error{Code: CodePermissionDenied, Status: http.StatusForbidden, Title: "Permission denied", Detail: detail}
+}
+
 func NotFound(detail string) *Error {
 	return &Error{Code: CodeNotFound, Status: http.StatusNotFound,
 		Title: "Not found", Detail: detail}
@@ -111,6 +119,33 @@ func UnknownField(name string) *Error {
 	return (&Error{Code: CodeUnknownField, Status: http.StatusUnprocessableEntity,
 		Title: "Unknown field", Detail: "The request has a field this endpoint does not accept: " + name + "."}).
 		WithFields(Field{Name: name, Detail: "not a field of this request"})
+}
+
+// CategoryInUse is the 409 for archiving a category that still has live
+// children or products in its subtree, with both counts (BR-036).
+func CategoryInUse(children, products int32) *Error {
+	return (&Error{Code: CodeCategoryInUse, Status: http.StatusConflict,
+		Title: "Category in use", Detail: "Move or archive its subcategories and products first."}).
+		WithFields(Field{Name: "children", Extra: map[string]any{"count": children}},
+			Field{Name: "products", Extra: map[string]any{"count": products}})
+}
+
+// DuplicateSKU is the 409 for a SKU another variant of this tenant holds,
+// naming the product that holds it when known (BR-039).
+func DuplicateSKU(sku, holder string) *Error {
+	detail := "This SKU is already used by another product."
+	if holder != "" {
+		detail = "SKU " + sku + " is used by " + holder + "."
+	}
+	return (&Error{Code: CodeDuplicateSKU, Status: http.StatusConflict, Title: "Duplicate SKU", Detail: detail}).
+		WithFields(Field{Name: "sku", Detail: detail})
+}
+
+// PublishCheckFailed is the 422 for a product that cannot go active, with
+// one entry per failure (BR-038).
+func PublishCheckFailed(failures ...Field) *Error {
+	return (&Error{Code: CodePublishCheck, Status: http.StatusUnprocessableEntity,
+		Title: "Publish check failed", Detail: "The product cannot be published yet."}).WithFields(failures...)
 }
 
 func ValidationFailed(detail string) *Error {

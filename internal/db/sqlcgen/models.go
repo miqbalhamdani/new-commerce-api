@@ -36,6 +36,82 @@ type AuditLog struct {
 	CreatedAt   time.Time
 }
 
+type Brand struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Name       string
+	Slug       string
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type Category struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	ParentID   *uuid.UUID
+	Kind       string
+	Name       string
+	Path       string
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type Job struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Kind       string
+	State      string
+	Processed  int32
+	Total      *int32
+	Failed     int32
+	Params     []byte
+	Result     []byte
+	Error      []byte
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+	FinishedAt *time.Time
+}
+
+type Product struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Title       string
+	Slug        string
+	Description *string
+	BrandID     *uuid.UUID
+	Status      string
+	Attributes  []byte
+	OptionNames []string
+	Version     int32
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ProductCategory struct {
+	TenantID   uuid.UUID
+	ProductID  uuid.UUID
+	CategoryID uuid.UUID
+}
+
+type ProductMedium struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	ProductID   uuid.UUID
+	VariantID   *uuid.UUID
+	R2Key       string
+	MimeType    string
+	Bytes       int64
+	Width       *int32
+	Height      *int32
+	Position    int32
+	Derivatives []byte
+	SourceUrl   *string
+	CreatedAt   time.Time
+}
+
 type RefreshToken struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -67,4 +143,23 @@ type User struct {
 	Status       string
 	LastLoginAt  *time.Time
 	CreatedAt    time.Time
+}
+
+type Variant struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	Barcode            *string
+	OptionValues       []string
+	RegularPriceAmount int64
+	SalePriceAmount    *int64
+	SaleStartsAt       *time.Time
+	SaleEndsAt         *time.Time
+	Currency           string
+	WeightGrams        int32
+	ArchivedAt         *time.Time
+	Version            int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
