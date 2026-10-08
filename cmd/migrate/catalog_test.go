@@ -57,6 +57,24 @@ func TestCatalogSchema(t *testing.T) {
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
 		}},
+		{"variants", []column{
+			{"id", "uuid", false},
+			{"tenant_id", "uuid", false},
+			{"product_id", "uuid", false},
+			{"sku", "text", true},
+			{"barcode", "text", true},
+			{"option_values", "text[]", false},
+			{"regular_price_amount", "bigint", false},
+			{"sale_price_amount", "bigint", true},
+			{"sale_starts_at", "timestamp with time zone", true},
+			{"sale_ends_at", "timestamp with time zone", true},
+			{"currency", "character(3)", false},
+			{"weight_grams", "integer", false},
+			{"archived_at", "timestamp with time zone", true},
+			{"version", "integer", false},
+			{"created_at", "timestamp with time zone", false},
+			{"updated_at", "timestamp with time zone", false},
+		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
 			if got := columnsOf(ctx, t, conn, tt.table); !slices.Equal(got, tt.columns) {
@@ -312,4 +330,89 @@ func TestCategoryGuards(t *testing.T) {
 			t.Fatalf("rollback to savepoint: %v", err)
 		}
 	}
+}
+
+// TestVariants is P1-026's acceptance (BR-039, BR-040, BR-046).
+func TestVariants(t *testing.T) {
+	ctx := t.Context()
+	tx := beginRolledBack(ctx, t, migratedOwner(ctx, t))
+	tenantID := seedTenant(ctx, t, tx)
+	product := func() uuid.UUID {
+		id := uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO products (id, tenant_id, title, slug) VALUES ($1, $2, 'Tee', $3)`,
+			id, tenantID, "tee-"+id.String()); err != nil {
+			t.Fatalf("product: %v", err)
+		}
+		return id
+	}
+	p1, p2 := product(), product()
+
+	attempt := func(sql string, args ...any) error {
+		t.Helper()
+		if _, err := tx.Exec(ctx, `SAVEPOINT s`); err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		_, err := tx.Exec(ctx, sql, args...)
+		if err != nil {
+			_, _ = tx.Exec(ctx, `ROLLBACK TO SAVEPOINT s`)
+		}
+		return err
+	}
+	variant := func(p uuid.UUID, sku any, opts []string) error {
+		return attempt(`INSERT INTO variants (id, tenant_id, product_id, sku, option_values, regular_price_amount)
+			VALUES ($1, $2, $3, $4, $5, 19900000)`, uuid.Must(uuid.NewV7()), tenantID, p, sku, opts)
+	}
+
+	t.Run("many null SKUs, non-null unique per tenant", func(t *testing.T) {
+		for _, o := range []string{"S", "M", "L"} {
+			if err := variant(p1, nil, []string{"Black", o}); err != nil {
+				t.Fatalf("null sku %s: %v", o, err)
+			}
+		}
+		if err := variant(p1, "TS-BLK-XL", []string{"Black", "XL"}); err != nil {
+			t.Fatalf("first sku: %v", err)
+		}
+		if variant(p2, "TS-BLK-XL", []string{"White", "XL"}) == nil {
+			t.Error("a SKU was reused across products of one tenant")
+		}
+	})
+	t.Run("one live variant per option combination", func(t *testing.T) {
+		if variant(p1, nil, []string{"Black", "S"}) == nil {
+			t.Error("a second live Black/S was accepted")
+		}
+		if err := attempt(`UPDATE variants SET archived_at = now() WHERE product_id = $1 AND option_values = '{Black,S}'`, p1); err != nil {
+			t.Fatalf("archive: %v", err)
+		}
+		if err := variant(p1, nil, []string{"Black", "S"}); err != nil {
+			t.Errorf("Black/S beside an archived one: %v", err)
+		}
+	})
+	t.Run("a sale price must be below the regular price", func(t *testing.T) {
+		if attempt(`INSERT INTO variants (id, tenant_id, product_id, regular_price_amount, sale_price_amount)
+			VALUES ($1, $2, $3, 100, 100)`, uuid.Must(uuid.NewV7()), tenantID, p2) == nil {
+			t.Error("sale price equal to regular price was accepted")
+		}
+	})
+	t.Run("variant_price honours the schedule", func(t *testing.T) {
+		for _, tt := range []struct {
+			starts, ends string
+			want         int64
+		}{
+			{"NULL", "NULL", 150},
+			{"now() - interval '1 day'", "now() + interval '1 day'", 150},
+			{"now() + interval '1 day'", "NULL", 200},
+			{"NULL", "now() - interval '1 second'", 200},
+		} {
+			var got int64
+			err := tx.QueryRow(ctx, `SELECT variant_price(ROW(gen_random_uuid(), $1, $2, NULL, NULL, '{}',
+				200, 150, `+tt.starts+`, `+tt.ends+`, 'IDR', 0, NULL, 1, now(), now())::variants)`,
+				tenantID, p2).Scan(&got)
+			if err != nil {
+				t.Fatalf("variant_price: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("sale %s..%s: price %d, want %d", tt.starts, tt.ends, got, tt.want)
+			}
+		}
+	})
 }
