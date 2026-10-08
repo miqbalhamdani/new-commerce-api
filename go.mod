@@ -3,6 +3,7 @@ module github.com/miqbalhamdani/new-commerce-api
 go 1.26.0
 
 require (
+	github.com/davidbyttow/govips/v2 v2.19.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -17,6 +18,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	golang.org/x/crypto v0.56.0
+	golang.org/x/image v0.41.0
 )
 
 require (

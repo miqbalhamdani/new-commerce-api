@@ -207,7 +207,7 @@ func (q *Queries) MediaKeyInUse(ctx context.Context, r2Key string) (bool, error)
 	return exists, err
 }
 
-const setMediaDerivatives = `-- name: SetMediaDerivatives :exec
+const setMediaDerivatives = `-- name: SetMediaDerivatives :execrows
 UPDATE product_media SET derivatives = $1, width = $2, height = $3
 WHERE id = $4
 `
@@ -220,14 +220,17 @@ type SetMediaDerivativesParams struct {
 }
 
 // The worker's result for one image (P1-044).
-func (q *Queries) SetMediaDerivatives(ctx context.Context, arg SetMediaDerivativesParams) error {
-	_, err := q.db.Exec(ctx, setMediaDerivatives,
+func (q *Queries) SetMediaDerivatives(ctx context.Context, arg SetMediaDerivativesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setMediaDerivatives,
 		arg.Derivatives,
 		arg.Width,
 		arg.Height,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setMediaPosition = `-- name: SetMediaPosition :exec

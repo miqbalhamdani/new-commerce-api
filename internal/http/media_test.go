@@ -12,12 +12,16 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/image/webp"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/images"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
@@ -257,4 +261,56 @@ func pngBytes(t *testing.T, w, h int) []byte {
 func sha(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// P1-044: a confirmed upload gets WebP derivatives at 1600, 800 and 200 px in
+// under 15 s, served from the public image URL (BR-052).
+func TestMediaDerivatives(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	tenantID := uuid.Must(uuid.NewV7())
+	admin := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleAdmin)
+	product := apiCreate(t, admin, "/v1/products", map[string]any{"title": "Erigo Basic Tee"})
+
+	start := time.Now()
+	media := mustConfirm(t, admin, product, pngBytes(t, 2400, 1600))
+	var job string
+	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id FROM jobs WHERE params->>'media_id' = $1`, media).Scan(&job)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if j := waitForJob(t, admin, job); j["state"] != "done" {
+		t.Fatalf("derivatives job: %v", j)
+	}
+	if took := time.Since(start); took > 15*time.Second {
+		t.Errorf("derivatives took %s, want < 15s", took)
+	}
+
+	_, p := apiClient(t, admin)("GET", "/v1/products/"+product, nil)
+	m := p["media"].([]any)[0].(map[string]any)
+	if m["width"] != float64(2400) || m["height"] != float64(1600) {
+		t.Errorf("size: %v×%v, want 2400×1600", m["width"], m["height"])
+	}
+	derivatives := m["derivatives"].(map[string]any)
+	for size, want := range map[string]int{"1600": 1600, "800": 800, "200": 200} {
+		u, _ := derivatives[size].(string)
+		res, err := http.Get(u)
+		if err != nil || res.StatusCode != 200 {
+			t.Fatalf("GET %s derivative %q: %v %v", size, u, err, res)
+		}
+		cfg, err := webp.DecodeConfig(res.Body)
+		_ = res.Body.Close()
+		if err != nil || cfg.Width != want {
+			t.Errorf("%s derivative: width %d, err %v", size, cfg.Width, err)
+		}
+	}
+
+	t.Run("a redelivery does nothing new", func(t *testing.T) {
+		out, err := images.Handler(store, testFiles(t))(tenant.NewContext(ctx, tenantID),
+			jobs.Job{Params: []byte(`{"media_id":"` + media + `"}`)}, nil)
+		if err != nil || out != nil {
+			t.Errorf("rerun: %v %v", out, err)
+		}
+	})
 }

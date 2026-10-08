@@ -32,7 +32,7 @@ DELETE FROM product_media WHERE id = $1 RETURNING *;
 -- name: MediaKeyInUse :one
 SELECT EXISTS (SELECT 1 FROM product_media WHERE r2_key = $1);
 
--- name: SetMediaDerivatives :exec
+-- name: SetMediaDerivatives :execrows
 -- The worker's result for one image (P1-044).
 UPDATE product_media SET derivatives = sqlc.arg(derivatives), width = sqlc.arg(width), height = sqlc.arg(height)
 WHERE id = sqlc.arg(id);

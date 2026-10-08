@@ -17,6 +17,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
+	"github.com/miqbalhamdani/new-commerce-api/internal/images"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
@@ -69,7 +70,8 @@ func run() error {
 		Store: pool,
 		Queue: redis,
 		Handlers: map[string]jobs.Handler{
-			"product_import": catalogSvc.ImportHandler(),
+			"product_import":    catalogSvc.ImportHandler(),
+			"image_derivatives": images.Handler(pool, files),
 		},
 		Consumer:      fmt.Sprintf("%s-%d", host, os.Getpid()),
 		ClaimIdle:     60 * time.Second,

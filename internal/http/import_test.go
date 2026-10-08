@@ -16,6 +16,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/images"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 )
 
@@ -195,7 +196,8 @@ func waitForJob(t *testing.T, s seeded, id string) map[string]any {
 	store, redis := openAppStore(t.Context(), t), testRedis(t)
 	svc := catalog.NewService(store, testFiles(t), jobs.NewService(store, redis))
 	runner := &jobs.Runner{Store: store, Queue: redis, Consumer: "test-" + id, ClaimIdle: 2 * time.Second,
-		MaxDeliveries: 2, Handlers: map[string]jobs.Handler{"product_import": svc.ImportHandler()}}
+		MaxDeliveries: 2, Handlers: map[string]jobs.Handler{"product_import": svc.ImportHandler(),
+			"image_derivatives": images.Handler(store, testFiles(t))}}
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
 	go func() { _ = runner.Run(ctx) }()
