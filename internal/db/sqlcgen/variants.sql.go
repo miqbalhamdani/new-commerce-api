@@ -12,6 +12,69 @@ import (
 	"github.com/google/uuid"
 )
 
+const allVariants = `-- name: AllVariants :many
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v WHERE v.product_id = $1 ORDER BY v.id
+`
+
+type AllVariantsRow struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	Barcode            *string
+	OptionValues       []string
+	RegularPriceAmount int64
+	SalePriceAmount    *int64
+	SaleStartsAt       *time.Time
+	SaleEndsAt         *time.Time
+	Currency           string
+	WeightGrams        int32
+	ArchivedAt         *time.Time
+	Version            int32
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	Price              int64
+}
+
+// Live and archived, for the matrix diff.
+func (q *Queries) AllVariants(ctx context.Context, productID uuid.UUID) ([]AllVariantsRow, error) {
+	rows, err := q.db.Query(ctx, allVariants, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AllVariantsRow
+	for rows.Next() {
+		var i AllVariantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ProductID,
+			&i.Sku,
+			&i.Barcode,
+			&i.OptionValues,
+			&i.RegularPriceAmount,
+			&i.SalePriceAmount,
+			&i.SaleStartsAt,
+			&i.SaleEndsAt,
+			&i.Currency,
+			&i.WeightGrams,
+			&i.ArchivedAt,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Price,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const archiveVariant = `-- name: ArchiveVariant :one
 UPDATE variants SET archived_at = coalesce(archived_at, now()), version = version + 1, updated_at = now()
 WHERE id = $1
@@ -185,6 +248,15 @@ func (q *Queries) ListVariants(ctx context.Context, arg ListVariantsParams) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const restoreVariant = `-- name: RestoreVariant :exec
+UPDATE variants SET archived_at = NULL, version = version + 1, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) RestoreVariant(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, restoreVariant, id)
+	return err
 }
 
 const sKUHolder = `-- name: SKUHolder :one

@@ -254,6 +254,33 @@ func (e SessionUserRole) Valid() bool {
 	}
 }
 
+// Defines values for VariantMatrixRowResultStatus.
+const (
+	Created   VariantMatrixRowResultStatus = "created"
+	Error     VariantMatrixRowResultStatus = "error"
+	Restored  VariantMatrixRowResultStatus = "restored"
+	Unchanged VariantMatrixRowResultStatus = "unchanged"
+	Updated   VariantMatrixRowResultStatus = "updated"
+)
+
+// Valid indicates whether the value is a known member of the VariantMatrixRowResultStatus enum.
+func (e VariantMatrixRowResultStatus) Valid() bool {
+	switch e {
+	case Created:
+		return true
+	case Error:
+		return true
+	case Restored:
+		return true
+	case Unchanged:
+		return true
+	case Updated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProductsParamsSort.
 const (
 	MinusCreatedAt ListProductsParamsSort = "-created_at"
@@ -679,6 +706,62 @@ type VariantList struct {
 	Data []Variant `json:"data"`
 }
 
+// VariantMatrix defines model for VariantMatrix.
+type VariantMatrix struct {
+	ArchiveMissing bool `json:"archive_missing"`
+
+	// OptionNames Ordered axes; Colour at position 0 when present (BR-040).
+	OptionNames []string           `json:"option_names"`
+	Rows        []VariantMatrixRow `json:"rows"`
+}
+
+// VariantMatrixResult defines model for VariantMatrixResult.
+type VariantMatrixResult struct {
+	Archived           int                      `json:"archived"`
+	ArchivedVariantIds []openapi_types.UUID     `json:"archived_variant_ids"`
+	Created            int                      `json:"created"`
+	Failed             int                      `json:"failed"`
+	ProductVersion     int                      `json:"product_version"`
+	Restored           int                      `json:"restored"`
+	Results            []VariantMatrixRowResult `json:"results"`
+	Unchanged          int                      `json:"unchanged"`
+	Updated            int                      `json:"updated"`
+}
+
+// VariantMatrixRow defines model for VariantMatrixRow.
+type VariantMatrixRow struct {
+	Barcode      *string  `json:"barcode,omitempty"`
+	OptionValues []string `json:"option_values"`
+
+	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	RegularPrice *Money     `json:"regular_price,omitempty"`
+	SaleEndsAt   *time.Time `json:"sale_ends_at,omitempty"`
+	SalePrice    *Money     `json:"sale_price,omitempty"`
+	SaleStartsAt *time.Time `json:"sale_starts_at,omitempty"`
+	Sku          *string    `json:"sku,omitempty"`
+	WeightGrams  *int       `json:"weight_grams,omitempty"`
+}
+
+// VariantMatrixRowResult defines model for VariantMatrixRowResult.
+type VariantMatrixRowResult struct {
+	// Code The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
+	// The code also appears as the last segment of a `Problem.type` URI, and directly in
+	// per-row results where an operation partially succeeds (§7.3, §7.5).
+	Code         *ErrorCode                   `json:"code,omitempty"`
+	Detail       *string                      `json:"detail,omitempty"`
+	OptionValues []string                     `json:"option_values"`
+	Status       VariantMatrixRowResultStatus `json:"status"`
+	VariantId    *openapi_types.UUID          `json:"variant_id"`
+}
+
+// VariantMatrixRowResultStatus defines model for VariantMatrixRowResult.Status.
+type VariantMatrixRowResultStatus string
+
 // VariantUpdate defines model for VariantUpdate.
 type VariantUpdate struct {
 	Barcode *string `json:"barcode,omitempty"`
@@ -800,6 +883,16 @@ type UpdateProductParams struct {
 	IfMatch IfMatch `json:"If-Match"`
 }
 
+// PutVariantMatrixParams defines parameters for PutVariantMatrix.
+type PutVariantMatrixParams struct {
+	// IfMatch The `version` read from the resource. Required on every `PATCH`. The server checks it in
+	// the `UPDATE … WHERE version = $n` predicate; a stale value is `409 version_conflict`, not
+	// a silent no-op.
+	//
+	// `version` travels here and never in the request body.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListVariantsParams defines parameters for ListVariants.
 type ListVariantsParams struct {
 	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
@@ -835,6 +928,9 @@ type CreateProductJSONRequestBody = ProductCreate
 
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductUpdate
+
+// PutVariantMatrixJSONRequestBody defines body for PutVariantMatrix for application/json ContentType.
+type PutVariantMatrixJSONRequestBody = VariantMatrix
 
 // CreateVariantJSONRequestBody defines body for CreateVariant for application/json ContentType.
 type CreateVariantJSONRequestBody = VariantCreate
@@ -982,6 +1078,9 @@ type ServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams)
+	// PutVariantMatrix Save the whole variant grid in one request
+	// (PUT /products/{id}/variant-matrix)
+	PutVariantMatrix(w http.ResponseWriter, r *http.Request, id Id, params PutVariantMatrixParams)
 	// ListVariants A product's variants, in grid order
 	// (GET /products/{id}/variants)
 	ListVariants(w http.ResponseWriter, r *http.Request, id Id, params ListVariantsParams)
@@ -1114,6 +1213,12 @@ func (_ Unimplemented) GetProduct(w http.ResponseWriter, r *http.Request, id Id)
 // UpdateProduct Edit a product
 // (PATCH /products/{id})
 func (_ Unimplemented) UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutVariantMatrix Save the whole variant grid in one request
+// (PUT /products/{id}/variant-matrix)
+func (_ Unimplemented) PutVariantMatrix(w http.ResponseWriter, r *http.Request, id Id, params PutVariantMatrixParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1770,6 +1875,60 @@ func (siw *ServerInterfaceWrapper) UpdateProduct(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// PutVariantMatrix operation middleware
+func (siw *ServerInterfaceWrapper) PutVariantMatrix(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PutVariantMatrixParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutVariantMatrix(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListVariants operation middleware
 func (siw *ServerInterfaceWrapper) ListVariants(w http.ResponseWriter, r *http.Request) {
 
@@ -2116,6 +2275,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/jobs/{id}", wrapper.GetJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/products/{id}/variant-matrix", wrapper.PutVariantMatrix)
 	})
 
 	return r
@@ -3509,6 +3671,110 @@ func (response UpdateProduct422ApplicationProblemPlusJSONResponse) VisitUpdatePr
 	return err
 }
 
+type PutVariantMatrixRequestObject struct {
+	Id     Id `json:"id"`
+	Params PutVariantMatrixParams
+	Body   *PutVariantMatrixJSONRequestBody
+}
+
+type PutVariantMatrixResponseObject interface {
+	VisitPutVariantMatrixResponse(w http.ResponseWriter) error
+}
+
+type PutVariantMatrix200JSONResponse VariantMatrixResult
+
+func (response PutVariantMatrix200JSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutVariantMatrix401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response PutVariantMatrix401ApplicationProblemPlusJSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutVariantMatrix403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PutVariantMatrix403ApplicationProblemPlusJSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutVariantMatrix404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PutVariantMatrix404ApplicationProblemPlusJSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutVariantMatrix409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response PutVariantMatrix409ApplicationProblemPlusJSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutVariantMatrix422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response PutVariantMatrix422ApplicationProblemPlusJSONResponse) VisitPutVariantMatrixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListVariantsRequestObject struct {
 	Id     Id `json:"id"`
 	Params ListVariantsParams
@@ -3963,6 +4229,9 @@ type StrictServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(ctx context.Context, request UpdateProductRequestObject) (UpdateProductResponseObject, error)
+	// PutVariantMatrix Save the whole variant grid in one request
+	// (PUT /products/{id}/variant-matrix)
+	PutVariantMatrix(ctx context.Context, request PutVariantMatrixRequestObject) (PutVariantMatrixResponseObject, error)
 	// ListVariants A product's variants, in grid order
 	// (GET /products/{id}/variants)
 	ListVariants(ctx context.Context, request ListVariantsRequestObject) (ListVariantsResponseObject, error)
@@ -4544,6 +4813,40 @@ func (sh *strictHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProductResponseObject); ok {
 		if err := validResponse.VisitUpdateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutVariantMatrix operation middleware
+func (sh *strictHandler) PutVariantMatrix(w http.ResponseWriter, r *http.Request, id Id, params PutVariantMatrixParams) {
+	var request PutVariantMatrixRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body PutVariantMatrixJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutVariantMatrix(ctx, request.(PutVariantMatrixRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutVariantMatrix")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutVariantMatrixResponseObject); ok {
+		if err := validResponse.VisitPutVariantMatrixResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

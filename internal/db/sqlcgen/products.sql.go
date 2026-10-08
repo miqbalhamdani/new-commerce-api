@@ -54,6 +54,25 @@ func (q *Queries) ArchiveProduct(ctx context.Context, id uuid.UUID) (Product, er
 	return i, err
 }
 
+const bumpProduct = `-- name: BumpProduct :one
+UPDATE products SET option_names = $1, version = version + 1, updated_at = now()
+WHERE id = $2
+RETURNING version
+`
+
+type BumpProductParams struct {
+	OptionNames []string
+	ID          uuid.UUID
+}
+
+// One version step per matrix save, with the option axes it settled on.
+func (q *Queries) BumpProduct(ctx context.Context, arg BumpProductParams) (int32, error) {
+	row := q.db.QueryRow(ctx, bumpProduct, arg.OptionNames, arg.ID)
+	var version int32
+	err := row.Scan(&version)
+	return version, err
+}
+
 const clearProductCategories = `-- name: ClearProductCategories :exec
 DELETE FROM product_categories WHERE product_id = $1
 `
@@ -152,6 +171,33 @@ func (q *Queries) LiveVariantCount(ctx context.Context, productID uuid.UUID) (in
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const lockProduct = `-- name: LockProduct :one
+SELECT id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at FROM products WHERE id = $1 FOR UPDATE
+`
+
+// The matrix holds the product row for its whole transaction, so two grid
+// saves cannot interleave.
+func (q *Queries) LockProduct(ctx context.Context, id uuid.UUID) (Product, error) {
+	row := q.db.QueryRow(ctx, lockProduct, id)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Title,
+		&i.Slug,
+		&i.Description,
+		&i.BrandID,
+		&i.Status,
+		&i.Attributes,
+		&i.OptionNames,
+		&i.Version,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const productCategories = `-- name: ProductCategories :many

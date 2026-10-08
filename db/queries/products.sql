@@ -51,3 +51,14 @@ ORDER BY c.kind, c.path;
 
 -- name: LiveVariantCount :one
 SELECT count(*)::int FROM variants WHERE product_id = $1 AND archived_at IS NULL;
+
+-- name: LockProduct :one
+-- The matrix holds the product row for its whole transaction, so two grid
+-- saves cannot interleave.
+SELECT * FROM products WHERE id = $1 FOR UPDATE;
+
+-- name: BumpProduct :one
+-- One version step per matrix save, with the option axes it settled on.
+UPDATE products SET option_names = sqlc.arg(option_names), version = version + 1, updated_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING version;

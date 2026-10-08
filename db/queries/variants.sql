@@ -41,3 +41,10 @@ RETURNING id;
 -- The variant and product that already hold a SKU, for the duplicate_sku
 -- message (BR-039).
 SELECT v.id, p.title FROM variants v JOIN products p ON p.id = v.product_id WHERE v.sku = sqlc.arg(sku)::text;
+
+-- name: AllVariants :many
+-- Live and archived, for the matrix diff.
+SELECT v.*, variant_price(v)::bigint AS price FROM variants v WHERE v.product_id = $1 ORDER BY v.id;
+
+-- name: RestoreVariant :exec
+UPDATE variants SET archived_at = NULL, version = version + 1, updated_at = now() WHERE id = $1;
