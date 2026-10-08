@@ -26,7 +26,7 @@ func init() {
 		request: func(t *testing.T, s seeded) *http.Request {
 			// Another tenant's key prefix is refused before anything is read.
 			return bodyRequest(t, http.MethodPost, "/v1/products/import", s.accessToken, map[string]any{
-				"r2_key":         uuid.NewString() + "/jobs/" + uuid.NewString() + "/upload.csv",
+				"r2_key":         "jobs/" + uuid.NewString() + "/" + uuid.NewString() + "/upload.csv",
 				"column_mapping": map[string]string{"Title": "title"}, "on_conflict": "update"})
 		}})
 	auditCases = append(auditCases, auditCase{

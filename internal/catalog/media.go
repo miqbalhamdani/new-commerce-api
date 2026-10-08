@@ -62,7 +62,7 @@ func (s *Service) PresignImage(ctx context.Context, productID uuid.UUID, mime st
 	return s.presign(ctx, fmt.Sprintf("%s/products/%s/%s.%s", tenantOf(ctx), productID, sha, ext))
 }
 
-// PresignImport signs an upload of a CSV to {tenant}/jobs/{job}/upload.csv;
+// PresignImport signs an upload of a CSV to jobs/{tenant}/{job}/upload.csv;
 // the import job takes that id when it is created (P1-073).
 func (s *Service) PresignImport(ctx context.Context, mime string, bytes int64) (Presign, error) {
 	if !importTypes[mime] {
@@ -71,7 +71,7 @@ func (s *Service) PresignImport(ctx context.Context, mime string, bytes int64) (
 	if bytes > maxImportBytes {
 		return Presign{}, fieldError("bytes", "an import is at most 50 MB")
 	}
-	return s.presign(ctx, fmt.Sprintf("%s/jobs/%s/upload.csv", tenantOf(ctx), uuid.Must(uuid.NewV7())))
+	return s.presign(ctx, fmt.Sprintf("jobs/%s/%s/upload.csv", tenantOf(ctx), uuid.Must(uuid.NewV7())))
 }
 
 func (s *Service) presign(ctx context.Context, key string) (Presign, error) {

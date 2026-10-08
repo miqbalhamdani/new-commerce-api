@@ -1,5 +1,6 @@
 // Command storage-init creates the development bucket in MinIO with public
-// read on product images, standing in for the R2 setup of P1-045.
+// read on product images and the BR-053 expiry rules, standing in for the R2
+// setup of P1-045.
 package main
 
 import (
@@ -22,5 +23,5 @@ func main() {
 		slog.Error("storage-init failed", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("bucket ready", "database", config.S3Bucket())
+	slog.Info("bucket ready", "bucket", config.S3Bucket(), "expiry_days", storage.Expiry)
 }

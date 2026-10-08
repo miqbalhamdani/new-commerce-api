@@ -780,7 +780,7 @@ type ImportRequest struct {
 	ColumnMapping map[string]string       `json:"column_mapping"`
 	OnConflict    ImportRequestOnConflict `json:"on_conflict"`
 
-	// R2Key Examples: 0192-tenant/jobs/0193…/upload.csv
+	// R2Key Examples: jobs/0192-tenant/0193…/upload.csv
 	R2Key string `json:"r2_key"`
 }
 

@@ -29,7 +29,7 @@ const importBatch = 500
 var importTargets = map[string]bool{"title": true, "sku": true, "regular_price": true, "sale_price": true,
 	"weight_grams": true, "barcode": true}
 
-var importKey = regexp.MustCompile(`^([0-9a-f-]{36})/jobs/([0-9a-f-]{36})/upload\.csv$`)
+var importKey = regexp.MustCompile(`^jobs/([0-9a-f-]{36})/([0-9a-f-]{36})/upload\.csv$`)
 
 // ImportParams is what a product_import job carries.
 type ImportParams struct {

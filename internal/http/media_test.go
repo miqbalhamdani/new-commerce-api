@@ -163,7 +163,7 @@ func TestMedia(t *testing.T) {
 		code, p = do("POST", "/v1/media/presign", body("product_image", "image/png", 21<<20))
 		assertProblem(t, code, p, 422, "validation_failed", "bytes")
 		code, p = do("POST", "/v1/media/presign", body("product_import", "text/csv", 1000))
-		if code != 200 || !strings.Contains(p["r2_key"].(string), "/jobs/") || !strings.HasSuffix(p["r2_key"].(string), "/upload.csv") {
+		if code != 200 || !strings.HasPrefix(p["r2_key"].(string), "jobs/"+tenantID.String()+"/") || !strings.HasSuffix(p["r2_key"].(string), "/upload.csv") {
 			t.Errorf("import presign: %d %v", code, p)
 		}
 		ops := signInAnotherUser(ctx, t, store, tenantID, auth.RoleOps)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 )
@@ -104,9 +105,14 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 // built on read, never stored.
 func (s *Store) PublicURL(key string) string { return s.publicBase + "/" + key }
 
-// EnsureBucket creates the bucket and lets anyone read product images, the
-// way the R2 bucket and image domain do in production (P1-045). For
-// development; production buckets are provisioned, not created by the app.
+// Expiry is how long temporary files live, by key prefix (BR-053). R2 gets the
+// same two lifecycle rules at provisioning (P1-045).
+var Expiry = map[string]int{"jobs/": 30, "exports/": 7}
+
+// EnsureBucket creates the bucket, lets anyone read product images and sets
+// the Expiry rules, the way the R2 bucket and image domain do in production
+// (P1-045). For development; production buckets are provisioned, not created
+// by the app.
 func (s *Store) EnsureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {
@@ -119,7 +125,18 @@ func (s *Store) EnsureBucket(ctx context.Context) error {
 	}
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},
 		"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*/products/*"]}]}`, s.bucket)
-	return s.client.SetBucketPolicy(ctx, s.bucket, policy)
+	if err := s.client.SetBucketPolicy(ctx, s.bucket, policy); err != nil {
+		return fmt.Errorf("bucket policy: %w", err)
+	}
+	rules := lifecycle.NewConfiguration()
+	for prefix, days := range Expiry {
+		rules.Rules = append(rules.Rules, lifecycle.Rule{ID: "expire-" + strings.TrimSuffix(prefix, "/"), Status: "Enabled",
+			RuleFilter: lifecycle.Filter{Prefix: prefix}, Expiration: lifecycle.Expiration{Days: lifecycle.ExpirationDays(days)}})
+	}
+	if err := s.client.SetBucketLifecycle(ctx, s.bucket, rules); err != nil {
+		return fmt.Errorf("bucket lifecycle: %w", err)
+	}
+	return nil
 }
 
 // FromEnv is the store the environment names (config.S3*).
