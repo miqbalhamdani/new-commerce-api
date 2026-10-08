@@ -9,10 +9,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // TestPermissionDenied is P1-012's acceptance: a 403 names the required
@@ -203,4 +205,39 @@ func seedSignedInUserWithRole(ctx context.Context, t *testing.T, store *db.Store
 	s.accessToken = session.AccessToken
 	s.refreshToken = session.RefreshToken
 	return s
+}
+
+// signInAnotherUser adds a user with role to an existing tenant and signs it
+// in, for tests that need two roles looking at the same rows.
+func signInAnotherUser(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID, role string) seeded {
+	t.Helper()
+	id := uuid.Must(uuid.NewV7())
+	email := "extra-" + id.String() + "@example.com"
+	hash, err := auth.HashPassword(isoPassword)
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO users (id, tenant_id, email, password_hash, name, role, status)
+			VALUES ($1, $2, $3, $4, 'Extra', $5, 'active')`, id, tenantID, email, hash, role)
+		return err
+	}); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	t.Cleanup(func() {
+		bg := tenant.NewContext(context.WithoutCancel(ctx), tenantID)
+		_ = store.InTenantTx(bg, func(tx pgx.Tx) error {
+			_, err := tx.Exec(bg, `DELETE FROM refresh_tokens WHERE user_id = $1; DELETE FROM users WHERE id = $1`, id)
+			return err
+		})
+	})
+	signer, err := auth.NewSigner(isoSigningKey)
+	if err != nil {
+		t.Fatalf("signer: %v", err)
+	}
+	session, err := auth.NewService(store, signer).Login(ctx, email, isoPassword)
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+	return seeded{email: email, password: isoPassword, accessToken: session.AccessToken, refreshToken: session.RefreshToken}
 }

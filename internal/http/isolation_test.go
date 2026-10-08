@@ -36,6 +36,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
@@ -336,18 +337,26 @@ var newServer = func(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("new signer: %v", err)
 	}
-	redis, err := queue.New(t.Context(), config.RedisURL())
-	if err != nil {
-		t.Fatalf("connect redis: %v\n\nIs it running?\n  brew services start redis", err)
-	}
-	t.Cleanup(func() { _ = redis.Close() })
+	redis := testRedis(t)
 
 	// secureCookies false: httptest speaks plain HTTP.
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
 		Auth:    auth.NewService(store, signer),
 		Catalog: catalog.NewService(store),
+		Jobs:    jobs.NewService(store, redis),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
+}
+
+// testRedis connects to the host Redis for the life of the test.
+func testRedis(t *testing.T) *queue.Client {
+	t.Helper()
+	redis, err := queue.New(t.Context(), config.RedisURL())
+	if err != nil {
+		t.Fatalf("connect redis: %v\n\nIs it running?\n  brew services start redis", err)
+	}
+	t.Cleanup(func() { _ = redis.Close() })
+	return redis
 }
 
 // --- fixtures --------------------------------------------------------------

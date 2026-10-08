@@ -58,6 +58,22 @@ type Category struct {
 	UpdatedAt  time.Time
 }
 
+type Job struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Kind       string
+	State      string
+	Processed  int32
+	Total      *int32
+	Failed     int32
+	Params     []byte
+	Result     []byte
+	Error      []byte
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+	FinishedAt *time.Time
+}
+
 type Product struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

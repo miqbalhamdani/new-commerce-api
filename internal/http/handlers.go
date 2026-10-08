@@ -8,6 +8,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 )
 
@@ -22,6 +23,7 @@ const refreshCookieName = "refresh_token"
 type Server struct {
 	auth    *auth.Service
 	catalog *catalog.Service
+	jobs    *jobs.Service
 
 	// secureCookies is false only for local development over plain HTTP, where
 	// a Secure cookie would be dropped by the browser and nothing would work.
@@ -33,10 +35,11 @@ type Server struct {
 type Services struct {
 	Auth    *auth.Service
 	Catalog *catalog.Service
+	Jobs    *jobs.Service
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
-	return &Server{auth: svc.Auth, catalog: svc.Catalog, secureCookies: secureCookies}
+	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.

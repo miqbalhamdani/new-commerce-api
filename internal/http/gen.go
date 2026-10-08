@@ -119,6 +119,54 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for JobState.
+const (
+	Done    JobState = "done"
+	Failed  JobState = "failed"
+	Queued  JobState = "queued"
+	Running JobState = "running"
+)
+
+// Valid indicates whether the value is a known member of the JobState enum.
+func (e JobState) Valid() bool {
+	switch e {
+	case Done:
+		return true
+	case Failed:
+		return true
+	case Queued:
+		return true
+	case Running:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobKind.
+const (
+	ChannelImport    JobKind = "channel_import"
+	ImageDerivatives JobKind = "image_derivatives"
+	OrderExport      JobKind = "order_export"
+	ProductImport    JobKind = "product_import"
+)
+
+// Valid indicates whether the value is a known member of the JobKind enum.
+func (e JobKind) Valid() bool {
+	switch e {
+	case ChannelImport:
+		return true
+	case ImageDerivatives:
+		return true
+	case OrderExport:
+		return true
+	case ProductImport:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProductStatus.
 const (
 	ProductStatusActive   ProductStatus = "active"
@@ -333,6 +381,30 @@ type CategoryUpdate struct {
 // The code also appears as the last segment of a `Problem.type` URI, and directly in
 // per-row results where an operation partially succeeds (§7.3, §7.5).
 type ErrorCode string
+
+// Job defines model for Job.
+type Job struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Error      *Problem           `json:"error"`
+	Failed     int                `json:"failed"`
+	FinishedAt *time.Time         `json:"finished_at"`
+	Id         openapi_types.UUID `json:"id"`
+	Kind       JobKind            `json:"kind"`
+	Processed  int                `json:"processed"`
+
+	// Result `null` until `done`. Per kind: `product_import` carries `created`, `updated` and
+	// `error_report_url` (+ `expires_in`), `null` when nothing failed; `order_export` carries
+	// `download_url`.
+	Result *map[string]interface{} `json:"result"`
+	State  JobState                `json:"state"`
+	Total  *int                    `json:"total"`
+}
+
+// JobState defines model for Job.State.
+type JobState string
+
+// JobKind defines model for JobKind.
+type JobKind string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -892,6 +964,9 @@ type ServerInterface interface {
 	// UpdateCategory Rename or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// GetJob A background job's progress and result
+	// (GET /jobs/{id})
+	GetJob(w http.ResponseWriter, r *http.Request, id Id)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -1003,6 +1078,12 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id Id
 // UpdateCategory Rename or move a category
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetJob A background job's progress and result
+// (GET /jobs/{id})
+func (_ Unimplemented) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1423,6 +1504,32 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetJob operation middleware
+func (siw *ServerInterfaceWrapper) GetJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetJob(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2006,6 +2113,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/variants/{id}", wrapper.UpdateVariant)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/jobs/{id}", wrapper.GetJob)
 	})
 
 	return r
@@ -2951,6 +3061,76 @@ func (response UpdateCategory422ApplicationProblemPlusJSONResponse) VisitUpdateC
 	return err
 }
 
+type GetJobRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetJobResponseObject interface {
+	VisitGetJobResponse(w http.ResponseWriter) error
+}
+
+type GetJob200JSONResponse Job
+
+func (response GetJob200JSONResponse) VisitGetJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJob401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetJob401ApplicationProblemPlusJSONResponse) VisitGetJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJob403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetJob403ApplicationProblemPlusJSONResponse) VisitGetJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetJob404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetJob404ApplicationProblemPlusJSONResponse) VisitGetJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProductsRequestObject struct {
 	Params ListProductsParams
 }
@@ -3765,6 +3945,9 @@ type StrictServerInterface interface {
 	// UpdateCategory Rename or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
+	// GetJob A background job's progress and result
+	// (GET /jobs/{id})
+	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -4192,6 +4375,32 @@ func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCategoryResponseObject); ok {
 		if err := validResponse.VisitUpdateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetJob operation middleware
+func (sh *strictHandler) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
+	var request GetJobRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetJob(ctx, request.(GetJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetJobResponseObject); ok {
+		if err := validResponse.VisitGetJobResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

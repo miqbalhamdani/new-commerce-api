@@ -26,6 +26,7 @@ done; an item is done only when its Acceptance is proven, with a test wherever a
 
 ```bash
 make dev          # run the API against host PostgreSQL and Redis
+make worker       # run the background job worker (cmd/worker)
 make db-create    # create the local development database
 make migrate      # apply migrations
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
@@ -51,7 +52,7 @@ cmd/api/          HTTP API: /v1 admin, /v1/storefront from Phase 3. Stateless; 2
                   behind Caddy in production (P1-001).
 cmd/migrate/      Runs migrations to completion, exits.
 cmd/lint-rls/     RLS policy guard (make lint-rls).
-cmd/worker/       (P1-060) Redis Streams consumer. Phase 1: image derivatives, product CSV
+cmd/worker/       Redis Streams consumer (P1-060). Phase 1: image derivatives, product CSV
                   import, invitation email. Later: order export, channel import, retention.
 internal/
   platform/       config, errors, logging, telemetry — imported by everything

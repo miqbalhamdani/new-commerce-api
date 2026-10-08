@@ -16,6 +16,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
@@ -80,6 +81,7 @@ func run() error {
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
 			Catalog: catalog.NewService(pool),
+			Jobs:    jobs.NewService(pool, redis),
 		}, !config.IsDevelopment()),
 		signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),

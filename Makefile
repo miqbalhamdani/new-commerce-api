@@ -4,11 +4,15 @@ DB_NAME ?= new_commerce_dev
 # a host install, so a .env is only needed to deviate from them.
 LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: dev db-create migrate migrate-down generate generated-diff fmt-check vet lint test test-iso lint-rls check
+.PHONY: dev worker db-create migrate migrate-down generate generated-diff fmt-check vet lint test test-iso lint-rls check
 
 ## dev: run the API against host PostgreSQL and Redis
 dev:
 	@$(LOAD_ENV) go run ./cmd/api
+
+## worker: run the background job worker (BR-060) against the same services
+worker:
+	@$(LOAD_ENV) go run ./cmd/worker
 
 ## db-create: create the local development database if it is not there yet
 db-create:
