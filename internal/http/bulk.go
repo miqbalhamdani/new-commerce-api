@@ -76,3 +76,31 @@ func (s *Server) BulkProducts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 	}))(w, r)
 }
+
+// ImportProducts queues a CSV import (04-api-spec.md §7.6, P1-073).
+func (s *Server) ImportProducts(w http.ResponseWriter, r *http.Request) {
+	requirePermission(auth.PermProductsWrite, requirePermission(auth.PermVariantsWrite, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Key        optional[string]            `json:"r2_key"`
+			Mapping    optional[map[string]string] `json:"column_mapping"`
+			OnConflict optional[string]            `json:"on_conflict"`
+		}
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		for name, ok := range map[string]bool{"r2_key": body.Key.Set && !body.Key.Null,
+			"column_mapping": body.Mapping.Set && !body.Mapping.Null, "on_conflict": body.OnConflict.Set && !body.OnConflict.Null} {
+			if !ok {
+				writeError(w, r, fieldErr(name, name+" is required"))
+				return
+			}
+		}
+		id, err := s.catalog.StartImport(r.Context(), catalog.ImportParams{Key: body.Key.Value,
+			Mapping: body.Mapping.Value, OnConflict: body.OnConflict.Value})
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, JobAccepted{JobId: id})
+	}))(w, r)
+}

@@ -24,3 +24,9 @@ WHERE id = sqlc.arg(id) AND state = 'running';
 -- name: FailJob :exec
 UPDATE jobs SET state = 'failed', error = sqlc.arg(error), finished_at = now()
 WHERE id = sqlc.arg(id) AND state IN ('queued', 'running');
+
+-- name: CheckpointJob :exec
+-- Written in the same transaction as the batch it counts, so a redelivered
+-- job resumes exactly after what committed.
+UPDATE jobs SET processed = sqlc.arg(processed), failed = sqlc.arg(failed), result = sqlc.arg(result)
+WHERE id = sqlc.arg(id);

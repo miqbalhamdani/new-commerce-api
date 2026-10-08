@@ -37,12 +37,17 @@ type Job = sqlcgen.Job
 // Create inserts a queued job inside tx, the transaction that asked for it.
 // Enqueue it once that transaction has committed.
 func Create(ctx context.Context, tx pgx.Tx, kind string, params any, createdBy *uuid.UUID) (Job, error) {
+	return CreateWithID(ctx, tx, uuid.Must(uuid.NewV7()), kind, params, createdBy)
+}
+
+// CreateWithID is Create for a job whose id was minted earlier -- an import's
+// id is in the key its file was uploaded under (P1-073).
+func CreateWithID(ctx context.Context, tx pgx.Tx, id uuid.UUID, kind string, params any, createdBy *uuid.UUID) (Job, error) {
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return Job{}, err
 	}
-	return sqlcgen.New(tx).CreateJob(ctx, sqlcgen.CreateJobParams{
-		ID: uuid.Must(uuid.NewV7()), Kind: kind, Params: raw, CreatedBy: createdBy})
+	return sqlcgen.New(tx).CreateJob(ctx, sqlcgen.CreateJobParams{ID: id, Kind: kind, Params: raw, CreatedBy: createdBy})
 }
 
 // Service reads jobs and enqueues committed ones.

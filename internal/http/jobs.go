@@ -40,8 +40,10 @@ func (s *Server) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 		t := int(*j.Total)
 		out.Total = &t
 	}
-	if j.Result != nil {
-		result, err := s.signResult(r, j.Kind, j.Result)
+	// The row carries a running tally while the job works; result is null
+	// until it is done (04-api-spec.md §9).
+	if j.Result != nil && j.State == "done" {
+		result, err := s.signResult(r, j.Result)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -59,11 +61,20 @@ func (s *Server) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 
 // signResult turns the stored result into the response one. The row keeps
 // object keys; every GET signs fresh 15-minute URLs for them (BR-063).
-//
-// ponytail: passes the stored result through until object storage is wired
-// (P1-073 signs error_report_key).
-func (s *Server) signResult(_ *http.Request, _ string, raw []byte) (map[string]any, error) {
+func (s *Server) signResult(r *http.Request, raw []byte) (map[string]any, error) {
 	var m map[string]any
-	err := json.Unmarshal(raw, &m)
-	return m, err
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, err
+	}
+	if key, ok := m["error_report_key"].(string); ok {
+		u, err := s.catalog.SignDownload(r.Context(), key)
+		if err != nil {
+			return nil, err
+		}
+		delete(m, "error_report_key")
+		m["error_report_url"], m["expires_in"] = u, 900
+	} else if _, isImport := m["created"]; isImport {
+		m["error_report_url"] = nil
+	}
+	return m, nil
 }

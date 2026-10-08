@@ -11,6 +11,30 @@ import (
 	"github.com/google/uuid"
 )
 
+const checkpointJob = `-- name: CheckpointJob :exec
+UPDATE jobs SET processed = $1, failed = $2, result = $3
+WHERE id = $4
+`
+
+type CheckpointJobParams struct {
+	Processed int32
+	Failed    int32
+	Result    []byte
+	ID        uuid.UUID
+}
+
+// Written in the same transaction as the batch it counts, so a redelivered
+// job resumes exactly after what committed.
+func (q *Queries) CheckpointJob(ctx context.Context, arg CheckpointJobParams) error {
+	_, err := q.db.Exec(ctx, checkpointJob,
+		arg.Processed,
+		arg.Failed,
+		arg.Result,
+		arg.ID,
+	)
+	return err
+}
+
 const createJob = `-- name: CreateJob :one
 
 INSERT INTO jobs (id, tenant_id, kind, params, created_by)

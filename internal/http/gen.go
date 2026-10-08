@@ -176,6 +176,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for ImportRequestOnConflict.
+const (
+	ImportRequestOnConflictError  ImportRequestOnConflict = "error"
+	ImportRequestOnConflictUpdate ImportRequestOnConflict = "update"
+)
+
+// Valid indicates whether the value is a known member of the ImportRequestOnConflict enum.
+func (e ImportRequestOnConflict) Valid() bool {
+	switch e {
+	case ImportRequestOnConflictError:
+		return true
+	case ImportRequestOnConflictUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for JobState.
 const (
 	Done    JobState = "done"
@@ -547,6 +565,24 @@ type ConfirmMedia struct {
 // per-row results where an operation partially succeeds (§7.3, §7.5).
 type ErrorCode string
 
+// ImportRequest defines model for ImportRequest.
+type ImportRequest struct {
+	// ColumnMapping CSV header → target: `title`, `sku`, `regular_price`, `sale_price`, `weight_grams`,
+	// `barcode`, or `option:<Name>`. Unmapped columns are ignored. `title` or `sku` is
+	// required.
+	//
+	//
+	// Examples: {"Harga":"regular_price","Nama Produk":"title","SKU":"sku","Warna":"option:Colour"}
+	ColumnMapping map[string]string       `json:"column_mapping"`
+	OnConflict    ImportRequestOnConflict `json:"on_conflict"`
+
+	// R2Key Examples: 0192-tenant/jobs/0193…/upload.csv
+	R2Key string `json:"r2_key"`
+}
+
+// ImportRequestOnConflict defines model for ImportRequest.OnConflict.
+type ImportRequestOnConflict string
+
 // Job defines model for Job.
 type Job struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -567,6 +603,11 @@ type Job struct {
 
 // JobState defines model for Job.State.
 type JobState string
+
+// JobAccepted defines model for JobAccepted.
+type JobAccepted struct {
+	JobId openapi_types.UUID `json:"job_id"`
+}
 
 // JobKind defines model for JobKind.
 type JobKind string
@@ -1111,6 +1152,9 @@ type CreateProductJSONRequestBody = ProductCreate
 // BulkProductsJSONRequestBody defines body for BulkProducts for application/json ContentType.
 type BulkProductsJSONRequestBody = BulkRequest
 
+// ImportProductsJSONRequestBody defines body for ImportProducts for application/json ContentType.
+type ImportProductsJSONRequestBody = ImportRequest
+
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductUpdate
 
@@ -1272,6 +1316,9 @@ type ServerInterface interface {
 	// BulkProducts Create or update up to 500 rows keyed on SKU
 	// (POST /products/bulk)
 	BulkProducts(w http.ResponseWriter, r *http.Request)
+	// ImportProducts Import a CSV uploaded with presign purpose product_import
+	// (POST /products/import)
+	ImportProducts(w http.ResponseWriter, r *http.Request)
 	// ArchiveProduct Archive a product
 	// (DELETE /products/{id})
 	ArchiveProduct(w http.ResponseWriter, r *http.Request, id Id)
@@ -1431,6 +1478,12 @@ func (_ Unimplemented) CreateProduct(w http.ResponseWriter, r *http.Request) {
 // BulkProducts Create or update up to 500 rows keyed on SKU
 // (POST /products/bulk)
 func (_ Unimplemented) BulkProducts(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImportProducts Import a CSV uploaded with presign purpose product_import
+// (POST /products/import)
+func (_ Unimplemented) ImportProducts(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2105,6 +2158,20 @@ func (siw *ServerInterfaceWrapper) BulkProducts(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ImportProducts operation middleware
+func (siw *ServerInterfaceWrapper) ImportProducts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportProducts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ArchiveProduct operation middleware
 func (siw *ServerInterfaceWrapper) ArchiveProduct(w http.ResponseWriter, r *http.Request) {
 
@@ -2616,6 +2683,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/products/bulk", wrapper.BulkProducts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/products/import", wrapper.ImportProducts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/products/{id}", wrapper.ArchiveProduct)
@@ -4174,6 +4244,76 @@ func (response BulkProducts422ApplicationProblemPlusJSONResponse) VisitBulkProdu
 	return err
 }
 
+type ImportProductsRequestObject struct {
+	Body *ImportProductsJSONRequestBody
+}
+
+type ImportProductsResponseObject interface {
+	VisitImportProductsResponse(w http.ResponseWriter) error
+}
+
+type ImportProducts202JSONResponse JobAccepted
+
+func (response ImportProducts202JSONResponse) VisitImportProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportProducts401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ImportProducts401ApplicationProblemPlusJSONResponse) VisitImportProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportProducts403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ImportProducts403ApplicationProblemPlusJSONResponse) VisitImportProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImportProducts422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ImportProducts422ApplicationProblemPlusJSONResponse) VisitImportProductsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ArchiveProductRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -5063,6 +5203,9 @@ type StrictServerInterface interface {
 	// BulkProducts Create or update up to 500 rows keyed on SKU
 	// (POST /products/bulk)
 	BulkProducts(ctx context.Context, request BulkProductsRequestObject) (BulkProductsResponseObject, error)
+	// ImportProducts Import a CSV uploaded with presign purpose product_import
+	// (POST /products/import)
+	ImportProducts(ctx context.Context, request ImportProductsRequestObject) (ImportProductsResponseObject, error)
 	// ArchiveProduct Archive a product
 	// (DELETE /products/{id})
 	ArchiveProduct(ctx context.Context, request ArchiveProductRequestObject) (ArchiveProductResponseObject, error)
@@ -5725,6 +5868,37 @@ func (sh *strictHandler) BulkProducts(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(BulkProductsResponseObject); ok {
 		if err := validResponse.VisitBulkProductsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImportProducts operation middleware
+func (sh *strictHandler) ImportProducts(w http.ResponseWriter, r *http.Request) {
+	var request ImportProductsRequestObject
+
+	var body ImportProductsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImportProducts(ctx, request.(ImportProductsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImportProducts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImportProductsResponseObject); ok {
+		if err := validResponse.VisitImportProductsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

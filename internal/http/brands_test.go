@@ -274,3 +274,5 @@ func assertProblem(t *testing.T, code int, p map[string]any, status int, errCode
 	}
 	t.Errorf("errors %v do not name %s", fmt.Sprint(errs), field)
 }
+
+func tenantCtx(ctx context.Context, id uuid.UUID) context.Context { return tenant.NewContext(ctx, id) }
