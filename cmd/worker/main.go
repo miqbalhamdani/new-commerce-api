@@ -1,10 +1,11 @@
 // Command worker runs background jobs from the Redis stream (BR-060): image
-// derivatives (P1-044), product CSV import (P1-073) and email (P1-226) as
-// those items add their handlers.
+// derivatives (P1-044), product CSV import (P1-073), and email (P1-226) from
+// its own stream.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,14 +13,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 func main() {
@@ -71,6 +75,38 @@ func run() error {
 		ClaimIdle:     60 * time.Second,
 		MaxDeliveries: 5,
 	}
+	sender, err := mailSender()
+	if err != nil {
+		return err
+	}
+	inviteSecret, err := config.InviteSecret()
+	if err != nil {
+		return err
+	}
+	invites, err := auth.NewInviteSigner(inviteSecret)
+	if err != nil {
+		return err
+	}
+	renders := map[string]email.Render{"invitation": team.InvitationMail(pool, invites, config.AdminURL())}
+	go func() {
+		if err := email.Consume(ctx, redis, runner.Consumer, renders, sender, 60*time.Second, 5); err != nil {
+			slog.Error("email consumer stopped", "error", err)
+		}
+	}()
+
 	slog.Info("worker consuming", "addr", jobs.Stream)
 	return runner.Run(ctx)
+}
+
+// mailSender is Resend when a key is set. Without one, development prints
+// mail to stdout; anywhere else that is a startup failure, since printed mail
+// would put invitation tokens in a deployed log (BR-013).
+func mailSender() (email.Sender, error) {
+	if key := config.ResendAPIKey(); key != "" {
+		return email.Resend{APIKey: key, Domain: config.EmailDomain(), URL: "https://api.resend.com/emails"}, nil
+	}
+	if config.IsDevelopment() {
+		return email.Log{Out: os.Stdout}, nil
+	}
+	return nil, errors.New("RESEND_API_KEY is required when ENVIRONMENT is not \"development\"")
 }
