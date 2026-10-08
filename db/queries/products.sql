@@ -62,3 +62,10 @@ SELECT * FROM products WHERE id = $1 FOR UPDATE;
 UPDATE products SET option_names = sqlc.arg(option_names), version = version + 1, updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING version;
+
+-- name: PublishFacts :one
+-- What the publish check reads about a product (BR-038).
+SELECT
+  (SELECT count(*) FROM product_media m WHERE m.product_id = sqlc.arg(id))::int AS media,
+  (SELECT count(*) FROM product_categories pc JOIN categories c ON c.id = pc.category_id
+    WHERE pc.product_id = sqlc.arg(id) AND c.kind = 'category')::int AS main_categories;

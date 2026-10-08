@@ -258,6 +258,26 @@ func (q *Queries) ProductSlugTaken(ctx context.Context, arg ProductSlugTakenPara
 	return exists, err
 }
 
+const publishFacts = `-- name: PublishFacts :one
+SELECT
+  (SELECT count(*) FROM product_media m WHERE m.product_id = $1)::int AS media,
+  (SELECT count(*) FROM product_categories pc JOIN categories c ON c.id = pc.category_id
+    WHERE pc.product_id = $1 AND c.kind = 'category')::int AS main_categories
+`
+
+type PublishFactsRow struct {
+	Media          int32
+	MainCategories int32
+}
+
+// What the publish check reads about a product (BR-038).
+func (q *Queries) PublishFacts(ctx context.Context, id uuid.UUID) (PublishFactsRow, error) {
+	row := q.db.QueryRow(ctx, publishFacts, id)
+	var i PublishFactsRow
+	err := row.Scan(&i.Media, &i.MainCategories)
+	return i, err
+}
+
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE products SET
   title       = coalesce($1, title),

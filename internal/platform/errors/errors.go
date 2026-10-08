@@ -20,6 +20,7 @@ import (
 const (
 	CodeValidationFailed = "validation_failed"
 	CodeUnknownField     = "unknown_field"
+	CodePublishCheck     = "publish_check_failed"
 	CodeVersionConflict  = "version_conflict"
 	CodeDuplicateSKU     = "duplicate_sku"
 	CodeCategoryInUse    = "category_in_use"
@@ -132,6 +133,13 @@ func DuplicateSKU(sku, holder string) *Error {
 	}
 	return (&Error{Code: CodeDuplicateSKU, Status: http.StatusConflict, Title: "Duplicate SKU", Detail: detail}).
 		WithFields(Field{Name: "sku", Detail: detail})
+}
+
+// PublishCheckFailed is the 422 for a product that cannot go active, with
+// one entry per failure (BR-038).
+func PublishCheckFailed(failures ...Field) *Error {
+	return (&Error{Code: CodePublishCheck, Status: http.StatusUnprocessableEntity,
+		Title: "Publish check failed", Detail: "The product cannot be published yet."}).WithFields(failures...)
 }
 
 func ValidationFailed(detail string) *Error {

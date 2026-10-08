@@ -265,11 +265,52 @@ func freeSlug(ctx context.Context, q *sqlcgen.Queries, title string) (string, er
 	}
 }
 
-// publishCheck is BR-038, run when a product goes active.
-//
-// ponytail: a no-op until P1-049, which needs variants (P1-029/040) and media
-// (P1-043) to have anything to check.
-func (s *Service) publishCheck(_ context.Context, _ *sqlcgen.Queries, _ uuid.UUID) error {
+// publishCheck is BR-038, run when a product goes active: every failure is
+// listed, so the client can link each to its field or matrix cell.
+func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	variants, err := q.ListVariants(ctx, sqlcgen.ListVariantsParams{ProductID: id, Archived: false})
+	if err != nil {
+		return err
+	}
+	facts, err := q.PublishFacts(ctx, id)
+	if err != nil {
+		return err
+	}
+	var fails []apperrors.Field
+	add := func(field string, variant *uuid.UUID, detail string) {
+		f := apperrors.Field{Name: field, Detail: detail}
+		if variant != nil {
+			f.Extra = map[string]any{"variant_id": *variant}
+		}
+		fails = append(fails, f)
+	}
+	if len(variants) == 0 {
+		add("variants", nil, "At least one live variant is required")
+	}
+	for _, v := range variants {
+		label := strings.Join(v.OptionValues, " / ")
+		if label == "" {
+			label = "the variant"
+		}
+		if v.Sku == nil {
+			add("sku", &v.ID, "Variant "+label+" has no SKU")
+		}
+		if v.RegularPriceAmount <= 0 {
+			add("price", &v.ID, "Variant "+label+": price must be greater than zero")
+		}
+		if v.WeightGrams <= 0 {
+			add("weight", &v.ID, "Variant "+label+": weight must be greater than zero")
+		}
+	}
+	if facts.Media == 0 {
+		add("media", nil, "At least one image is required")
+	}
+	if facts.MainCategories == 0 {
+		add("categories", nil, "At least one category of kind category is required")
+	}
+	if len(fails) > 0 {
+		return apperrors.PublishCheckFailed(fails...)
+	}
 	return nil
 }
 
