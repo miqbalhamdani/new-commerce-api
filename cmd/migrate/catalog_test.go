@@ -416,3 +416,35 @@ func TestVariants(t *testing.T) {
 		}
 	})
 }
+
+// TestProductCategories is P1-027's acceptance: one product in three trees
+// of different kinds at once (BR-031), and a cross-tenant link refused (BR-004).
+func TestProductCategories(t *testing.T) {
+	ctx := t.Context()
+	tx := beginRolledBack(ctx, t, migratedOwner(ctx, t))
+	a, b := seedTenant(ctx, t, tx), seedTenant(ctx, t, tx)
+
+	product := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO products (id, tenant_id, title, slug) VALUES ($1, $2, 'Tee', 'tee')`, product, a); err != nil {
+		t.Fatalf("product: %v", err)
+	}
+	category := func(tenantID uuid.UUID, kind string) uuid.UUID {
+		id := uuid.Must(uuid.NewV7())
+		if _, err := tx.Exec(ctx, `INSERT INTO categories (id, tenant_id, kind, name) VALUES ($1, $2, $3, $3)`,
+			id, tenantID, kind); err != nil {
+			t.Fatalf("category %s: %v", kind, err)
+		}
+		return id
+	}
+	for _, kind := range []string{"category", "series", "collection"} {
+		if _, err := tx.Exec(ctx, `INSERT INTO product_categories (tenant_id, product_id, category_id) VALUES ($1, $2, $3)`,
+			a, product, category(a, kind)); err != nil {
+			t.Errorf("link to %s: %v", kind, err)
+		}
+	}
+	foreign := category(b, "category")
+	if _, err := tx.Exec(ctx, `INSERT INTO product_categories (tenant_id, product_id, category_id) VALUES ($1, $2, $3)`,
+		a, product, foreign); err == nil {
+		t.Error("a product was linked to another tenant's category")
+	}
+}
