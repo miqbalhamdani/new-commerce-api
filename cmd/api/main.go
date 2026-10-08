@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
@@ -76,7 +77,10 @@ func run() error {
 		checker{name: "redis", version: redis.ServerVersion},
 	))
 	mux.Handle("/v1/", httpapi.NewRouter(
-		httpapi.NewServer(auth.NewService(pool, signer), !config.IsDevelopment()),
+		httpapi.NewServer(httpapi.Services{
+			Auth:    auth.NewService(pool, signer),
+			Catalog: catalog.NewService(pool),
+		}, !config.IsDevelopment()),
 		signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),
 	))

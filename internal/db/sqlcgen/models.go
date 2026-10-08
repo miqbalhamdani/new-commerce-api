@@ -36,6 +36,16 @@ type AuditLog struct {
 	CreatedAt   time.Time
 }
 
+type Brand struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Name       string
+	Slug       string
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type RefreshToken struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

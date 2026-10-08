@@ -1,7 +1,10 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
+
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -20,7 +23,26 @@ func NewRouter(srv ServerInterface, signer *auth.Signer, limiter *RateLimiter) h
 	// the authentication middleware still carries a trace id that resolves.
 	// The limiter keys on the user Authenticate puts in the context.
 	r.Use(tracing, Authenticate(signer), limiter.Middleware)
-	return HandlerFromMuxWithBaseURL(srv, r, "/v1")
+	return HandlerWithOptions(srv, ChiServerOptions{
+		BaseURL: "/v1", BaseRouter: r, ErrorHandlerFunc: paramError,
+	})
+}
+
+// paramError answers a path or query parameter the generated binder could not
+// parse. An id that is not a UUID names no row, so it is the same 404 as a row
+// that does not exist; a bad query parameter is 422 naming it.
+func paramError(w http.ResponseWriter, r *http.Request, err error) {
+	var bad *InvalidParamFormatError
+	if errors.As(err, &bad) && bad.ParamName == "id" {
+		writeError(w, r, apperrors.NotFound("No such resource."))
+		return
+	}
+	name := "query"
+	if errors.As(err, &bad) {
+		name = bad.ParamName
+	}
+	writeError(w, r, apperrors.ValidationFailed(err.Error()).
+		WithFields(apperrors.Field{Name: name, Detail: "invalid"}).WithCause(err))
 }
 
 // tracing starts a span per request and names it after the matched route

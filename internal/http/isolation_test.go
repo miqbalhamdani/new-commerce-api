@@ -34,6 +34,7 @@ import (
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
@@ -64,6 +65,12 @@ type seeded struct {
 	password     string
 	accessToken  string
 	refreshToken string
+
+	// id is the row this tenant's seed created, for routes addressed by id.
+	// otherID is filled in by the suite with the other tenant's id, so a
+	// request can aim at a row it must not reach.
+	id      string
+	otherID string
 }
 
 // isolationCase says how to exercise one route as tenant A after tenant B owns
@@ -115,6 +122,7 @@ func TestTenantIsolation(t *testing.T) {
 			b := c.seed(ctx, t, store, tenantB)
 
 			rec := httptest.NewRecorder()
+			a.otherID = b.id
 			srv.ServeHTTP(rec, c.request(t, a))
 
 			assertNoLeak(t, rec, b.marker)
@@ -330,7 +338,10 @@ var newServer = func(t *testing.T) http.Handler {
 	t.Cleanup(func() { _ = redis.Close() })
 
 	// secureCookies false: httptest speaks plain HTTP.
-	return httpapi.NewRouter(httpapi.NewServer(auth.NewService(store, signer), false), signer,
+	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
+		Auth:    auth.NewService(store, signer),
+		Catalog: catalog.NewService(store),
+	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
 }
 
