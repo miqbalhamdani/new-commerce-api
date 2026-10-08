@@ -148,9 +148,6 @@ func productOut(v catalog.ProductView) Product {
 	return p
 }
 
-// mediaOut renders a product's images. ponytail: empty until P1-043.
-func mediaOut([]catalog.Media) []Media { return []Media{} }
-
 func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
 	requirePermission(auth.PermProductsRead, func(w http.ResponseWriter, r *http.Request) {
 		f := catalog.ProductFilter{BrandID: params.BrandId, CategoryID: params.CategoryId, Q: params.Q,

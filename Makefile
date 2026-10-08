@@ -4,11 +4,15 @@ DB_NAME ?= new_commerce_dev
 # a host install, so a .env is only needed to deviate from them.
 LOAD_ENV = set -a; [ -f .env ] && . ./.env; set +a;
 
-.PHONY: dev worker db-create migrate migrate-down generate generated-diff fmt-check vet lint test test-iso lint-rls check
+.PHONY: dev worker storage-init db-create migrate migrate-down generate generated-diff fmt-check vet lint test test-iso lint-rls check
 
 ## dev: run the API against host PostgreSQL and Redis
 dev:
 	@$(LOAD_ENV) go run ./cmd/api
+
+## storage-init: create the development bucket in MinIO (stands in for R2, P1-045)
+storage-init:
+	@$(LOAD_ENV) go run ./cmd/storage-init
 
 ## worker: run the background job worker (BR-060) against the same services
 worker:

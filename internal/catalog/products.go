@@ -202,7 +202,7 @@ func (s *Service) GetProduct(ctx context.Context, id uuid.UUID) (ProductView, er
 		if err != nil {
 			return err
 		}
-		v.Media, err = productMedia(ctx, q, id)
+		v.Media, err = productMedia(ctx, q, s, id)
 		return err
 	})
 	return v, err

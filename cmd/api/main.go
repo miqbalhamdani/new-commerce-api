@@ -21,6 +21,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 )
 
 func main() {
@@ -62,6 +63,12 @@ func run() error {
 	}
 	defer func() { _ = redis.Close() }()
 
+	files, err := storage.FromEnv()
+	if err != nil {
+		return err
+	}
+	jobsSvc := jobs.NewService(pool, redis)
+
 	secret, err := config.JWTSecret()
 	if err != nil {
 		return err
@@ -80,8 +87,8 @@ func run() error {
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
-			Catalog: catalog.NewService(pool),
-			Jobs:    jobs.NewService(pool, redis),
+			Catalog: catalog.NewService(pool, files, jobsSvc),
+			Jobs:    jobsSvc,
 		}, !config.IsDevelopment()),
 		signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),

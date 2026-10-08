@@ -27,6 +27,7 @@ done; an item is done only when its Acceptance is proven, with a test wherever a
 ```bash
 make dev          # run the API against host PostgreSQL and Redis
 make worker       # run the background job worker (cmd/worker)
+make storage-init # create the dev bucket in MinIO (stands in for R2 until P1-045)
 make db-create    # create the local development database
 make migrate      # apply migrations
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
@@ -38,7 +39,8 @@ make check        # generate, generated-diff, fmt-check, vet, lint, lint-rls, te
 ```
 
 `make check` green is the bar for a PR. There is no CI yet (P1-004, Phase 6); run it locally.
-Tests need PostgreSQL and Redis running on the host (`brew services start postgresql@18 redis`).
+Tests need PostgreSQL, Redis and MinIO running on the host
+(`brew services start postgresql@18 redis minio`, then `make storage-init` once).
 
 The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
 so `make generate` produces the same bytes on every machine without anyone installing anything.
@@ -62,7 +64,7 @@ internal/
   queue/          Redis: rate-limit windows now, Redis Streams from P1-060
   http/           chi router, middleware, handlers, DTOs (admin)
   catalog/        (Phase 1) products, variants, categories, brands, media
-  storage/        (P1-043) R2 presign, HEAD validation
+  storage/        object store (R2 / MinIO): presign, HEAD, public URLs
   storefront/     (P1-202) storefront routes; never imports the admin http package, nor it this
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries

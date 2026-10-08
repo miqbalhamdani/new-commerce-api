@@ -39,6 +39,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -77,6 +78,10 @@ type seeded struct {
 	// product (its variants, media).
 	product      string
 	otherProduct string
+
+	// key and otherKey are an object key per tenant, for media routes.
+	key      string
+	otherKey string
 }
 
 // isolationCase says how to exercise one route as tenant A after tenant B owns
@@ -128,7 +133,7 @@ func TestTenantIsolation(t *testing.T) {
 			b := c.seed(ctx, t, store, tenantB)
 
 			rec := httptest.NewRecorder()
-			a.otherID, a.otherProduct = b.id, b.product
+			a.otherID, a.otherProduct, a.otherKey = b.id, b.product, b.key
 			srv.ServeHTTP(rec, c.request(t, a))
 
 			assertNoLeak(t, rec, b.marker)
@@ -338,14 +343,25 @@ var newServer = func(t *testing.T) http.Handler {
 		t.Fatalf("new signer: %v", err)
 	}
 	redis := testRedis(t)
+	jobsSvc := jobs.NewService(store, redis)
 
 	// secureCookies false: httptest speaks plain HTTP.
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
 		Auth:    auth.NewService(store, signer),
-		Catalog: catalog.NewService(store),
-		Jobs:    jobs.NewService(store, redis),
+		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
+		Jobs:    jobsSvc,
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
+}
+
+// testFiles is the development bucket in MinIO (make storage-init).
+func testFiles(t *testing.T) *storage.Store {
+	t.Helper()
+	files, err := storage.FromEnv()
+	if err != nil {
+		t.Fatalf("object store: %v", err)
+	}
+	return files
 }
 
 // testRedis connects to the host Redis for the life of the test.

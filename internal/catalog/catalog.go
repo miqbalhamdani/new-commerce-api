@@ -12,15 +12,21 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 )
 
 // Service is the catalog use cases.
 type Service struct {
 	store *db.Store
+	files *storage.Store
+	jobs  *jobs.Service
 }
 
-func NewService(store *db.Store) *Service { return &Service{store: store} }
+func NewService(store *db.Store, files *storage.Store, j *jobs.Service) *Service {
+	return &Service{store: store, files: files, jobs: j}
+}
 
 // tx runs fn in the caller's tenant with a query set bound to the transaction.
 func (s *Service) tx(ctx context.Context, fn func(q *sqlcgen.Queries, tx pgx.Tx) error) error {

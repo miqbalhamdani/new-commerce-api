@@ -167,11 +167,16 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 	return out, next, nil
 }
 
-// coverURLSQL selects the key of a product's cover thumbnail.
-//
-// ponytail: NULL until product_media exists (P1-042); P1-043 replaces it.
-const coverURLSQL = `NULL::text`
+// coverURLSQL selects the key of a product's cover thumbnail: the first
+// image's 200 px derivative, once the worker has made it (BR-052).
+const coverURLSQL = `(SELECT m.derivatives->>'200' FROM product_media m
+	WHERE m.product_id = p.id ORDER BY m.position, m.id LIMIT 1)`
 
-// publicURL turns a stored object key into a URL on the image domain
-// (BR-050). ponytail: identity until storage is wired (P1-043).
-func (s *Service) publicURL(key *string) *string { return key }
+// publicURL turns a stored object key into a URL on the image domain (BR-050).
+func (s *Service) publicURL(key *string) *string {
+	if key == nil {
+		return nil
+	}
+	u := s.files.PublicURL(*key)
+	return &u
+}

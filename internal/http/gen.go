@@ -145,22 +145,40 @@ func (e JobState) Valid() bool {
 
 // Defines values for JobKind.
 const (
-	ChannelImport    JobKind = "channel_import"
-	ImageDerivatives JobKind = "image_derivatives"
-	OrderExport      JobKind = "order_export"
-	ProductImport    JobKind = "product_import"
+	JobKindChannelImport    JobKind = "channel_import"
+	JobKindImageDerivatives JobKind = "image_derivatives"
+	JobKindOrderExport      JobKind = "order_export"
+	JobKindProductImport    JobKind = "product_import"
 )
 
 // Valid indicates whether the value is a known member of the JobKind enum.
 func (e JobKind) Valid() bool {
 	switch e {
-	case ChannelImport:
+	case JobKindChannelImport:
 		return true
-	case ImageDerivatives:
+	case JobKindImageDerivatives:
 		return true
-	case OrderExport:
+	case JobKindOrderExport:
 		return true
-	case ProductImport:
+	case JobKindProductImport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PresignRequestPurpose.
+const (
+	PresignRequestPurposeProductImage  PresignRequestPurpose = "product_image"
+	PresignRequestPurposeProductImport PresignRequestPurpose = "product_import"
+)
+
+// Valid indicates whether the value is a known member of the PresignRequestPurpose enum.
+func (e PresignRequestPurpose) Valid() bool {
+	switch e {
+	case PresignRequestPurposeProductImage:
+		return true
+	case PresignRequestPurposeProductImport:
 		return true
 	default:
 		return false
@@ -404,6 +422,13 @@ type CategoryUpdate struct {
 	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
 }
 
+// ConfirmMedia defines model for ConfirmMedia.
+type ConfirmMedia struct {
+	ProductId openapi_types.UUID  `json:"product_id"`
+	R2Key     string              `json:"r2_key"`
+	VariantId *openapi_types.UUID `json:"variant_id,omitempty"`
+}
+
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
 // The code also appears as the last segment of a `Problem.type` URI, and directly in
 // per-row results where an operation partially succeeds (§7.3, §7.5).
@@ -457,12 +482,47 @@ type Media struct {
 	Width       *int                `json:"width"`
 }
 
+// MediaList defines model for MediaList.
+type MediaList struct {
+	Data []Media `json:"data"`
+}
+
+// MediaOrder defines model for MediaOrder.
+type MediaOrder struct {
+	MediaIds []openapi_types.UUID `json:"media_ids"`
+}
+
+// MediaUpdate defines model for MediaUpdate.
+type MediaUpdate struct {
+	VariantId *openapi_types.UUID `json:"variant_id"`
+}
+
 // Money An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 // a float, a decimal string or an object; there is no currency field because there is only
 // one currency (BR-006, BR-029). Clients divide by 100 to display.
 //
 // Examples: 19900000
 type Money = int64
+
+// PresignRequest defines model for PresignRequest.
+type PresignRequest struct {
+	Bytes     int64                 `json:"bytes"`
+	MimeType  string                `json:"mime_type"`
+	ProductId *openapi_types.UUID   `json:"product_id,omitempty"`
+	Purpose   PresignRequestPurpose `json:"purpose"`
+	Sha256    string                `json:"sha256"`
+}
+
+// PresignRequestPurpose defines model for PresignRequest.Purpose.
+type PresignRequestPurpose string
+
+// PresignResponse defines model for PresignResponse.
+type PresignResponse struct {
+	// ExpiresIn Examples: 600
+	ExpiresIn int    `json:"expires_in"`
+	R2Key     string `json:"r2_key"`
+	UploadUrl string `json:"upload_url"`
+}
 
 // Problem RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
@@ -923,11 +983,23 @@ type CreateCategoryJSONRequestBody = CategoryCreate
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryUpdate
 
+// ConfirmMediaJSONRequestBody defines body for ConfirmMedia for application/json ContentType.
+type ConfirmMediaJSONRequestBody = ConfirmMedia
+
+// PresignMediaJSONRequestBody defines body for PresignMedia for application/json ContentType.
+type PresignMediaJSONRequestBody = PresignRequest
+
+// UpdateMediaJSONRequestBody defines body for UpdateMedia for application/json ContentType.
+type UpdateMediaJSONRequestBody = MediaUpdate
+
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductCreate
 
 // UpdateProductJSONRequestBody defines body for UpdateProduct for application/json ContentType.
 type UpdateProductJSONRequestBody = ProductUpdate
+
+// OrderMediaJSONRequestBody defines body for OrderMedia for application/json ContentType.
+type OrderMediaJSONRequestBody = MediaOrder
 
 // PutVariantMatrixJSONRequestBody defines body for PutVariantMatrix for application/json ContentType.
 type PutVariantMatrixJSONRequestBody = VariantMatrix
@@ -1063,6 +1135,18 @@ type ServerInterface interface {
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(w http.ResponseWriter, r *http.Request, id Id)
+	// ConfirmMedia Record an uploaded image on a product
+	// (POST /media/confirm)
+	ConfirmMedia(w http.ResponseWriter, r *http.Request)
+	// PresignMedia Sign a direct upload to the object store
+	// (POST /media/presign)
+	PresignMedia(w http.ResponseWriter, r *http.Request)
+	// DeleteMedia Delete an image
+	// (DELETE /media/{id})
+	DeleteMedia(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdateMedia Attach an image to a variant, or back to the product
+	// (PATCH /media/{id})
+	UpdateMedia(w http.ResponseWriter, r *http.Request, id Id)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -1078,6 +1162,9 @@ type ServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams)
+	// OrderMedia Reorder a product's images
+	// (PATCH /products/{id}/media/order)
+	OrderMedia(w http.ResponseWriter, r *http.Request, id Id)
 	// PutVariantMatrix Save the whole variant grid in one request
 	// (PUT /products/{id}/variant-matrix)
 	PutVariantMatrix(w http.ResponseWriter, r *http.Request, id Id, params PutVariantMatrixParams)
@@ -1186,6 +1273,30 @@ func (_ Unimplemented) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ConfirmMedia Record an uploaded image on a product
+// (POST /media/confirm)
+func (_ Unimplemented) ConfirmMedia(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PresignMedia Sign a direct upload to the object store
+// (POST /media/presign)
+func (_ Unimplemented) PresignMedia(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteMedia Delete an image
+// (DELETE /media/{id})
+func (_ Unimplemented) DeleteMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateMedia Attach an image to a variant, or back to the product
+// (PATCH /media/{id})
+func (_ Unimplemented) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListProducts Products, filtered and cursor-paginated
 // (GET /products)
 func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
@@ -1213,6 +1324,12 @@ func (_ Unimplemented) GetProduct(w http.ResponseWriter, r *http.Request, id Id)
 // UpdateProduct Edit a product
 // (PATCH /products/{id})
 func (_ Unimplemented) UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// OrderMedia Reorder a product's images
+// (PATCH /products/{id}/media/order)
+func (_ Unimplemented) OrderMedia(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1644,6 +1761,86 @@ func (siw *ServerInterfaceWrapper) GetJob(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ConfirmMedia operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmMedia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmMedia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PresignMedia operation middleware
+func (siw *ServerInterfaceWrapper) PresignMedia(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PresignMedia(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMedia operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMedia operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
 
@@ -1866,6 +2063,32 @@ func (siw *ServerInterfaceWrapper) UpdateProduct(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProduct(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OrderMedia operation middleware
+func (siw *ServerInterfaceWrapper) OrderMedia(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OrderMedia(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2278,6 +2501,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/products/{id}/variant-matrix", wrapper.PutVariantMatrix)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/media/presign", wrapper.PresignMedia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/media/confirm", wrapper.ConfirmMedia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/media/{id}", wrapper.DeleteMedia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/media/{id}", wrapper.UpdateMedia)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/products/{id}/media/order", wrapper.OrderMedia)
 	})
 
 	return r
@@ -3293,6 +3531,297 @@ func (response GetJob404ApplicationProblemPlusJSONResponse) VisitGetJobResponse(
 	return err
 }
 
+type ConfirmMediaRequestObject struct {
+	Body *ConfirmMediaJSONRequestBody
+}
+
+type ConfirmMediaResponseObject interface {
+	VisitConfirmMediaResponse(w http.ResponseWriter) error
+}
+
+type ConfirmMedia201JSONResponse Media
+
+func (response ConfirmMedia201JSONResponse) VisitConfirmMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmMedia401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmMedia401ApplicationProblemPlusJSONResponse) VisitConfirmMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmMedia403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmMedia403ApplicationProblemPlusJSONResponse) VisitConfirmMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmMedia422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmMedia422ApplicationProblemPlusJSONResponse) VisitConfirmMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PresignMediaRequestObject struct {
+	Body *PresignMediaJSONRequestBody
+}
+
+type PresignMediaResponseObject interface {
+	VisitPresignMediaResponse(w http.ResponseWriter) error
+}
+
+type PresignMedia200JSONResponse PresignResponse
+
+func (response PresignMedia200JSONResponse) VisitPresignMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PresignMedia401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response PresignMedia401ApplicationProblemPlusJSONResponse) VisitPresignMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PresignMedia403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PresignMedia403ApplicationProblemPlusJSONResponse) VisitPresignMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PresignMedia422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response PresignMedia422ApplicationProblemPlusJSONResponse) VisitPresignMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMediaRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type DeleteMediaResponseObject interface {
+	VisitDeleteMediaResponse(w http.ResponseWriter) error
+}
+
+type DeleteMedia204Response struct {
+}
+
+func (response DeleteMedia204Response) VisitDeleteMediaResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMedia401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMedia401ApplicationProblemPlusJSONResponse) VisitDeleteMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMedia403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMedia403ApplicationProblemPlusJSONResponse) VisitDeleteMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMedia404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMedia404ApplicationProblemPlusJSONResponse) VisitDeleteMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMediaRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdateMediaJSONRequestBody
+}
+
+type UpdateMediaResponseObject interface {
+	VisitUpdateMediaResponse(w http.ResponseWriter) error
+}
+
+type UpdateMedia200JSONResponse Media
+
+func (response UpdateMedia200JSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedia401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMedia401ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedia403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMedia403ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedia404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMedia404ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMedia422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMedia422ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProductsRequestObject struct {
 	Params ListProductsParams
 }
@@ -3660,6 +4189,93 @@ type UpdateProduct422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateProduct422ApplicationProblemPlusJSONResponse) VisitUpdateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OrderMediaRequestObject struct {
+	Id   Id `json:"id"`
+	Body *OrderMediaJSONRequestBody
+}
+
+type OrderMediaResponseObject interface {
+	VisitOrderMediaResponse(w http.ResponseWriter) error
+}
+
+type OrderMedia200JSONResponse MediaList
+
+func (response OrderMedia200JSONResponse) VisitOrderMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OrderMedia401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response OrderMedia401ApplicationProblemPlusJSONResponse) VisitOrderMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OrderMedia403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response OrderMedia403ApplicationProblemPlusJSONResponse) VisitOrderMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OrderMedia404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response OrderMedia404ApplicationProblemPlusJSONResponse) VisitOrderMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OrderMedia422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response OrderMedia422ApplicationProblemPlusJSONResponse) VisitOrderMediaResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -4214,6 +4830,18 @@ type StrictServerInterface interface {
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
+	// ConfirmMedia Record an uploaded image on a product
+	// (POST /media/confirm)
+	ConfirmMedia(ctx context.Context, request ConfirmMediaRequestObject) (ConfirmMediaResponseObject, error)
+	// PresignMedia Sign a direct upload to the object store
+	// (POST /media/presign)
+	PresignMedia(ctx context.Context, request PresignMediaRequestObject) (PresignMediaResponseObject, error)
+	// DeleteMedia Delete an image
+	// (DELETE /media/{id})
+	DeleteMedia(ctx context.Context, request DeleteMediaRequestObject) (DeleteMediaResponseObject, error)
+	// UpdateMedia Attach an image to a variant, or back to the product
+	// (PATCH /media/{id})
+	UpdateMedia(ctx context.Context, request UpdateMediaRequestObject) (UpdateMediaResponseObject, error)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -4229,6 +4857,9 @@ type StrictServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(ctx context.Context, request UpdateProductRequestObject) (UpdateProductResponseObject, error)
+	// OrderMedia Reorder a product's images
+	// (PATCH /products/{id}/media/order)
+	OrderMedia(ctx context.Context, request OrderMediaRequestObject) (OrderMediaResponseObject, error)
 	// PutVariantMatrix Save the whole variant grid in one request
 	// (PUT /products/{id}/variant-matrix)
 	PutVariantMatrix(ctx context.Context, request PutVariantMatrixRequestObject) (PutVariantMatrixResponseObject, error)
@@ -4677,6 +5308,127 @@ func (sh *strictHandler) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 	}
 }
 
+// ConfirmMedia operation middleware
+func (sh *strictHandler) ConfirmMedia(w http.ResponseWriter, r *http.Request) {
+	var request ConfirmMediaRequestObject
+
+	var body ConfirmMediaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmMedia(ctx, request.(ConfirmMediaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmMedia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmMediaResponseObject); ok {
+		if err := validResponse.VisitConfirmMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PresignMedia operation middleware
+func (sh *strictHandler) PresignMedia(w http.ResponseWriter, r *http.Request) {
+	var request PresignMediaRequestObject
+
+	var body PresignMediaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PresignMedia(ctx, request.(PresignMediaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PresignMedia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PresignMediaResponseObject); ok {
+		if err := validResponse.VisitPresignMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMedia operation middleware
+func (sh *strictHandler) DeleteMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	var request DeleteMediaRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMedia(ctx, request.(DeleteMediaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMedia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMediaResponseObject); ok {
+		if err := validResponse.VisitDeleteMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMedia operation middleware
+func (sh *strictHandler) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdateMediaRequestObject
+
+	request.Id = id
+
+	var body UpdateMediaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMedia(ctx, request.(UpdateMediaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMedia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMediaResponseObject); ok {
+		if err := validResponse.VisitUpdateMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListProducts operation middleware
 func (sh *strictHandler) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
 	var request ListProductsRequestObject
@@ -4813,6 +5565,39 @@ func (sh *strictHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProductResponseObject); ok {
 		if err := validResponse.VisitUpdateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OrderMedia operation middleware
+func (sh *strictHandler) OrderMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	var request OrderMediaRequestObject
+
+	request.Id = id
+
+	var body OrderMediaJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OrderMedia(ctx, request.(OrderMediaRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OrderMedia")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OrderMediaResponseObject); ok {
+		if err := validResponse.VisitOrderMediaResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -132,3 +133,5 @@ func pageLimit(l *int) int {
 func fieldErr(field, detail string) error {
 	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
 }
+
+var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
