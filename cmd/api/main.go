@@ -22,6 +22,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 func main() {
@@ -77,6 +78,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	inviteSecret, err := config.InviteSecret()
+	if err != nil {
+		return err
+	}
+	invites, err := auth.NewInviteSigner(inviteSecret)
+	if err != nil {
+		return err
+	}
 
 	mux := http.NewServeMux()
 	// Not a contract endpoint, so not generated and not under /v1.
@@ -89,6 +98,8 @@ func run() error {
 			Auth:    auth.NewService(pool, signer),
 			Catalog: catalog.NewService(pool, files, jobsSvc),
 			Jobs:    jobsSvc,
+			Team:    team.NewService(pool, redis),
+			Invites: invites,
 		}, !config.IsDevelopment()),
 		signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),

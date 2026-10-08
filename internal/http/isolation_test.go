@@ -40,6 +40,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -350,8 +351,25 @@ var newServer = func(t *testing.T) http.Handler {
 		Auth:    auth.NewService(store, signer),
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Jobs:    jobsSvc,
+		Team:    team.NewService(store, redis),
+		Invites: testInvites(t),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
+}
+
+// testInvites signs invitation tokens with the development key, as the
+// worker that mints them does.
+func testInvites(t *testing.T) *auth.InviteSigner {
+	t.Helper()
+	secret, err := config.InviteSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := auth.NewInviteSigner(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }
 
 // testFiles is the development bucket in MinIO (make storage-init).

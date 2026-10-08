@@ -94,6 +94,12 @@ func PermissionDenied(permission string) *Error {
 		Detail: "This action requires the " + permission + " permission."}
 }
 
+// Forbidden is a 403 whose rule is not a single permission -- only an owner
+// can grant or change the owner role (BR-023).
+func Forbidden(detail string) *Error {
+	return &Error{Code: CodePermissionDenied, Status: http.StatusForbidden, Title: "Permission denied", Detail: detail}
+}
+
 func NotFound(detail string) *Error {
 	return &Error{Code: CodeNotFound, Status: http.StatusNotFound,
 		Title: "Not found", Detail: detail}

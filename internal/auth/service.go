@@ -269,3 +269,36 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 // when there is no user, so that the failing path costs the same as the
 // succeeding one.
 const dummyHash = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHR2YWx1ZXg$Zm9yY2luZ2NvbnN0YW50dGltZWNvc3Rvbmx5MDA"
+
+// AcceptInvite sets the invited user's password and signs them in (BR-026).
+// The token proves which user at which tenant; the user must still be
+// invited, so a link stops working once used. Any failure is
+// ErrInvalidInvite: the client can only ask for a new invitation.
+func (s *Service) AcceptInvite(ctx context.Context, invites *InviteSigner, token, password string) (Session, error) {
+	inv, err := invites.Parse(token, s.now())
+	if err != nil {
+		return Session{}, ErrInvalidInvite
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return Session{}, err
+	}
+	tctx := tenant.NewActorContext(tenant.NewContext(ctx, inv.TenantID), tenant.Actor{UserID: inv.UserID})
+	var role string
+	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		u, err := sqlcgen.New(tx).AcceptInvitation(tctx, sqlcgen.AcceptInvitationParams{ID: inv.UserID, PasswordHash: &hash})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidInvite
+		}
+		if err != nil {
+			return err
+		}
+		role = u.Role
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.accept_invite", SubjectType: "user",
+			SubjectID: u.ID.String(), After: map[string]any{"status": u.Status}})
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	return s.issue(ctx, inv.TenantID, inv.UserID, role, nil)
+}

@@ -95,3 +95,8 @@ func toMessages(in []redis.XMessage) []Message {
 	}
 	return out
 }
+
+// Len is how many entries a stream holds.
+func (c *Client) Len(ctx context.Context, stream string) (int64, error) {
+	return c.rdb.XLen(ctx, stream).Result()
+}

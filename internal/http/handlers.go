@@ -10,6 +10,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 // refreshCookieName is the only place the refresh token lives on a client.
@@ -24,6 +25,8 @@ type Server struct {
 	auth    *auth.Service
 	catalog *catalog.Service
 	jobs    *jobs.Service
+	team    *team.Service
+	invites *auth.InviteSigner
 
 	// secureCookies is false only for local development over plain HTTP, where
 	// a Secure cookie would be dropped by the browser and nothing would work.
@@ -36,10 +39,13 @@ type Services struct {
 	Auth    *auth.Service
 	Catalog *catalog.Service
 	Jobs    *jobs.Service
+	Team    *team.Service
+	Invites *auth.InviteSigner
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
-	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, secureCookies: secureCookies}
+	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, invites: svc.Invites,
+		secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.
