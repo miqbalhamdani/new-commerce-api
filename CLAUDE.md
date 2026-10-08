@@ -28,6 +28,7 @@ done; an item is done only when its Acceptance is proven, with a test wherever a
 make dev          # run the API against host PostgreSQL and Redis
 make worker       # run the background job worker (cmd/worker)
 make storage-init # create the dev bucket in MinIO (stands in for R2 until P1-045)
+make dev-seed     # a demo shop to sign in as: owner@example.com / development-password
 make db-create    # create the local development database
 make migrate      # apply migrations
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
