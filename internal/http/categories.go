@@ -15,11 +15,13 @@ type categoryCreateBody struct {
 	Name     optional[string]    `json:"name"`
 	ParentID optional[uuid.UUID] `json:"parent_id"`
 	Kind     optional[string]    `json:"kind"`
+	Label    optional[string]    `json:"label"`
 }
 
 type categoryUpdateBody struct {
 	Name     optional[string]    `json:"name"`
 	ParentID optional[uuid.UUID] `json:"parent_id"`
+	Label    optional[string]    `json:"label"`
 }
 
 func (s *Server) ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams) {
@@ -52,7 +54,7 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &body) {
 			return
 		}
-		if err := rejectNull(map[string]bool{"name": body.Name.Null, "parent_id": body.ParentID.Null, "kind": body.Kind.Null}); err != nil {
+		if err := rejectNull(map[string]bool{"name": body.Name.Null, "parent_id": body.ParentID.Null, "kind": body.Kind.Null, "label": body.Label.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -68,7 +70,11 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		if body.ParentID.Set {
 			parent = &body.ParentID.Value
 		}
-		c, err := s.catalog.CreateCategory(r.Context(), body.Name.Value, kind, parent)
+		var label *string
+		if body.Label.Set {
+			label = &body.Label.Value
+		}
+		c, err := s.catalog.CreateCategory(r.Context(), body.Name.Value, kind, parent, label)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -86,15 +92,15 @@ func (s *Server) GetCategory(w http.ResponseWriter, r *http.Request, id Id) {
 		}
 		c := categoryOut(d.Category)
 		writeJSON(w, http.StatusOK, CategoryDetail{
-			Id: c.Id, Kind: c.Kind, Name: c.Name, ParentId: c.ParentId, Path: c.Path,
+			Id: c.Id, Kind: c.Kind, Name: c.Name, Label: c.Label, ParentId: c.ParentId, Path: c.Path,
 			ArchivedAt: c.ArchivedAt, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 			DescendantCount: d.DescendantCount, ProductCount: d.ProductCount,
 		})
 	})(w, r)
 }
 
-// UpdateCategory renames or moves. kind is not in the body type, so sending
-// it is unknown_field; it never changes.
+// UpdateCategory renames, relabels or moves. kind is not in the body type, so
+// sending it is unknown_field; it never changes. label: null re-derives it.
 func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
 	requirePermission(auth.PermCategoriesWrite, func(w http.ResponseWriter, r *http.Request) {
 		var body categoryUpdateBody
@@ -105,7 +111,10 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
 			writeError(w, r, err)
 			return
 		}
-		u := catalog.CategoryUpdate{ClearParent: body.ParentID.Null}
+		u := catalog.CategoryUpdate{ClearParent: body.ParentID.Null, ClearLabel: body.Label.Null}
+		if body.Label.Set && !body.Label.Null {
+			u.Label = &body.Label.Value
+		}
 		if body.Name.Set {
 			u.Name = &body.Name.Value
 		}
@@ -132,6 +141,6 @@ func (s *Server) ArchiveCategory(w http.ResponseWriter, r *http.Request, id Id) 
 }
 
 func categoryOut(c catalog.Category) Category {
-	return Category{Id: c.ID, Kind: CategoryKind(c.Kind), Name: c.Name, ParentId: c.ParentID, Path: c.Path,
+	return Category{Id: c.ID, Kind: CategoryKind(c.Kind), Name: c.Name, Label: c.Label, ParentId: c.ParentID, Path: c.Path,
 		ArchivedAt: c.ArchivedAt, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 }

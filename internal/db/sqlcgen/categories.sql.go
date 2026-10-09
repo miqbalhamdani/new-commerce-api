@@ -37,7 +37,8 @@ type CategoryCountsRow struct {
 }
 
 // Live categories below this one, and live products linked anywhere in its
-// subtree -- what the move dialog states and what makes a category in use.
+// subtree -- what the move and delete dialogs state. Live children block a
+// delete (BR-036).
 func (q *Queries) CategoryCounts(ctx context.Context, id uuid.UUID) (CategoryCountsRow, error) {
 	row := q.db.QueryRow(ctx, categoryCounts, id)
 	var i CategoryCountsRow
@@ -45,10 +46,28 @@ func (q *Queries) CategoryCounts(ctx context.Context, id uuid.UUID) (CategoryCou
 	return i, err
 }
 
+const clearCategoryProducts = `-- name: ClearCategoryProducts :execrows
+WITH unlinked AS (
+  DELETE FROM product_categories WHERE category_id = $1 RETURNING product_id
+)
+UPDATE products SET version = version + 1, updated_at = now()
+ WHERE id IN (SELECT product_id FROM unlinked)
+`
+
+// Deleting a category takes it off its products, bumping their version so a
+// stale product form gets 409 instead of putting it back (BR-012).
+func (q *Queries) ClearCategoryProducts(ctx context.Context, categoryID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, clearCategoryProducts, categoryID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createCategory = `-- name: CreateCategory :one
-INSERT INTO categories (id, tenant_id, parent_id, kind, name)
-VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, $4)
-RETURNING id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at
+INSERT INTO categories (id, tenant_id, parent_id, kind, name, label)
+VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, $4, $5)
+RETURNING id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at, label
 `
 
 type CreateCategoryParams struct {
@@ -56,6 +75,7 @@ type CreateCategoryParams struct {
 	ParentID *uuid.UUID
 	Kind     string
 	Name     string
+	Label    *string
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error) {
@@ -64,6 +84,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		arg.ParentID,
 		arg.Kind,
 		arg.Name,
+		arg.Label,
 	)
 	var i Category
 	err := row.Scan(
@@ -76,12 +97,13 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Label,
 	)
 	return i, err
 }
 
 const getCategory = `-- name: GetCategory :one
-SELECT id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at FROM categories WHERE id = $1
+SELECT id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at, label FROM categories WHERE id = $1
 `
 
 func (q *Queries) GetCategory(ctx context.Context, id uuid.UUID) (Category, error) {
@@ -97,12 +119,13 @@ func (q *Queries) GetCategory(ctx context.Context, id uuid.UUID) (Category, erro
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Label,
 	)
 	return i, err
 }
 
 const listCategories = `-- name: ListCategories :many
-SELECT c.id, c.tenant_id, c.parent_id, c.kind, c.name, c.path, c.archived_at, c.created_at, c.updated_at FROM categories c
+SELECT c.id, c.tenant_id, c.parent_id, c.kind, c.name, c.path, c.archived_at, c.created_at, c.updated_at, c.label FROM categories c
 LEFT JOIN categories base ON base.id = $1::uuid
 WHERE c.archived_at IS NULL
   AND ($2::text IS NULL OR c.kind = $2::text)
@@ -140,6 +163,7 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Label,
 		); err != nil {
 			return nil, err
 		}
@@ -169,9 +193,10 @@ const updateCategory = `-- name: UpdateCategory :one
 UPDATE categories
    SET name      = CASE WHEN $1::bool THEN $2::text ELSE name END,
        parent_id = CASE WHEN $3::bool THEN $4::uuid ELSE parent_id END,
+       label     = CASE WHEN $5::bool THEN $6::text ELSE label END,
        updated_at = now()
- WHERE id = $5
-RETURNING id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at
+ WHERE id = $7
+RETURNING id, tenant_id, parent_id, kind, name, path, archived_at, created_at, updated_at, label
 `
 
 type UpdateCategoryParams struct {
@@ -179,6 +204,8 @@ type UpdateCategoryParams struct {
 	Name      string
 	SetParent bool
 	ParentID  *uuid.UUID
+	SetLabel  bool
+	Label     *string
 	ID        uuid.UUID
 }
 
@@ -188,6 +215,8 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		arg.Name,
 		arg.SetParent,
 		arg.ParentID,
+		arg.SetLabel,
+		arg.Label,
 		arg.ID,
 	)
 	var i Category
@@ -201,6 +230,7 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Label,
 	)
 	return i, err
 }

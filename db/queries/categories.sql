@@ -7,8 +7,8 @@
 SELECT pg_advisory_xact_lock(hashtextextended('categories:' || current_setting('app.tenant_id'), 0));
 
 -- name: CreateCategory :one
-INSERT INTO categories (id, tenant_id, parent_id, kind, name)
-VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.narg(parent_id), sqlc.arg(kind), sqlc.arg(name))
+INSERT INTO categories (id, tenant_id, parent_id, kind, name, label)
+VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.narg(parent_id), sqlc.arg(kind), sqlc.arg(name), sqlc.narg(label))
 RETURNING *;
 
 -- name: GetCategory :one
@@ -18,6 +18,7 @@ SELECT * FROM categories WHERE id = $1;
 UPDATE categories
    SET name      = CASE WHEN sqlc.arg(set_name)::bool THEN sqlc.arg(name)::text ELSE name END,
        parent_id = CASE WHEN sqlc.arg(set_parent)::bool THEN sqlc.narg(parent_id)::uuid ELSE parent_id END,
+       label     = CASE WHEN sqlc.arg(set_label)::bool THEN sqlc.narg(label)::text ELSE label END,
        updated_at = now()
  WHERE id = sqlc.arg(id)
 RETURNING *;
@@ -25,9 +26,19 @@ RETURNING *;
 -- name: ArchiveCategory :exec
 UPDATE categories SET archived_at = coalesce(archived_at, now()), updated_at = now() WHERE id = $1;
 
+-- name: ClearCategoryProducts :execrows
+-- Deleting a category takes it off its products, bumping their version so a
+-- stale product form gets 409 instead of putting it back (BR-012).
+WITH unlinked AS (
+  DELETE FROM product_categories WHERE category_id = $1 RETURNING product_id
+)
+UPDATE products SET version = version + 1, updated_at = now()
+ WHERE id IN (SELECT product_id FROM unlinked);
+
 -- name: CategoryCounts :one
 -- Live categories below this one, and live products linked anywhere in its
--- subtree -- what the move dialog states and what makes a category in use.
+-- subtree -- what the move and delete dialogs state. Live children block a
+-- delete (BR-036).
 SELECT
   (SELECT count(*) FROM categories d
     WHERE d.kind = c.kind AND d.path <@ c.path AND d.id <> c.id AND d.archived_at IS NULL)::int AS descendant_count,

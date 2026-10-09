@@ -71,7 +71,7 @@ func seedCategory(ctx context.Context, t *testing.T, store *db.Store, tenantID u
 	return s
 }
 
-// TestCategories is P1-024's acceptance (04-api-spec.md §6.2; BR-008, BR-032..036).
+// TestCategories is P1-024's acceptance (04-api-spec.md §6.2; BR-008, BR-012, BR-032..036).
 func TestCategories(t *testing.T) {
 	ctx := t.Context()
 	store := openAppStore(ctx, t)
@@ -159,13 +159,54 @@ func TestCategories(t *testing.T) {
 		code, p := do("GET", "/v1/categories?kind=bogus", nil)
 		assertProblem(t, code, p, 422, "validation_failed", "kind")
 	})
-	t.Run("a category in use is 409 with both counts", func(t *testing.T) {
+	t.Run("label sets the path segment, null re-derives it", func(t *testing.T) {
+		coats := create(map[string]any{"name": "Jackets & Coats", "label": "coats", "kind": "collection"})
+		if coats["label"] != "coats" || coats["path"] != "coats" {
+			t.Fatalf("custom label: %v", coats)
+		}
+		rain := create(map[string]any{"name": "Rain", "parent_id": coats["id"], "kind": "collection"})
+		if rain["label"] != nil || rain["path"] != "coats.rain" {
+			t.Fatalf("derived child: %v", rain)
+		}
+		id := coats["id"].(string)
+		// A rename keeps a custom label.
+		if code, c := do("PATCH", "/v1/categories/"+id, map[string]any{"name": "Coats & Jackets"}); code != 200 || c["path"] != "coats" {
+			t.Errorf("rename: %d %v", code, c)
+		}
+		// A relabel moves the subtree.
+		if code, c := do("PATCH", "/v1/categories/"+id, map[string]any{"label": "outer"}); code != 200 || c["path"] != "outer" {
+			t.Errorf("relabel: %d %v", code, c)
+		}
+		if code, r := do("GET", "/v1/categories/"+rain["id"].(string), nil); code != 200 || r["path"] != "outer.rain" {
+			t.Errorf("child after relabel: %v", r["path"])
+		}
+		code, c := do("PATCH", "/v1/categories/"+id, map[string]any{"label": nil})
+		if code != 200 || c["label"] != nil || c["path"] != "coats_jackets" {
+			t.Errorf("label null: %d %v", code, c)
+		}
+		// Derived labels are still disambiguated; a chosen one that clashes is refused.
+		if twin := create(map[string]any{"name": "Coats & Jackets", "kind": "collection"}); twin["path"] != "coats_jackets_1" {
+			t.Errorf("derived twin: %v", twin["path"])
+		}
+		code, p := do("POST", "/v1/categories", map[string]any{"name": "Other", "label": "coats_jackets", "kind": "collection"})
+		assertProblem(t, code, p, 422, "validation_failed", "label")
+		code, p = do("PATCH", "/v1/categories/"+rain["id"].(string), map[string]any{"label": "Bad-Label"})
+		assertProblem(t, code, p, 422, "validation_failed", "label")
+		code, p = do("POST", "/v1/categories", map[string]any{"name": "Null", "label": nil})
+		assertProblem(t, code, p, 422, "validation_failed", "label")
+	})
+	t.Run("only children block a delete; products lose the category", func(t *testing.T) {
 		code, p := do("DELETE", "/v1/categories/"+technical["id"].(string), nil)
 		assertProblem(t, code, p, 409, "category_in_use", "children")
 
-		// A product linked to the leaf keeps it in use too.
 		product := uuid.Must(uuid.NewV7())
-		if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		inTenant := func(f func(tx pgx.Tx) error) {
+			t.Helper()
+			if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), f); err != nil {
+				t.Fatal(err)
+			}
+		}
+		inTenant(func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, `INSERT INTO products (id, tenant_id, title, slug) VALUES ($1, $2, 'Tee', $3)`,
 				product, tenantID, "tee-"+product.String()); err != nil {
 				return err
@@ -173,18 +214,24 @@ func TestCategories(t *testing.T) {
 			_, err := tx.Exec(ctx, `INSERT INTO product_categories (tenant_id, product_id, category_id) VALUES ($1, $2, $3)`,
 				tenantID, product, jackets["id"])
 			return err
-		}); err != nil {
-			t.Fatalf("link product: %v", err)
+		})
+		if code, _ := do("DELETE", "/v1/categories/"+jackets["id"].(string), nil); code != 204 {
+			t.Fatalf("a leaf with a product: %d", code)
 		}
-		code, p = do("DELETE", "/v1/categories/"+jackets["id"].(string), nil)
-		assertProblem(t, code, p, 409, "category_in_use", "products")
+		var links, version int
+		inTenant(func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM product_categories WHERE product_id = $1)::int, version
+			                           FROM products WHERE id = $1`, product).Scan(&links, &version)
+		})
+		if links != 0 || version != 2 {
+			t.Errorf("product after delete: %d links, version %d", links, version)
+		}
 
-		code, _ = do("DELETE", "/v1/categories/"+series["id"].(string), nil)
-		if code != 204 {
+		if code, _ := do("DELETE", "/v1/categories/"+series["id"].(string), nil); code != 204 {
 			t.Errorf("an unused category: %d", code)
 		}
 		if code, p := do("GET", "/v1/categories?kind=series", nil); code != 200 || len(p["data"].([]any)) != 0 {
-			t.Errorf("archived category still listed: %v", p)
+			t.Errorf("deleted category still listed: %v", p)
 		}
 	})
 }
