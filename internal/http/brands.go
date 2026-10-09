@@ -11,6 +11,15 @@ import (
 
 type brandBody struct {
 	Name optional[string] `json:"name"`
+	Slug optional[string] `json:"slug"`
+}
+
+// slug is the client's slug, or nil to derive it from the name (BR-030).
+func (b brandBody) slug() *string {
+	if b.Slug.Set {
+		return &b.Slug.Value
+	}
+	return nil
 }
 
 func (s *Server) ListBrands(w http.ResponseWriter, r *http.Request, params ListBrandsParams) {
@@ -43,14 +52,14 @@ func (s *Server) ListBrands(w http.ResponseWriter, r *http.Request, params ListB
 func (s *Server) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	requirePermission(auth.PermBrandsWrite, func(w http.ResponseWriter, r *http.Request) {
 		var body brandBody
-		if !decodeJSON(w, r, &body, "slug") {
+		if !decodeJSON(w, r, &body) {
 			return
 		}
-		if err := rejectNull(map[string]bool{"name": body.Name.Null}); err != nil {
+		if err := rejectNull(map[string]bool{"name": body.Name.Null, "slug": body.Slug.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
-		b, err := s.catalog.CreateBrand(r.Context(), body.Name.Value)
+		b, err := s.catalog.CreateBrand(r.Context(), body.Name.Value, body.slug())
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -70,22 +79,26 @@ func (s *Server) GetBrand(w http.ResponseWriter, r *http.Request, id Id) {
 	})(w, r)
 }
 
-// UpdateBrand renames. name is the only writable field, so an empty body
-// changes nothing and returns the brand as it is.
+// UpdateBrand renames and re-slugs. An empty body changes nothing and returns
+// the brand as it is.
 func (s *Server) UpdateBrand(w http.ResponseWriter, r *http.Request, id Id) {
 	requirePermission(auth.PermBrandsWrite, func(w http.ResponseWriter, r *http.Request) {
 		var body brandBody
-		if !decodeJSON(w, r, &body, "slug") {
+		if !decodeJSON(w, r, &body) {
 			return
 		}
-		if err := rejectNull(map[string]bool{"name": body.Name.Null}); err != nil {
+		if err := rejectNull(map[string]bool{"name": body.Name.Null, "slug": body.Slug.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
 		var b catalog.Brand
 		var err error
-		if body.Name.Set {
-			b, err = s.catalog.RenameBrand(r.Context(), id, body.Name.Value)
+		if body.Name.Set || body.Slug.Set {
+			var name *string
+			if body.Name.Set {
+				name = &body.Name.Value
+			}
+			b, err = s.catalog.RenameBrand(r.Context(), id, name, body.slug())
 		} else {
 			b, err = s.catalog.GetBrand(r.Context(), id)
 		}
