@@ -59,6 +59,18 @@ type Category struct {
 	Label      *string
 }
 
+type Customer struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	Email           string
+	PasswordHash    *string
+	Name            string
+	Phone           *string
+	EmailVerifiedAt *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type Job struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
@@ -73,6 +85,54 @@ type Job struct {
 	CreatedBy  *uuid.UUID
 	CreatedAt  time.Time
 	FinishedAt *time.Time
+}
+
+type Order struct {
+	ID              uuid.UUID
+	TenantID        uuid.UUID
+	Source          string
+	CustomerID      *uuid.UUID
+	OrderNumber     string
+	Status          string
+	Customer        []byte
+	ShippingAddress []byte
+	Note            *string
+	SubtotalAmount  int64
+	ShippingAmount  int64
+	DiscountAmount  int64
+	TotalAmount     int64
+	Currency        string
+	PaymentMethod   string
+	ShippingCourier *string
+	ShippingService *string
+	Courier         *string
+	TrackingNumber  *string
+	PlacedAt        time.Time
+	PaidAt          *time.Time
+	ShippedAt       *time.Time
+	CompletedAt     *time.Time
+	CancelledAt     *time.Time
+	RefundedAt      *time.Time
+	Version         int32
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type OrderLine struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	OrderID        uuid.UUID
+	VariantID      uuid.UUID
+	SkuSnapshot    string
+	TitleSnapshot  string
+	Qty            int32
+	UnitPrice      int64
+	DiscountAmount int64
+}
+
+type OrderSequence struct {
+	TenantID  uuid.UUID
+	LastValue int64
 }
 
 type Product struct {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -220,22 +221,22 @@ func (e InviteUserRole) Valid() bool {
 
 // Defines values for JobState.
 const (
-	Done    JobState = "done"
-	Failed  JobState = "failed"
-	Queued  JobState = "queued"
-	Running JobState = "running"
+	JobStateDone    JobState = "done"
+	JobStateFailed  JobState = "failed"
+	JobStateQueued  JobState = "queued"
+	JobStateRunning JobState = "running"
 )
 
 // Valid indicates whether the value is a known member of the JobState enum.
 func (e JobState) Valid() bool {
 	switch e {
-	case Done:
+	case JobStateDone:
 		return true
-	case Failed:
+	case JobStateFailed:
 		return true
-	case Queued:
+	case JobStateQueued:
 		return true
-	case Running:
+	case JobStateRunning:
 		return true
 	default:
 		return false
@@ -260,6 +261,111 @@ func (e JobKind) Valid() bool {
 	case JobKindOrderExport:
 		return true
 	case JobKindProductImport:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderPaymentMethod.
+const (
+	BankTransfer OrderPaymentMethod = "bank_transfer"
+	Midtrans     OrderPaymentMethod = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the OrderPaymentMethod enum.
+func (e OrderPaymentMethod) Valid() bool {
+	switch e {
+	case BankTransfer:
+		return true
+	case Midtrans:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderCreateRequestSource.
+const (
+	OrderCreateRequestSourceManual OrderCreateRequestSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the OrderCreateRequestSource enum.
+func (e OrderCreateRequestSource) Valid() bool {
+	switch e {
+	case OrderCreateRequestSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderPaymentStatus.
+const (
+	OrderPaymentStatusAmountMismatch OrderPaymentStatus = "amount_mismatch"
+	OrderPaymentStatusFailed         OrderPaymentStatus = "failed"
+	OrderPaymentStatusPaid           OrderPaymentStatus = "paid"
+	OrderPaymentStatusPending        OrderPaymentStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the OrderPaymentStatus enum.
+func (e OrderPaymentStatus) Valid() bool {
+	switch e {
+	case OrderPaymentStatusAmountMismatch:
+		return true
+	case OrderPaymentStatusFailed:
+		return true
+	case OrderPaymentStatusPaid:
+		return true
+	case OrderPaymentStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderSource.
+const (
+	OrderSourceManual     OrderSource = "manual"
+	OrderSourceStorefront OrderSource = "storefront"
+)
+
+// Valid indicates whether the value is a known member of the OrderSource enum.
+func (e OrderSource) Valid() bool {
+	switch e {
+	case OrderSourceManual:
+		return true
+	case OrderSourceStorefront:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderStatus.
+const (
+	OrderStatusCancelled  OrderStatus = "cancelled"
+	OrderStatusCompleted  OrderStatus = "completed"
+	OrderStatusPaid       OrderStatus = "paid"
+	OrderStatusPending    OrderStatus = "pending"
+	OrderStatusProcessing OrderStatus = "processing"
+	OrderStatusShipped    OrderStatus = "shipped"
+)
+
+// Valid indicates whether the value is a known member of the OrderStatus enum.
+func (e OrderStatus) Valid() bool {
+	switch e {
+	case OrderStatusCancelled:
+		return true
+	case OrderStatusCompleted:
+		return true
+	case OrderStatusPaid:
+		return true
+	case OrderStatusPending:
+		return true
+	case OrderStatusProcessing:
+		return true
+	case OrderStatusShipped:
 		return true
 	default:
 		return false
@@ -500,6 +606,24 @@ func (e VariantMatrixRowResultStatus) Valid() bool {
 	case VariantMatrixRowResultStatusUnchanged:
 		return true
 	case VariantMatrixRowResultStatusUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListOrdersParamsSort.
+const (
+	MinusPlacedAt ListOrdersParamsSort = "-placed_at"
+	PlacedAt      ListOrdersParamsSort = "placed_at"
+)
+
+// Valid indicates whether the value is a known member of the ListOrdersParamsSort enum.
+func (e ListOrdersParamsSort) Valid() bool {
+	switch e {
+	case MinusPlacedAt:
+		return true
+	case PlacedAt:
 		return true
 	default:
 		return false
@@ -780,6 +904,35 @@ type ConfirmMedia struct {
 	VariantId *openapi_types.UUID `json:"variant_id,omitempty"`
 }
 
+// Customer Never a password hash, session or token (BR-092).
+type Customer struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Email      string             `json:"email"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	OrderCount int                `json:"order_count"`
+	Phone      *string            `json:"phone"`
+}
+
+// CustomerDetail defines model for CustomerDetail.
+type CustomerDetail struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Email      string             `json:"email"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	OrderCount int                `json:"order_count"`
+
+	// Orders The customer's orders, newest first, up to 50.
+	Orders []OrderListRow `json:"orders"`
+	Phone  *string        `json:"phone"`
+}
+
+// CustomerPage defines model for CustomerPage.
+type CustomerPage struct {
+	Data       []Customer `json:"data"`
+	NextCursor *string    `json:"next_cursor"`
+}
+
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
 // The code also appears as the last segment of a `Problem.type` URI, and directly in
 // per-row results where an operation partially succeeds (§7.3, §7.5).
@@ -887,6 +1040,245 @@ type MediaUpdate struct {
 //
 // Examples: 19900000
 type Money = int64
+
+// Order An order in full. `allowed_transitions` comes from the BR-070 allow-list so clients never
+// hardcode it; recording a refund is not in it because it does not change `status` (BR-075).
+// `history` is newest first.
+type Order struct {
+	AllowedTransitions []OrderStatus `json:"allowed_transitions"`
+	CancelledAt        *time.Time    `json:"cancelled_at"`
+	CompletedAt        *time.Time    `json:"completed_at"`
+
+	// Courier Set when shipped (BR-072); defaults to `shipping_courier`.
+	Courier *string `json:"courier"`
+
+	// Customer The customer as they were when the order was placed (BR-076), not a live reference.
+	Customer OrderCustomerSnapshot `json:"customer"`
+
+	// CustomerId `null` for guest and manual orders.
+	CustomerId *openapi_types.UUID `json:"customer_id"`
+
+	// Discount Σ line discounts, so `total = subtotal + shipping - discount` (BR-078).
+	Discount Money               `json:"discount"`
+	History  []OrderHistoryEntry `json:"history"`
+	Id       openapi_types.UUID  `json:"id"`
+	Lines    []OrderLine         `json:"lines"`
+	Note     *string             `json:"note"`
+
+	// OrderNumber Examples: ERG-000123
+	OrderNumber   string             `json:"order_number"`
+	PaidAt        *time.Time         `json:"paid_at"`
+	PaymentMethod OrderPaymentMethod `json:"payment_method"`
+	Payments      []OrderPayment     `json:"payments"`
+	PlacedAt      time.Time          `json:"placed_at"`
+	RefundedAt    *time.Time         `json:"refunded_at"`
+	ShippedAt     *time.Time         `json:"shipped_at"`
+
+	// Shipping An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Shipping        Money           `json:"shipping"`
+	ShippingAddress ShippingAddress `json:"shipping_address"`
+
+	// ShippingCourier Biteship courier code the shopper chose; `null` on manual orders (BR-121).
+	ShippingCourier *string     `json:"shipping_courier"`
+	ShippingService *string     `json:"shipping_service"`
+	Source          OrderSource `json:"source"`
+
+	// Status The BR-070 state machine's states.
+	Status OrderStatus `json:"status"`
+
+	// Subtotal Σ qty·unit_price before any discount.
+	Subtotal Money `json:"subtotal"`
+
+	// Total An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Total          Money   `json:"total"`
+	TrackingNumber *string `json:"tracking_number"`
+
+	// Version Send it back in `If-Match` on `PATCH`; transitions take none (BR-010).
+	Version int `json:"version"`
+}
+
+// OrderPaymentMethod defines model for Order.PaymentMethod.
+type OrderPaymentMethod string
+
+// OrderCancelRequest defines model for OrderCancelRequest.
+type OrderCancelRequest struct {
+	// Reason Recorded in the audit row only; there is no column (BR-073).
+	Reason *string `json:"reason,omitempty"`
+}
+
+// OrderCreateRequest defines model for OrderCreateRequest.
+type OrderCreateRequest struct {
+	Customer struct {
+		Email *string `json:"email,omitempty"`
+		Name  string  `json:"name"`
+		Phone *string `json:"phone,omitempty"`
+	} `json:"customer"`
+	Lines []struct {
+		// Discount Per-line discount in minor units (BR-078).
+		Discount  *Money             `json:"discount,omitempty"`
+		Qty       int                `json:"qty"`
+		VariantId openapi_types.UUID `json:"variant_id"`
+	} `json:"lines"`
+	Note *string `json:"note,omitempty"`
+
+	// Shipping A typed shipping amount; `shipping_option` arrives with `P1-218` (BR-121).
+	Shipping        *Money                   `json:"shipping,omitempty"`
+	ShippingAddress ShippingAddressWrite     `json:"shipping_address"`
+	Source          OrderCreateRequestSource `json:"source"`
+}
+
+// OrderCreateRequestSource defines model for OrderCreateRequest.Source.
+type OrderCreateRequestSource string
+
+// OrderCustomerSnapshot The customer as they were when the order was placed (BR-076), not a live reference.
+type OrderCustomerSnapshot struct {
+	Email *string `json:"email"`
+	Name  string  `json:"name"`
+	Phone *string `json:"phone"`
+}
+
+// OrderExportRequest The §5.1 order-list filters, with `status` as an array (BR-065).
+type OrderExportRequest struct {
+	CustomerId *openapi_types.UUID `json:"customer_id,omitempty"`
+
+	// PlacedFrom RFC 3339 with an offset, or a date meaning midnight WIB (BR-007).
+	PlacedFrom *string        `json:"placed_from,omitempty"`
+	PlacedTo   *string        `json:"placed_to,omitempty"`
+	Q          *string        `json:"q,omitempty"`
+	RefundOwed *bool          `json:"refund_owed,omitempty"`
+	Source     *OrderSource   `json:"source,omitempty"`
+	Status     *[]OrderStatus `json:"status,omitempty"`
+}
+
+// OrderHistoryEntry One entry of the order's audit trail (BR-073), embedded in the order so ops can read it
+// with `orders:read` alone — `GET /audit-log` keeps requiring `audit_log:read`. `from` and
+// `to` are set for `order.transition` and `null` for other actions; `actor` is `null` for
+// the system.
+type OrderHistoryEntry struct {
+	// Action Examples: order.transition
+	Action    string       `json:"action"`
+	Actor     *Ref         `json:"actor"`
+	CreatedAt time.Time    `json:"created_at"`
+	From      *OrderStatus `json:"from"`
+	To        *OrderStatus `json:"to"`
+}
+
+// OrderLine A snapshot at the time of order (BR-076): the wire drops the `_snapshot` and `_amount`
+// suffixes. `sku` is empty for a variant that had none.
+type OrderLine struct {
+	// Discount Per-line discount; manual orders only (BR-078).
+	Discount Money              `json:"discount"`
+	Id       openapi_types.UUID `json:"id"`
+	Qty      int                `json:"qty"`
+	Sku      string             `json:"sku"`
+
+	// Title Examples: Erigo Basic Tee — Black / M
+	Title string `json:"title"`
+
+	// UnitPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	UnitPrice Money              `json:"unit_price"`
+	VariantId openapi_types.UUID `json:"variant_id"`
+}
+
+// OrderListRow defines model for OrderListRow.
+type OrderListRow struct {
+	// Customer The customer as they were when the order was placed (BR-076), not a live reference.
+	Customer OrderCustomerSnapshot `json:"customer"`
+	Id       openapi_types.UUID    `json:"id"`
+
+	// ItemCount Summed `qty` over the order's lines.
+	ItemCount   int         `json:"item_count"`
+	OrderNumber string      `json:"order_number"`
+	PaidAt      *time.Time  `json:"paid_at"`
+	PlacedAt    time.Time   `json:"placed_at"`
+	RefundedAt  *time.Time  `json:"refunded_at"`
+	Source      OrderSource `json:"source"`
+
+	// Status The BR-070 state machine's states.
+	Status OrderStatus `json:"status"`
+
+	// Total An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Total   Money `json:"total"`
+	Version int   `json:"version"`
+}
+
+// OrderPage defines model for OrderPage.
+type OrderPage struct {
+	Data       []OrderListRow `json:"data"`
+	NextCursor *string        `json:"next_cursor"`
+}
+
+// OrderPayment One Midtrans Snap attempt, newest first (BR-123). Always `[]` until `P1-220` builds
+// Midtrans at checkout; bank transfers never have a row.
+type OrderPayment struct {
+	// Amount An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Amount    Money      `json:"amount"`
+	CreatedAt time.Time  `json:"created_at"`
+	PaidAt    *time.Time `json:"paid_at"`
+
+	// ProviderOrderId Examples: ERG-000123
+	ProviderOrderId string             `json:"provider_order_id"`
+	Status          OrderPaymentStatus `json:"status"`
+
+	// TransactionStatus The last status confirmed by the Get Status API (BR-125).
+	TransactionStatus *string `json:"transaction_status"`
+}
+
+// OrderPaymentStatus defines model for OrderPayment.Status.
+type OrderPaymentStatus string
+
+// OrderRefundRequest defines model for OrderRefundRequest.
+type OrderRefundRequest struct {
+	// Note Recorded in the audit row only (BR-075).
+	Note *string `json:"note,omitempty"`
+}
+
+// OrderShipRequest defines model for OrderShipRequest.
+type OrderShipRequest struct {
+	// Courier Biteship courier code; defaults to the order's `shipping_courier` (BR-072).
+	Courier        *string `json:"courier,omitempty"`
+	TrackingNumber string  `json:"tracking_number"`
+}
+
+// OrderSource defines model for OrderSource.
+type OrderSource string
+
+// OrderStatus The BR-070 state machine's states.
+type OrderStatus string
+
+// OrderUpdateRequest defines model for OrderUpdateRequest.
+type OrderUpdateRequest struct {
+	Note *string `json:"note,omitempty"`
+
+	// Shipping Replaces the shipping amount; the total is recomputed (BR-079).
+	Shipping        *Money                `json:"shipping,omitempty"`
+	ShippingAddress *ShippingAddressWrite `json:"shipping_address,omitempty"`
+}
 
 // PresignRequest defines model for PresignRequest.
 type PresignRequest struct {
@@ -1105,6 +1497,24 @@ type SettingsUpdate struct {
 	Name        *string `json:"name,omitempty"`
 	OrderPrefix *string `json:"order_prefix,omitempty"`
 	Timezone    *string `json:"timezone,omitempty"`
+}
+
+// ShippingAddress defines model for ShippingAddress.
+type ShippingAddress struct {
+	City       string  `json:"city"`
+	Line1      string  `json:"line1"`
+	Line2      *string `json:"line2"`
+	PostalCode string  `json:"postal_code"`
+	Province   string  `json:"province"`
+}
+
+// ShippingAddressWrite defines model for ShippingAddressWrite.
+type ShippingAddressWrite struct {
+	City       string  `json:"city"`
+	Line1      string  `json:"line1"`
+	Line2      *string `json:"line2,omitempty"`
+	PostalCode string  `json:"postal_code"`
+	Province   string  `json:"province"`
 }
 
 // User defines model for User.
@@ -1373,6 +1783,50 @@ type ListCategoriesParams struct {
 	Depth    *int                `form:"depth,omitempty" json:"depth,omitempty"`
 }
 
+// ListCustomersParams defines parameters for ListCustomers.
+type ListCustomersParams struct {
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListOrdersParams defines parameters for ListOrders.
+type ListOrdersParams struct {
+	Status     *[]OrderStatus        `form:"status,omitempty" json:"status,omitempty"`
+	Source     *OrderSource          `form:"source,omitempty" json:"source,omitempty"`
+	CustomerId *openapi_types.UUID   `form:"customer_id,omitempty" json:"customer_id,omitempty"`
+	RefundOwed *bool                 `form:"refund_owed,omitempty" json:"refund_owed,omitempty"`
+	PlacedFrom *string               `form:"placed_from,omitempty" json:"placed_from,omitempty"`
+	PlacedTo   *string               `form:"placed_to,omitempty" json:"placed_to,omitempty"`
+	Q          *string               `form:"q,omitempty" json:"q,omitempty"`
+	Sort       *ListOrdersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListOrdersParamsSort defines parameters for ListOrders.
+type ListOrdersParamsSort string
+
+// UpdateOrderParams defines parameters for UpdateOrder.
+type UpdateOrderParams struct {
+	// IfMatch The `version` read from the resource. Required on every `PATCH`. The server checks it in
+	// the `UPDATE … WHERE version = $n` predicate; a stale value is `409 version_conflict`, not
+	// a silent no-op.
+	//
+	// `version` travels here and never in the request body.
+	IfMatch IfMatch `json:"If-Match"`
+}
+
 // ListProductsParams defines parameters for ListProducts.
 type ListProductsParams struct {
 	Status     *ProductStatus          `form:"status,omitempty" json:"status,omitempty"`
@@ -1472,6 +1926,24 @@ type PresignMediaJSONRequestBody = PresignRequest
 
 // UpdateMediaJSONRequestBody defines body for UpdateMedia for application/json ContentType.
 type UpdateMediaJSONRequestBody = MediaUpdate
+
+// CreateOrderJSONRequestBody defines body for CreateOrder for application/json ContentType.
+type CreateOrderJSONRequestBody = OrderCreateRequest
+
+// ExportOrdersJSONRequestBody defines body for ExportOrders for application/json ContentType.
+type ExportOrdersJSONRequestBody = OrderExportRequest
+
+// UpdateOrderJSONRequestBody defines body for UpdateOrder for application/json ContentType.
+type UpdateOrderJSONRequestBody = OrderUpdateRequest
+
+// CancelOrderJSONRequestBody defines body for CancelOrder for application/json ContentType.
+type CancelOrderJSONRequestBody = OrderCancelRequest
+
+// RefundOrderJSONRequestBody defines body for RefundOrder for application/json ContentType.
+type RefundOrderJSONRequestBody = OrderRefundRequest
+
+// ShipOrderJSONRequestBody defines body for ShipOrder for application/json ContentType.
+type ShipOrderJSONRequestBody = OrderShipRequest
 
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductCreate
@@ -1634,6 +2106,12 @@ type ServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// ListCustomers Customers, searched and cursor-paginated
+	// (GET /customers)
+	ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams)
+	// GetCustomer One customer and their latest orders
+	// (GET /customers/{id})
+	GetCustomer(w http.ResponseWriter, r *http.Request, id Id)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(w http.ResponseWriter, r *http.Request, id Id)
@@ -1649,6 +2127,39 @@ type ServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(w http.ResponseWriter, r *http.Request, id Id)
+	// ListOrders Orders, filtered and cursor-paginated
+	// (GET /orders)
+	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
+	// CreateOrder Enter a manual (WhatsApp) order
+	// (POST /orders)
+	CreateOrder(w http.ResponseWriter, r *http.Request)
+	// ExportOrders Export orders to CSV as a background job
+	// (POST /orders/export)
+	ExportOrders(w http.ResponseWriter, r *http.Request)
+	// GetOrder One order, with its allowed transitions and audit trail
+	// (GET /orders/{id})
+	GetOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdateOrder Edit a pending order's address, note or shipping amount
+	// (PATCH /orders/{id})
+	UpdateOrder(w http.ResponseWriter, r *http.Request, id Id, params UpdateOrderParams)
+	// CancelOrder Cancel an order
+	// (POST /orders/{id}/cancel)
+	CancelOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// CompleteOrder Close a shipped order
+	// (POST /orders/{id}/complete)
+	CompleteOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// MarkOrderPaid Record a confirmed payment
+	// (POST /orders/{id}/mark-paid)
+	MarkOrderPaid(w http.ResponseWriter, r *http.Request, id Id)
+	// ProcessOrder Start processing a paid order
+	// (POST /orders/{id}/process)
+	ProcessOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// RefundOrder Record a refund made outside the system
+	// (POST /orders/{id}/refund)
+	RefundOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// ShipOrder Record the courier and tracking number and mark shipped
+	// (POST /orders/{id}/ship)
+	ShipOrder(w http.ResponseWriter, r *http.Request, id Id)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -1808,6 +2319,18 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ListCustomers Customers, searched and cursor-paginated
+// (GET /customers)
+func (_ Unimplemented) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCustomer One customer and their latest orders
+// (GET /customers/{id})
+func (_ Unimplemented) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // GetJob A background job's progress and result
 // (GET /jobs/{id})
 func (_ Unimplemented) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
@@ -1835,6 +2358,72 @@ func (_ Unimplemented) DeleteMedia(w http.ResponseWriter, r *http.Request, id Id
 // UpdateMedia Attach an image to a variant, or back to the product
 // (PATCH /media/{id})
 func (_ Unimplemented) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListOrders Orders, filtered and cursor-paginated
+// (GET /orders)
+func (_ Unimplemented) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateOrder Enter a manual (WhatsApp) order
+// (POST /orders)
+func (_ Unimplemented) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportOrders Export orders to CSV as a background job
+// (POST /orders/export)
+func (_ Unimplemented) ExportOrders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetOrder One order, with its allowed transitions and audit trail
+// (GET /orders/{id})
+func (_ Unimplemented) GetOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateOrder Edit a pending order's address, note or shipping amount
+// (PATCH /orders/{id})
+func (_ Unimplemented) UpdateOrder(w http.ResponseWriter, r *http.Request, id Id, params UpdateOrderParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CancelOrder Cancel an order
+// (POST /orders/{id}/cancel)
+func (_ Unimplemented) CancelOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CompleteOrder Close a shipped order
+// (POST /orders/{id}/complete)
+func (_ Unimplemented) CompleteOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// MarkOrderPaid Record a confirmed payment
+// (POST /orders/{id}/mark-paid)
+func (_ Unimplemented) MarkOrderPaid(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ProcessOrder Start processing a paid order
+// (POST /orders/{id}/process)
+func (_ Unimplemented) ProcessOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RefundOrder Record a refund made outside the system
+// (POST /orders/{id}/refund)
+func (_ Unimplemented) RefundOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ShipOrder Record the courier and tracking number and mark shipped
+// (POST /orders/{id}/ship)
+func (_ Unimplemented) ShipOrder(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2455,6 +3044,91 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListCustomers operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomer operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetJob operation middleware
 func (siw *ServerInterfaceWrapper) GetJob(w http.ResponseWriter, r *http.Request) {
 
@@ -2552,6 +3226,420 @@ func (siw *ServerInterfaceWrapper) UpdateMedia(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrders operation middleware
+func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrdersParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "customer_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "customer_id", r.URL.Query(), &params.CustomerId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "customer_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customer_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "refund_owed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "refund_owed", r.URL.Query(), &params.RefundOwed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "refund_owed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "refund_owed", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placed_from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placed_from", r.URL.Query(), &params.PlacedFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placed_from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placed_from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placed_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placed_to", r.URL.Query(), &params.PlacedTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placed_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placed_to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrders(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOrder operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrder(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportOrders operation middleware
+func (siw *ServerInterfaceWrapper) ExportOrders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportOrders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrder operation middleware
+func (siw *ServerInterfaceWrapper) GetOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOrder operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateOrderParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "integer", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOrder(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelOrder operation middleware
+func (siw *ServerInterfaceWrapper) CancelOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelOrder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteOrder operation middleware
+func (siw *ServerInterfaceWrapper) CompleteOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteOrder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkOrderPaid operation middleware
+func (siw *ServerInterfaceWrapper) MarkOrderPaid(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkOrderPaid(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ProcessOrder operation middleware
+func (siw *ServerInterfaceWrapper) ProcessOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ProcessOrder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefundOrder operation middleware
+func (siw *ServerInterfaceWrapper) RefundOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefundOrder(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ShipOrder operation middleware
+func (siw *ServerInterfaceWrapper) ShipOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShipOrder(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3489,6 +4577,45 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit-log", wrapper.ListAuditLog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders", wrapper.CreateOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orders/{id}", wrapper.GetOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/orders/{id}", wrapper.UpdateOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/mark-paid", wrapper.MarkOrderPaid)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/process", wrapper.ProcessOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/ship", wrapper.ShipOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/complete", wrapper.CompleteOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/cancel", wrapper.CancelOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{id}/refund", wrapper.RefundOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/export", wrapper.ExportOrders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers/{id}", wrapper.GetCustomer)
 	})
 
 	return r
@@ -4552,6 +5679,146 @@ func (response UpdateCategory422ApplicationProblemPlusJSONResponse) VisitUpdateC
 	return err
 }
 
+type ListCustomersRequestObject struct {
+	Params ListCustomersParams
+}
+
+type ListCustomersResponseObject interface {
+	VisitListCustomersResponse(w http.ResponseWriter) error
+}
+
+type ListCustomers200JSONResponse CustomerPage
+
+func (response ListCustomers200JSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers401ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers403ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers422ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomerRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetCustomerResponseObject interface {
+	VisitGetCustomerResponse(w http.ResponseWriter) error
+}
+
+type GetCustomer200JSONResponse CustomerDetail
+
+func (response GetCustomer200JSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer401ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer403ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer404ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetJobRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -4902,6 +6169,941 @@ type UpdateMedia422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateMedia422ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrdersRequestObject struct {
+	Params ListOrdersParams
+}
+
+type ListOrdersResponseObject interface {
+	VisitListOrdersResponse(w http.ResponseWriter) error
+}
+
+type ListOrders200JSONResponse OrderPage
+
+func (response ListOrders200JSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders401ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders403ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders422ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrderRequestObject struct {
+	Body *CreateOrderJSONRequestBody
+}
+
+type CreateOrderResponseObject interface {
+	VisitCreateOrderResponse(w http.ResponseWriter) error
+}
+
+type CreateOrder201JSONResponse Order
+
+func (response CreateOrder201JSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder401ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder403ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder422ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrdersRequestObject struct {
+	Body *ExportOrdersJSONRequestBody
+}
+
+type ExportOrdersResponseObject interface {
+	VisitExportOrdersResponse(w http.ResponseWriter) error
+}
+
+type ExportOrders202JSONResponse JobAccepted
+
+func (response ExportOrders202JSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders401ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders403ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders422ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrderRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetOrderResponseObject interface {
+	VisitGetOrderResponse(w http.ResponseWriter) error
+}
+
+type GetOrder200JSONResponse Order
+
+func (response GetOrder200JSONResponse) VisitGetOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrder401ApplicationProblemPlusJSONResponse) VisitGetOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrder403ApplicationProblemPlusJSONResponse) VisitGetOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrder404ApplicationProblemPlusJSONResponse) VisitGetOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrderRequestObject struct {
+	Id     Id `json:"id"`
+	Params UpdateOrderParams
+	Body   *UpdateOrderJSONRequestBody
+}
+
+type UpdateOrderResponseObject interface {
+	VisitUpdateOrderResponse(w http.ResponseWriter) error
+}
+
+type UpdateOrder200JSONResponse Order
+
+func (response UpdateOrder200JSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrder401ApplicationProblemPlusJSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrder403ApplicationProblemPlusJSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrder404ApplicationProblemPlusJSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrder409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrder409ApplicationProblemPlusJSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateOrder422ApplicationProblemPlusJSONResponse) VisitUpdateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrderRequestObject struct {
+	Id   Id `json:"id"`
+	Body *CancelOrderJSONRequestBody
+}
+
+type CancelOrderResponseObject interface {
+	VisitCancelOrderResponse(w http.ResponseWriter) error
+}
+
+type CancelOrder200JSONResponse Order
+
+func (response CancelOrder200JSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CancelOrder401ApplicationProblemPlusJSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CancelOrder403ApplicationProblemPlusJSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CancelOrder404ApplicationProblemPlusJSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrder409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CancelOrder409ApplicationProblemPlusJSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CancelOrder422ApplicationProblemPlusJSONResponse) VisitCancelOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOrderRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type CompleteOrderResponseObject interface {
+	VisitCompleteOrderResponse(w http.ResponseWriter) error
+}
+
+type CompleteOrder200JSONResponse Order
+
+func (response CompleteOrder200JSONResponse) VisitCompleteOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOrder401ApplicationProblemPlusJSONResponse) VisitCompleteOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOrder403ApplicationProblemPlusJSONResponse) VisitCompleteOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOrder404ApplicationProblemPlusJSONResponse) VisitCompleteOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOrder409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CompleteOrder409ApplicationProblemPlusJSONResponse) VisitCompleteOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkOrderPaidRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type MarkOrderPaidResponseObject interface {
+	VisitMarkOrderPaidResponse(w http.ResponseWriter) error
+}
+
+type MarkOrderPaid200JSONResponse Order
+
+func (response MarkOrderPaid200JSONResponse) VisitMarkOrderPaidResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkOrderPaid401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response MarkOrderPaid401ApplicationProblemPlusJSONResponse) VisitMarkOrderPaidResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkOrderPaid403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response MarkOrderPaid403ApplicationProblemPlusJSONResponse) VisitMarkOrderPaidResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkOrderPaid404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response MarkOrderPaid404ApplicationProblemPlusJSONResponse) VisitMarkOrderPaidResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkOrderPaid409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response MarkOrderPaid409ApplicationProblemPlusJSONResponse) VisitMarkOrderPaidResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ProcessOrderRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ProcessOrderResponseObject interface {
+	VisitProcessOrderResponse(w http.ResponseWriter) error
+}
+
+type ProcessOrder200JSONResponse Order
+
+func (response ProcessOrder200JSONResponse) VisitProcessOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ProcessOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ProcessOrder401ApplicationProblemPlusJSONResponse) VisitProcessOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ProcessOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ProcessOrder403ApplicationProblemPlusJSONResponse) VisitProcessOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ProcessOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ProcessOrder404ApplicationProblemPlusJSONResponse) VisitProcessOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ProcessOrder409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ProcessOrder409ApplicationProblemPlusJSONResponse) VisitProcessOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefundOrderRequestObject struct {
+	Id   Id `json:"id"`
+	Body *RefundOrderJSONRequestBody
+}
+
+type RefundOrderResponseObject interface {
+	VisitRefundOrderResponse(w http.ResponseWriter) error
+}
+
+type RefundOrder200JSONResponse Order
+
+func (response RefundOrder200JSONResponse) VisitRefundOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefundOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response RefundOrder401ApplicationProblemPlusJSONResponse) VisitRefundOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefundOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RefundOrder403ApplicationProblemPlusJSONResponse) VisitRefundOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefundOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RefundOrder404ApplicationProblemPlusJSONResponse) VisitRefundOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefundOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response RefundOrder422ApplicationProblemPlusJSONResponse) VisitRefundOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrderRequestObject struct {
+	Id   Id `json:"id"`
+	Body *ShipOrderJSONRequestBody
+}
+
+type ShipOrderResponseObject interface {
+	VisitShipOrderResponse(w http.ResponseWriter) error
+}
+
+type ShipOrder200JSONResponse Order
+
+func (response ShipOrder200JSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ShipOrder401ApplicationProblemPlusJSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ShipOrder403ApplicationProblemPlusJSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrder404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ShipOrder404ApplicationProblemPlusJSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrder409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ShipOrder409ApplicationProblemPlusJSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShipOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ShipOrder422ApplicationProblemPlusJSONResponse) VisitShipOrderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6574,6 +8776,12 @@ type StrictServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
+	// ListCustomers Customers, searched and cursor-paginated
+	// (GET /customers)
+	ListCustomers(ctx context.Context, request ListCustomersRequestObject) (ListCustomersResponseObject, error)
+	// GetCustomer One customer and their latest orders
+	// (GET /customers/{id})
+	GetCustomer(ctx context.Context, request GetCustomerRequestObject) (GetCustomerResponseObject, error)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
@@ -6589,6 +8797,39 @@ type StrictServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(ctx context.Context, request UpdateMediaRequestObject) (UpdateMediaResponseObject, error)
+	// ListOrders Orders, filtered and cursor-paginated
+	// (GET /orders)
+	ListOrders(ctx context.Context, request ListOrdersRequestObject) (ListOrdersResponseObject, error)
+	// CreateOrder Enter a manual (WhatsApp) order
+	// (POST /orders)
+	CreateOrder(ctx context.Context, request CreateOrderRequestObject) (CreateOrderResponseObject, error)
+	// ExportOrders Export orders to CSV as a background job
+	// (POST /orders/export)
+	ExportOrders(ctx context.Context, request ExportOrdersRequestObject) (ExportOrdersResponseObject, error)
+	// GetOrder One order, with its allowed transitions and audit trail
+	// (GET /orders/{id})
+	GetOrder(ctx context.Context, request GetOrderRequestObject) (GetOrderResponseObject, error)
+	// UpdateOrder Edit a pending order's address, note or shipping amount
+	// (PATCH /orders/{id})
+	UpdateOrder(ctx context.Context, request UpdateOrderRequestObject) (UpdateOrderResponseObject, error)
+	// CancelOrder Cancel an order
+	// (POST /orders/{id}/cancel)
+	CancelOrder(ctx context.Context, request CancelOrderRequestObject) (CancelOrderResponseObject, error)
+	// CompleteOrder Close a shipped order
+	// (POST /orders/{id}/complete)
+	CompleteOrder(ctx context.Context, request CompleteOrderRequestObject) (CompleteOrderResponseObject, error)
+	// MarkOrderPaid Record a confirmed payment
+	// (POST /orders/{id}/mark-paid)
+	MarkOrderPaid(ctx context.Context, request MarkOrderPaidRequestObject) (MarkOrderPaidResponseObject, error)
+	// ProcessOrder Start processing a paid order
+	// (POST /orders/{id}/process)
+	ProcessOrder(ctx context.Context, request ProcessOrderRequestObject) (ProcessOrderResponseObject, error)
+	// RefundOrder Record a refund made outside the system
+	// (POST /orders/{id}/refund)
+	RefundOrder(ctx context.Context, request RefundOrderRequestObject) (RefundOrderResponseObject, error)
+	// ShipOrder Record the courier and tracking number and mark shipped
+	// (POST /orders/{id}/ship)
+	ShipOrder(ctx context.Context, request ShipOrderRequestObject) (ShipOrderResponseObject, error)
 	// ListProducts Products, filtered and cursor-paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -7113,6 +9354,58 @@ func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// ListCustomers operation middleware
+func (sh *strictHandler) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	var request ListCustomersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomers(ctx, request.(ListCustomersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomersResponseObject); ok {
+		if err := validResponse.VisitListCustomersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomer operation middleware
+func (sh *strictHandler) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	var request GetCustomerRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomer(ctx, request.(GetCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomerResponseObject); ok {
+		if err := validResponse.VisitGetCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetJob operation middleware
 func (sh *strictHandler) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 	var request GetJobRequestObject
@@ -7253,6 +9546,337 @@ func (sh *strictHandler) UpdateMedia(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMediaResponseObject); ok {
 		if err := validResponse.VisitUpdateMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrders operation middleware
+func (sh *strictHandler) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
+	var request ListOrdersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrders(ctx, request.(ListOrdersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrdersResponseObject); ok {
+		if err := validResponse.VisitListOrdersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateOrder operation middleware
+func (sh *strictHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	var request CreateOrderRequestObject
+
+	var body CreateOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOrder(ctx, request.(CreateOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOrderResponseObject); ok {
+		if err := validResponse.VisitCreateOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportOrders operation middleware
+func (sh *strictHandler) ExportOrders(w http.ResponseWriter, r *http.Request) {
+	var request ExportOrdersRequestObject
+
+	var body ExportOrdersJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportOrders(ctx, request.(ExportOrdersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportOrders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportOrdersResponseObject); ok {
+		if err := validResponse.VisitExportOrdersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrder operation middleware
+func (sh *strictHandler) GetOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request GetOrderRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrder(ctx, request.(GetOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrderResponseObject); ok {
+		if err := validResponse.VisitGetOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateOrder operation middleware
+func (sh *strictHandler) UpdateOrder(w http.ResponseWriter, r *http.Request, id Id, params UpdateOrderParams) {
+	var request UpdateOrderRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body UpdateOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateOrder(ctx, request.(UpdateOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateOrderResponseObject); ok {
+		if err := validResponse.VisitUpdateOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelOrder operation middleware
+func (sh *strictHandler) CancelOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request CancelOrderRequestObject
+
+	request.Id = id
+
+	var body CancelOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelOrder(ctx, request.(CancelOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelOrderResponseObject); ok {
+		if err := validResponse.VisitCancelOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteOrder operation middleware
+func (sh *strictHandler) CompleteOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request CompleteOrderRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteOrder(ctx, request.(CompleteOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteOrderResponseObject); ok {
+		if err := validResponse.VisitCompleteOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkOrderPaid operation middleware
+func (sh *strictHandler) MarkOrderPaid(w http.ResponseWriter, r *http.Request, id Id) {
+	var request MarkOrderPaidRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkOrderPaid(ctx, request.(MarkOrderPaidRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkOrderPaid")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkOrderPaidResponseObject); ok {
+		if err := validResponse.VisitMarkOrderPaidResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ProcessOrder operation middleware
+func (sh *strictHandler) ProcessOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ProcessOrderRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ProcessOrder(ctx, request.(ProcessOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ProcessOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ProcessOrderResponseObject); ok {
+		if err := validResponse.VisitProcessOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefundOrder operation middleware
+func (sh *strictHandler) RefundOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request RefundOrderRequestObject
+
+	request.Id = id
+
+	var body RefundOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefundOrder(ctx, request.(RefundOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefundOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefundOrderResponseObject); ok {
+		if err := validResponse.VisitRefundOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShipOrder operation middleware
+func (sh *strictHandler) ShipOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ShipOrderRequestObject
+
+	request.Id = id
+
+	var body ShipOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShipOrder(ctx, request.(ShipOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShipOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShipOrderResponseObject); ok {
+		if err := validResponse.VisitShipOrderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

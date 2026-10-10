@@ -9,6 +9,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
@@ -26,6 +27,7 @@ type Server struct {
 	catalog *catalog.Service
 	jobs    *jobs.Service
 	team    *team.Service
+	orders  *orders.Service
 	invites *auth.InviteSigner
 
 	// secureCookies is false only for local development over plain HTTP, where
@@ -40,11 +42,12 @@ type Services struct {
 	Catalog *catalog.Service
 	Jobs    *jobs.Service
 	Team    *team.Service
+	Orders  *orders.Service
 	Invites *auth.InviteSigner
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
-	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, invites: svc.Invites,
+	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
 		secureCookies: secureCookies}
 }
 

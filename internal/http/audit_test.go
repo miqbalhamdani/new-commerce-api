@@ -97,10 +97,14 @@ func TestEveryMutatingRouteIsAudited(t *testing.T) {
 			}
 			if subjectID == "" { // a create: the subject is in the response
 				var created struct {
-					ID string `json:"id"`
+					ID    string `json:"id"`
+					JobID string `json:"job_id"`
 				}
 				_ = json.Unmarshal(rec.Body.Bytes(), &created)
 				subjectID = created.ID
+				if subjectID == "" { // a 202 job answer carries job_id
+					subjectID = created.JobID
+				}
 			}
 
 			if n := count(subjectID) - before; n != 1 {

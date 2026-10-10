@@ -37,6 +37,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
@@ -355,6 +356,7 @@ var newServer = func(t *testing.T) http.Handler {
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Jobs:    jobsSvc,
 		Team:    team.NewService(store, redis),
+		Orders:  orders.NewService(store, testFiles(t), jobsSvc),
 		Invites: testInvites(t),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))

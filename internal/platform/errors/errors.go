@@ -18,17 +18,18 @@ import (
 // The canonical codes for this phase (04-api-spec.md §1.1). The code is also the
 // last segment of the type URI a client receives.
 const (
-	CodeValidationFailed = "validation_failed"
-	CodeUnknownField     = "unknown_field"
-	CodePublishCheck     = "publish_check_failed"
-	CodeVersionConflict  = "version_conflict"
-	CodeDuplicateSKU     = "duplicate_sku"
-	CodeCategoryInUse    = "category_in_use"
-	CodePermissionDenied = "permission_denied"
-	CodeNotFound         = "not_found"
-	CodeRateLimited      = "rate_limited"
-	CodeUnauthenticated  = "unauthenticated"
-	CodeInternal         = "internal"
+	CodeValidationFailed  = "validation_failed"
+	CodeUnknownField      = "unknown_field"
+	CodePublishCheck      = "publish_check_failed"
+	CodeVersionConflict   = "version_conflict"
+	CodeIllegalTransition = "illegal_transition"
+	CodeDuplicateSKU      = "duplicate_sku"
+	CodeCategoryInUse     = "category_in_use"
+	CodePermissionDenied  = "permission_denied"
+	CodeNotFound          = "not_found"
+	CodeRateLimited       = "rate_limited"
+	CodeUnauthenticated   = "unauthenticated"
+	CodeInternal          = "internal"
 )
 
 // Field is one entry in a Problem's errors array: which field, and what about
@@ -158,6 +159,15 @@ func VersionConflict(expected, supplied int) *Error {
 		Detail: "This was changed by someone else. Reload and try again."}).
 		WithFields(Field{Name: "version", Extra: map[string]any{
 			"expected": expected, "supplied": supplied}})
+}
+
+// IllegalTransition is the 409 for an order move the BR-070 allow-list does
+// not contain, naming from and to; nothing changes.
+func IllegalTransition(from, to string) *Error {
+	return (&Error{Code: CodeIllegalTransition, Status: http.StatusConflict,
+		Title:  "Illegal transition",
+		Detail: "An order cannot move from " + from + " to " + to + "."}).
+		WithFields(Field{Name: "status", Extra: map[string]any{"from": from, "to": to}})
 }
 
 // Internal wraps anything the client has no business seeing.

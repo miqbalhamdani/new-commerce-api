@@ -66,6 +66,16 @@ func (s *Server) signResult(r *http.Request, raw []byte) (map[string]any, error)
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, err
 	}
+	if key, ok := m["result_key"].(string); ok {
+		// order_export (BR-063): the row keeps the key, the response gets a
+		// fresh 15-minute URL on every read.
+		u, err := s.catalog.SignDownload(r.Context(), key)
+		if err != nil {
+			return nil, err
+		}
+		delete(m, "result_key")
+		m["download_url"], m["expires_in"] = u, 900
+	}
 	if key, ok := m["error_report_key"].(string); ok {
 		u, err := s.catalog.SignDownload(r.Context(), key)
 		if err != nil {
