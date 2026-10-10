@@ -7,6 +7,7 @@ package orders
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -42,4 +43,13 @@ func notFound(err error, what string) error {
 
 func fieldError(field, detail string) error {
 	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
+}
+
+// likePattern escapes LIKE metacharacters so a search for "50%" means it.
+func likePattern(q *string) *string {
+	if q == nil || strings.TrimSpace(*q) == "" {
+		return nil
+	}
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.TrimSpace(*q))
+	return &r
 }

@@ -120,11 +120,18 @@ func decodeCursor(c *string, key any) error {
 	return nil
 }
 
-// pageLimit is the requested page size, defaulting to 50 (04-api-spec.md §1).
-// The generated binder has already rejected values outside 1-200.
+// pageLimit is the requested page size, defaulting to 50 (04-api-spec.md §1)
+// and clamped to the contract's 1-200. The clamp is load-bearing: the
+// generated binder does not enforce the schema's bounds, and an unclamped
+// limit=0 indexes out of range in every list that trims to the page size.
 func pageLimit(l *int) int {
-	if l == nil {
+	switch {
+	case l == nil:
 		return 50
+	case *l < 1:
+		return 1
+	case *l > 200:
+		return 200
 	}
 	return *l
 }

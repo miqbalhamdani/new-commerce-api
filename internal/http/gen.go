@@ -597,6 +597,24 @@ func (e VariantMatrixRowResultStatus) Valid() bool {
 	}
 }
 
+// Defines values for ListOrdersParamsSort.
+const (
+	MinusPlacedAt ListOrdersParamsSort = "-placed_at"
+	PlacedAt      ListOrdersParamsSort = "placed_at"
+)
+
+// Valid indicates whether the value is a known member of the ListOrdersParamsSort enum.
+func (e ListOrdersParamsSort) Valid() bool {
+	switch e {
+	case MinusPlacedAt:
+		return true
+	case PlacedAt:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProductsParamsSort.
 const (
 	MinusCreatedAt ListProductsParamsSort = "-created_at"
@@ -1094,6 +1112,39 @@ type OrderLine struct {
 	// Examples: 19900000
 	UnitPrice Money              `json:"unit_price"`
 	VariantId openapi_types.UUID `json:"variant_id"`
+}
+
+// OrderListRow defines model for OrderListRow.
+type OrderListRow struct {
+	// Customer The customer as they were when the order was placed (BR-076), not a live reference.
+	Customer OrderCustomerSnapshot `json:"customer"`
+	Id       openapi_types.UUID    `json:"id"`
+
+	// ItemCount Summed `qty` over the order's lines.
+	ItemCount   int         `json:"item_count"`
+	OrderNumber string      `json:"order_number"`
+	PaidAt      *time.Time  `json:"paid_at"`
+	PlacedAt    time.Time   `json:"placed_at"`
+	RefundedAt  *time.Time  `json:"refunded_at"`
+	Source      OrderSource `json:"source"`
+
+	// Status The BR-070 state machine's states.
+	Status OrderStatus `json:"status"`
+
+	// Total An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Total   Money `json:"total"`
+	Version int   `json:"version"`
+}
+
+// OrderPage defines model for OrderPage.
+type OrderPage struct {
+	Data       []OrderListRow `json:"data"`
+	NextCursor *string        `json:"next_cursor"`
 }
 
 // OrderPayment One Midtrans Snap attempt, newest first (BR-123). Always `[]` until `P1-220` builds
@@ -1642,6 +1693,28 @@ type ListCategoriesParams struct {
 	Depth    *int                `form:"depth,omitempty" json:"depth,omitempty"`
 }
 
+// ListOrdersParams defines parameters for ListOrders.
+type ListOrdersParams struct {
+	Status     *[]OrderStatus        `form:"status,omitempty" json:"status,omitempty"`
+	Source     *OrderSource          `form:"source,omitempty" json:"source,omitempty"`
+	CustomerId *openapi_types.UUID   `form:"customer_id,omitempty" json:"customer_id,omitempty"`
+	RefundOwed *bool                 `form:"refund_owed,omitempty" json:"refund_owed,omitempty"`
+	PlacedFrom *string               `form:"placed_from,omitempty" json:"placed_from,omitempty"`
+	PlacedTo   *string               `form:"placed_to,omitempty" json:"placed_to,omitempty"`
+	Q          *string               `form:"q,omitempty" json:"q,omitempty"`
+	Sort       *ListOrdersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListOrdersParamsSort defines parameters for ListOrders.
+type ListOrdersParamsSort string
+
 // ListProductsParams defines parameters for ListProducts.
 type ListProductsParams struct {
 	Status     *ProductStatus          `form:"status,omitempty" json:"status,omitempty"`
@@ -1927,6 +2000,9 @@ type ServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(w http.ResponseWriter, r *http.Request, id Id)
+	// ListOrders Orders, filtered and cursor-paginated
+	// (GET /orders)
+	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
 	// CancelOrder Cancel an order
 	// (POST /orders/{id}/cancel)
 	CancelOrder(w http.ResponseWriter, r *http.Request, id Id)
@@ -2131,6 +2207,12 @@ func (_ Unimplemented) DeleteMedia(w http.ResponseWriter, r *http.Request, id Id
 // UpdateMedia Attach an image to a variant, or back to the product
 // (PATCH /media/{id})
 func (_ Unimplemented) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListOrders Orders, filtered and cursor-paginated
+// (GET /orders)
+func (_ Unimplemented) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2884,6 +2966,156 @@ func (siw *ServerInterfaceWrapper) UpdateMedia(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMedia(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrders operation middleware
+func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrdersParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "customer_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "customer_id", r.URL.Query(), &params.CustomerId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "customer_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customer_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "refund_owed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "refund_owed", r.URL.Query(), &params.RefundOwed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "refund_owed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "refund_owed", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placed_from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placed_from", r.URL.Query(), &params.PlacedFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placed_from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placed_from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placed_to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placed_to", r.URL.Query(), &params.PlacedTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placed_to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placed_to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrders(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3977,6 +4209,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit-log", wrapper.ListAuditLog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orders/{id}/mark-paid", wrapper.MarkOrderPaid)
@@ -5408,6 +5643,76 @@ type UpdateMedia422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateMedia422ApplicationProblemPlusJSONResponse) VisitUpdateMediaResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrdersRequestObject struct {
+	Params ListOrdersParams
+}
+
+type ListOrdersResponseObject interface {
+	VisitListOrdersResponse(w http.ResponseWriter) error
+}
+
+type ListOrders200JSONResponse OrderPage
+
+func (response ListOrders200JSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders401ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders403ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOrders422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListOrders422ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7646,6 +7951,9 @@ type StrictServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(ctx context.Context, request UpdateMediaRequestObject) (UpdateMediaResponseObject, error)
+	// ListOrders Orders, filtered and cursor-paginated
+	// (GET /orders)
+	ListOrders(ctx context.Context, request ListOrdersRequestObject) (ListOrdersResponseObject, error)
 	// CancelOrder Cancel an order
 	// (POST /orders/{id}/cancel)
 	CancelOrder(ctx context.Context, request CancelOrderRequestObject) (CancelOrderResponseObject, error)
@@ -8328,6 +8636,32 @@ func (sh *strictHandler) UpdateMedia(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMediaResponseObject); ok {
 		if err := validResponse.VisitUpdateMediaResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOrders operation middleware
+func (sh *strictHandler) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
+	var request ListOrdersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOrders(ctx, request.(ListOrdersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOrders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOrdersResponseObject); ok {
+		if err := validResponse.VisitListOrdersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
