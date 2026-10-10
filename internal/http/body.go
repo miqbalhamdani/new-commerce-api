@@ -17,7 +17,7 @@ import (
 const maxBody = 4 << 20
 
 // serverManaged are the fields no client may send, on create or update alike
-// (BR-008). Each route adds its own derived fields (a brand's slug).
+// (BR-008). Each route adds its own derived fields (a tenant's slug).
 var serverManaged = []string{"id", "tenant_id", "version", "created_at", "updated_at", "archived_at", "path"}
 
 // decodeJSON decodes a request body into v, answering 422 itself on failure.

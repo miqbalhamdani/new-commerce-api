@@ -606,7 +606,7 @@ type Brand struct {
 	Id         openapi_types.UUID `json:"id"`
 	Name       string             `json:"name"`
 
-	// Slug Derived from `name`; read-only (BR-030).
+	// Slug Defaults to `slugify(name)`; editable (BR-030).
 	//
 	// Examples: erigo
 	Slug      string    `json:"slug"`
@@ -622,6 +622,9 @@ type BrandPage struct {
 // BrandWrite defines model for BrandWrite.
 type BrandWrite struct {
 	Name string `json:"name"`
+
+	// Slug Omitted means `slugify(name)` (BR-030).
+	Slug *string `json:"slug,omitempty"`
 }
 
 // BulkItem defines model for BulkItem.
@@ -1594,13 +1597,13 @@ type ServerInterface interface {
 	// CreateBrand Create a brand
 	// (POST /brands)
 	CreateBrand(w http.ResponseWriter, r *http.Request)
-	// ArchiveBrand Archive a brand
+	// ArchiveBrand Delete a brand
 	// (DELETE /brands/{id})
 	ArchiveBrand(w http.ResponseWriter, r *http.Request, id Id)
 	// GetBrand One brand
 	// (GET /brands/{id})
 	GetBrand(w http.ResponseWriter, r *http.Request, id Id)
-	// UpdateBrand Rename a brand
+	// UpdateBrand Rename a brand or change its slug
 	// (PATCH /brands/{id})
 	UpdateBrand(w http.ResponseWriter, r *http.Request, id Id)
 	// ListCategories Categories, flat, sorted by kind then path
@@ -1744,7 +1747,7 @@ func (_ Unimplemented) CreateBrand(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ArchiveBrand Archive a brand
+// ArchiveBrand Delete a brand
 // (DELETE /brands/{id})
 func (_ Unimplemented) ArchiveBrand(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1756,7 +1759,7 @@ func (_ Unimplemented) GetBrand(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// UpdateBrand Rename a brand
+// UpdateBrand Rename a brand or change its slug
 // (PATCH /brands/{id})
 func (_ Unimplemented) UpdateBrand(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -6534,13 +6537,13 @@ type StrictServerInterface interface {
 	// CreateBrand Create a brand
 	// (POST /brands)
 	CreateBrand(ctx context.Context, request CreateBrandRequestObject) (CreateBrandResponseObject, error)
-	// ArchiveBrand Archive a brand
+	// ArchiveBrand Delete a brand
 	// (DELETE /brands/{id})
 	ArchiveBrand(ctx context.Context, request ArchiveBrandRequestObject) (ArchiveBrandResponseObject, error)
 	// GetBrand One brand
 	// (GET /brands/{id})
 	GetBrand(ctx context.Context, request GetBrandRequestObject) (GetBrandResponseObject, error)
-	// UpdateBrand Rename a brand
+	// UpdateBrand Rename a brand or change its slug
 	// (PATCH /brands/{id})
 	UpdateBrand(ctx context.Context, request UpdateBrandRequestObject) (UpdateBrandResponseObject, error)
 	// ListCategories Categories, flat, sorted by kind then path

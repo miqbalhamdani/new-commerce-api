@@ -100,8 +100,16 @@ func TestBrands(t *testing.T) {
 	}
 	id := b["id"].(string)
 
-	t.Run("slug is server-managed", func(t *testing.T) {
-		code, p := do("POST", "/v1/brands", map[string]any{"name": "X", "slug": "x"})
+	t.Run("a client slug is kept; a bad or taken one is 422 on slug", func(t *testing.T) {
+		code, p := do("POST", "/v1/brands", map[string]any{"name": "Custom", "slug": "my-label"})
+		if code != 201 || p["slug"] != "my-label" {
+			t.Fatalf("create: %d %v", code, p)
+		}
+		code, p = do("POST", "/v1/brands", map[string]any{"name": "X", "slug": "Bad Slug"})
+		assertProblem(t, code, p, 422, "validation_failed", "slug")
+		code, p = do("POST", "/v1/brands", map[string]any{"name": "Other", "slug": "my-label"})
+		assertProblem(t, code, p, 422, "validation_failed", "slug")
+		code, p = do("POST", "/v1/brands", map[string]any{"name": "X", "slug": nil})
 		assertProblem(t, code, p, 422, "validation_failed", "slug")
 	})
 	t.Run("unknown field", func(t *testing.T) {
@@ -123,10 +131,31 @@ func TestBrands(t *testing.T) {
 		code, p = do("POST", "/v1/brands", map[string]any{"name": "old label!"})
 		assertProblem(t, code, p, 422, "validation_failed", "name")
 	})
-	t.Run("rename re-derives the slug", func(t *testing.T) {
-		code, p := do("PATCH", "/v1/brands/"+id, map[string]any{"name": "Erigo Apparel"})
+	t.Run("a rename without slug re-derives it; a sent slug is kept", func(t *testing.T) {
+		code, p := do("PATCH", "/v1/brands/"+id, map[string]any{"slug": "erigo-id"})
+		if code != 200 || p["slug"] != "erigo-id" || p["name"] != "Erigo Café" {
+			t.Fatalf("slug only: %d %v", code, p)
+		}
+		code, p = do("PATCH", "/v1/brands/"+id, map[string]any{"name": "Erigo Apparel"})
 		if code != 200 || p["slug"] != "erigo-apparel" {
 			t.Fatalf("rename: %d %v", code, p)
+		}
+	})
+	t.Run("delete takes the brand off its products and bumps their version", func(t *testing.T) {
+		code, br := do("POST", "/v1/brands", map[string]any{"name": "Gone Soon"})
+		if code != 201 {
+			t.Fatalf("create brand: %d %v", code, br)
+		}
+		code, pr := do("POST", "/v1/products", map[string]any{"title": "Tee", "brand_id": br["id"]})
+		if code != 201 {
+			t.Fatalf("create product: %d %v", code, pr)
+		}
+		if code, _ := do("DELETE", "/v1/brands/"+br["id"].(string), nil); code != 204 {
+			t.Fatalf("delete: %d", code)
+		}
+		code, pr2 := do("GET", "/v1/products/"+pr["id"].(string), nil)
+		if code != 200 || pr2["brand_id"] != nil || pr2["version"].(float64) != pr["version"].(float64)+1 {
+			t.Fatalf("product after delete: %d %v", code, pr2)
 		}
 	})
 	t.Run("list pages by name with a cursor; archived only on request", func(t *testing.T) {
@@ -150,11 +179,11 @@ func TestBrands(t *testing.T) {
 				path = "/v1/brands?limit=2&cursor=" + c
 			}
 		}
-		if want := "Alpha,Erigo Apparel,Mid,Zeta"; strings.Join(names, ",") != want {
+		if want := "Alpha,Custom,Erigo Apparel,Mid,Zeta"; strings.Join(names, ",") != want {
 			t.Errorf("names %v, want %s", names, want)
 		}
 		code, p := do("GET", "/v1/brands?archived=true", nil)
-		if code != 200 || len(p["data"].([]any)) != 1 {
+		if code != 200 || len(p["data"].([]any)) != 2 {
 			t.Errorf("archived list: %d %v", code, p)
 		}
 		code, p = do("GET", "/v1/brands?q=lph", nil)

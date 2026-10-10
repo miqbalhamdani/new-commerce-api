@@ -33,19 +33,37 @@ func (q *Queries) ArchiveBrand(ctx context.Context, id uuid.UUID) (Brand, error)
 	return i, err
 }
 
+const clearProductBrand = `-- name: ClearProductBrand :execrows
+UPDATE products SET brand_id = NULL, version = version + 1, updated_at = now()
+WHERE brand_id = $1
+`
+
+// Deleting a brand takes it off every product (BR-012). The version bump makes
+// a product form still holding the brand get 409 instead of re-setting it.
+func (q *Queries) ClearProductBrand(ctx context.Context, brandID *uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, clearProductBrand, brandID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createBrand = `-- name: CreateBrand :one
 INSERT INTO brands (id, tenant_id, name, slug)
-VALUES ($1, current_setting('app.tenant_id')::uuid, $2, slugify($2))
+VALUES ($1, current_setting('app.tenant_id')::uuid, $2,
+        coalesce($3::text, slugify($2)))
 RETURNING id, tenant_id, name, slug, archived_at, created_at, updated_at
 `
 
 type CreateBrandParams struct {
 	ID   uuid.UUID
 	Name string
+	Slug *string
 }
 
+// A NULL slug means slugify(name) (BR-030).
 func (q *Queries) CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand, error) {
-	row := q.db.QueryRow(ctx, createBrand, arg.ID, arg.Name)
+	row := q.db.QueryRow(ctx, createBrand, arg.ID, arg.Name, arg.Slug)
 	var i Brand
 	err := row.Scan(
 		&i.ID,
@@ -132,32 +150,6 @@ func (q *Queries) ListBrands(ctx context.Context, arg ListBrandsParams) ([]Brand
 	return items, nil
 }
 
-const renameBrand = `-- name: RenameBrand :one
-UPDATE brands SET name = $1, slug = slugify($1), updated_at = now()
-WHERE id = $2
-RETURNING id, tenant_id, name, slug, archived_at, created_at, updated_at
-`
-
-type RenameBrandParams struct {
-	Name string
-	ID   uuid.UUID
-}
-
-func (q *Queries) RenameBrand(ctx context.Context, arg RenameBrandParams) (Brand, error) {
-	row := q.db.QueryRow(ctx, renameBrand, arg.Name, arg.ID)
-	var i Brand
-	err := row.Scan(
-		&i.ID,
-		&i.TenantID,
-		&i.Name,
-		&i.Slug,
-		&i.ArchivedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const slugify = `-- name: Slugify :one
 
 SELECT slugify($1::text)::text
@@ -170,4 +162,33 @@ func (q *Queries) Slugify(ctx context.Context, txt string) (string, error) {
 	var column_1 string
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const updateBrand = `-- name: UpdateBrand :one
+UPDATE brands SET name = $1,
+                  slug = coalesce($2::text, slugify($1)), updated_at = now()
+WHERE id = $3
+RETURNING id, tenant_id, name, slug, archived_at, created_at, updated_at
+`
+
+type UpdateBrandParams struct {
+	Name string
+	Slug *string
+	ID   uuid.UUID
+}
+
+// A NULL slug re-derives it from the name (BR-030).
+func (q *Queries) UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand, error) {
+	row := q.db.QueryRow(ctx, updateBrand, arg.Name, arg.Slug, arg.ID)
+	var i Brand
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Name,
+		&i.Slug,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
