@@ -49,7 +49,7 @@ func newHarness(t *testing.T) *harness {
 	tenantID := uuid.Must(uuid.NewV7())
 	ctx = tenant.NewContext(ctx, tenantID)
 	ctx = tenant.NewActorContext(ctx, tenant.Actor{UserID: uuid.Must(uuid.NewV7())})
-	h := &harness{store: store, svc: orders.NewService(store), ctx: ctx, tenant: tenantID}
+	h := &harness{store: store, svc: orders.NewService(store, nil, nil), ctx: ctx, tenant: tenantID}
 
 	if err := store.InTenantTx(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO tenants (id, name, slug, order_prefix)

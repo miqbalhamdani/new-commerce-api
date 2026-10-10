@@ -1147,6 +1147,19 @@ type OrderCustomerSnapshot struct {
 	Phone *string `json:"phone"`
 }
 
+// OrderExportRequest The §5.1 order-list filters, with `status` as an array (BR-065).
+type OrderExportRequest struct {
+	CustomerId *openapi_types.UUID `json:"customer_id,omitempty"`
+
+	// PlacedFrom RFC 3339 with an offset, or a date meaning midnight WIB (BR-007).
+	PlacedFrom *string        `json:"placed_from,omitempty"`
+	PlacedTo   *string        `json:"placed_to,omitempty"`
+	Q          *string        `json:"q,omitempty"`
+	RefundOwed *bool          `json:"refund_owed,omitempty"`
+	Source     *OrderSource   `json:"source,omitempty"`
+	Status     *[]OrderStatus `json:"status,omitempty"`
+}
+
 // OrderHistoryEntry One entry of the order's audit trail (BR-073), embedded in the order so ops can read it
 // with `orders:read` alone — `GET /audit-log` keeps requiring `audit_log:read`. `from` and
 // `to` are set for `order.transition` and `null` for other actions; `actor` is `null` for
@@ -1917,6 +1930,9 @@ type UpdateMediaJSONRequestBody = MediaUpdate
 // CreateOrderJSONRequestBody defines body for CreateOrder for application/json ContentType.
 type CreateOrderJSONRequestBody = OrderCreateRequest
 
+// ExportOrdersJSONRequestBody defines body for ExportOrders for application/json ContentType.
+type ExportOrdersJSONRequestBody = OrderExportRequest
+
 // UpdateOrderJSONRequestBody defines body for UpdateOrder for application/json ContentType.
 type UpdateOrderJSONRequestBody = OrderUpdateRequest
 
@@ -2117,6 +2133,9 @@ type ServerInterface interface {
 	// CreateOrder Enter a manual (WhatsApp) order
 	// (POST /orders)
 	CreateOrder(w http.ResponseWriter, r *http.Request)
+	// ExportOrders Export orders to CSV as a background job
+	// (POST /orders/export)
+	ExportOrders(w http.ResponseWriter, r *http.Request)
 	// GetOrder One order, with its allowed transitions and audit trail
 	// (GET /orders/{id})
 	GetOrder(w http.ResponseWriter, r *http.Request, id Id)
@@ -2351,6 +2370,12 @@ func (_ Unimplemented) ListOrders(w http.ResponseWriter, r *http.Request, params
 // CreateOrder Enter a manual (WhatsApp) order
 // (POST /orders)
 func (_ Unimplemented) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ExportOrders Export orders to CSV as a background job
+// (POST /orders/export)
+func (_ Unimplemented) ExportOrders(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3365,6 +3390,20 @@ func (siw *ServerInterfaceWrapper) CreateOrder(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateOrder(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExportOrders operation middleware
+func (siw *ServerInterfaceWrapper) ExportOrders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExportOrders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4568,6 +4607,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orders/{id}/refund", wrapper.RefundOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/export", wrapper.ExportOrders)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
@@ -6267,6 +6309,76 @@ type CreateOrder422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateOrder422ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrdersRequestObject struct {
+	Body *ExportOrdersJSONRequestBody
+}
+
+type ExportOrdersResponseObject interface {
+	VisitExportOrdersResponse(w http.ResponseWriter) error
+}
+
+type ExportOrders202JSONResponse JobAccepted
+
+func (response ExportOrders202JSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders401ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders403ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExportOrders422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ExportOrders422ApplicationProblemPlusJSONResponse) VisitExportOrdersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8691,6 +8803,9 @@ type StrictServerInterface interface {
 	// CreateOrder Enter a manual (WhatsApp) order
 	// (POST /orders)
 	CreateOrder(ctx context.Context, request CreateOrderRequestObject) (CreateOrderResponseObject, error)
+	// ExportOrders Export orders to CSV as a background job
+	// (POST /orders/export)
+	ExportOrders(ctx context.Context, request ExportOrdersRequestObject) (ExportOrdersResponseObject, error)
 	// GetOrder One order, with its allowed transitions and audit trail
 	// (GET /orders/{id})
 	GetOrder(ctx context.Context, request GetOrderRequestObject) (GetOrderResponseObject, error)
@@ -9488,6 +9603,37 @@ func (sh *strictHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateOrderResponseObject); ok {
 		if err := validResponse.VisitCreateOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExportOrders operation middleware
+func (sh *strictHandler) ExportOrders(w http.ResponseWriter, r *http.Request) {
+	var request ExportOrdersRequestObject
+
+	var body ExportOrdersJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExportOrders(ctx, request.(ExportOrdersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExportOrders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExportOrdersResponseObject); ok {
+		if err := validResponse.VisitExportOrdersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

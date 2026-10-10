@@ -17,16 +17,63 @@ import (
 // status=[paid, processing] · Shipped status=[shipped] · Cancelled, refund
 // owed refund_owed=true (BR-075).
 type Filter struct {
-	Status     []string
-	Source     *string
-	CustomerID *uuid.UUID
-	RefundOwed *bool
-	PlacedFrom *time.Time
-	PlacedTo   *time.Time
-	Q          *string
-	Sort       string // "-placed_at" (default) or "placed_at"
-	After      *Cursor
-	Limit      int
+	Status     []string   `json:"status,omitempty"`
+	Source     *string    `json:"source,omitempty"`
+	CustomerID *uuid.UUID `json:"customer_id,omitempty"`
+	RefundOwed *bool      `json:"refund_owed,omitempty"`
+	PlacedFrom *time.Time `json:"placed_from,omitempty"`
+	PlacedTo   *time.Time `json:"placed_to,omitempty"`
+	Q          *string    `json:"q,omitempty"`
+	// The export job stores the fields above as its params; the three below
+	// are the list's own.
+	Sort  string  `json:"-"` // "-placed_at" (default) or "placed_at"
+	After *Cursor `json:"-"`
+	Limit int     `json:"-"`
+}
+
+// sqlArgs numbers placeholders as it collects their values.
+type sqlArgs struct{ args []any }
+
+func (a *sqlArgs) add(v any) string {
+	a.args = append(a.args, v)
+	return fmt.Sprintf("$%d", len(a.args))
+}
+
+// filterSQL renders the §5.1 filters as WHERE clauses over alias o, shared by
+// the list and the export job (BR-065).
+func filterSQL(f Filter, a *sqlArgs) []string {
+	where := []string{"true"}
+	if len(f.Status) > 0 {
+		where = append(where, "o.status = ANY("+a.add(f.Status)+")")
+	}
+	if f.Source != nil {
+		where = append(where, "o.source = "+a.add(*f.Source))
+	}
+	if f.CustomerID != nil {
+		where = append(where, "o.customer_id = "+a.add(*f.CustomerID))
+	}
+	if f.RefundOwed != nil {
+		// Exactly the partial index's predicate (BR-075).
+		owed := "(o.status = 'cancelled' AND o.paid_at IS NOT NULL AND o.refunded_at IS NULL)"
+		if !*f.RefundOwed {
+			owed = "NOT " + owed
+		}
+		where = append(where, owed)
+	}
+	if f.PlacedFrom != nil {
+		where = append(where, "o.placed_at >= "+a.add(*f.PlacedFrom))
+	}
+	if f.PlacedTo != nil {
+		where = append(where, "o.placed_at < "+a.add(*f.PlacedTo))
+	}
+	if q := likePattern(f.Q); q != nil {
+		p := a.add(*q)
+		where = append(where, "(o.order_number ILIKE '%' || "+p+" || '%'"+
+			" OR o.customer->>'name' ILIKE '%' || "+p+" || '%'"+
+			" OR o.customer->>'email' ILIKE '%' || "+p+" || '%'"+
+			" OR o.customer->>'phone' ILIKE '%' || "+p+" || '%')")
+	}
+	return where
 }
 
 // Cursor is the keyset position after a page: placed_at plus the id that
@@ -57,51 +104,17 @@ type Row struct {
 // §3.6); the saved views ride the three orders indexes, refund_owed its
 // partial one.
 func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
-	var (
-		where = []string{"true"}
-		args  []any
-	)
-	arg := func(v any) string { args = append(args, v); return fmt.Sprintf("$%d", len(args)) }
-
-	if len(f.Status) > 0 {
-		where = append(where, "o.status = ANY("+arg(f.Status)+")")
-	}
-	if f.Source != nil {
-		where = append(where, "o.source = "+arg(*f.Source))
-	}
-	if f.CustomerID != nil {
-		where = append(where, "o.customer_id = "+arg(*f.CustomerID))
-	}
-	if f.RefundOwed != nil {
-		// Exactly the partial index's predicate (BR-075).
-		owed := "(o.status = 'cancelled' AND o.paid_at IS NOT NULL AND o.refunded_at IS NULL)"
-		if !*f.RefundOwed {
-			owed = "NOT " + owed
-		}
-		where = append(where, owed)
-	}
-	if f.PlacedFrom != nil {
-		where = append(where, "o.placed_at >= "+arg(*f.PlacedFrom))
-	}
-	if f.PlacedTo != nil {
-		where = append(where, "o.placed_at < "+arg(*f.PlacedTo))
-	}
-	if q := likePattern(f.Q); q != nil {
-		p := arg(*q)
-		where = append(where, "(o.order_number ILIKE '%' || "+p+" || '%'"+
-			" OR o.customer->>'name' ILIKE '%' || "+p+" || '%'"+
-			" OR o.customer->>'email' ILIKE '%' || "+p+" || '%'"+
-			" OR o.customer->>'phone' ILIKE '%' || "+p+" || '%')")
-	}
+	a := &sqlArgs{}
+	where := filterSQL(f, a)
 
 	order := "o.placed_at DESC, o.id DESC"
 	if f.Sort == "placed_at" {
 		order = "o.placed_at, o.id"
 		if f.After != nil {
-			where = append(where, "(o.placed_at, o.id) > ("+arg(f.After.At)+", "+arg(f.After.ID)+")")
+			where = append(where, "(o.placed_at, o.id) > ("+a.add(f.After.At)+", "+a.add(f.After.ID)+")")
 		}
 	} else if f.After != nil {
-		where = append(where, "(o.placed_at, o.id) < ("+arg(f.After.At)+", "+arg(f.After.ID)+")")
+		where = append(where, "(o.placed_at, o.id) < ("+a.add(f.After.At)+", "+a.add(f.After.ID)+")")
 	}
 
 	// The page is chosen first; the line aggregate then runs for those rows
@@ -110,7 +123,7 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
 	  SELECT o.* FROM orders o
 	   WHERE ` + strings.Join(where, " AND ") + `
 	   ORDER BY ` + order + `
-	   LIMIT ` + arg(f.Limit+1) + `)
+	   LIMIT ` + a.add(f.Limit+1) + `)
 	SELECT o.id, o.order_number, o.source, o.status, o.version, o.customer,
 	       coalesce(l.n, 0), o.total_amount, o.placed_at, o.paid_at, o.refunded_at
 	FROM page o
@@ -119,7 +132,7 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
 
 	var out []Row
 	err := s.tx(ctx, func(_ *sqlcgen.Queries, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, sql, args...)
+		rows, err := tx.Query(ctx, sql, a.args...)
 		if err != nil {
 			return err
 		}

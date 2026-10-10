@@ -19,6 +19,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/images"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
@@ -63,7 +64,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	catalogSvc := catalog.NewService(pool, files, jobs.NewService(pool, redis))
+	jobsSvc := jobs.NewService(pool, redis)
+	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	ordersSvc := orders.NewService(pool, files, jobsSvc)
 
 	host, _ := os.Hostname()
 	runner := &jobs.Runner{
@@ -71,6 +74,7 @@ func run() error {
 		Queue: redis,
 		Handlers: map[string]jobs.Handler{
 			"product_import":    catalogSvc.ImportHandler(),
+			"order_export":      ordersSvc.ExportHandler(),
 			"image_derivatives": images.Handler(pool, files),
 		},
 		Consumer:      fmt.Sprintf("%s-%d", host, os.Getpid()),

@@ -9,20 +9,26 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // Service is the order use cases.
 type Service struct {
 	store *db.Store
+	files *storage.Store
+	jobs  *jobs.Service
 }
 
-func NewService(store *db.Store) *Service {
-	return &Service{store: store}
+func NewService(store *db.Store, files *storage.Store, j *jobs.Service) *Service {
+	return &Service{store: store, files: files, jobs: j}
 }
 
 // tx runs fn in the caller's tenant with a query set bound to the transaction.
@@ -43,6 +49,20 @@ func notFound(err error, what string) error {
 
 func fieldError(field, detail string) error {
 	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
+}
+
+// tenantOf and actorOf read what the middleware or the job runner put on the
+// context.
+func tenantOf(ctx context.Context) uuid.UUID {
+	id, _ := tenant.FromContext(ctx)
+	return id
+}
+
+func actorOf(ctx context.Context) *uuid.UUID {
+	if a, ok := tenant.ActorFromContext(ctx); ok {
+		return &a.UserID
+	}
+	return nil
 }
 
 // likePattern escapes LIKE metacharacters so a search for "50%" means it.

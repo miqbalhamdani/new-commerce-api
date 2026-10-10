@@ -100,7 +100,7 @@ func run() error {
 			Catalog: catalog.NewService(pool, files, jobsSvc),
 			Jobs:    jobsSvc,
 			Team:    team.NewService(pool, redis),
-			Orders:  orders.NewService(pool),
+			Orders:  orders.NewService(pool, files, jobsSvc),
 			Invites: invites,
 		}, !config.IsDevelopment()),
 		signer,

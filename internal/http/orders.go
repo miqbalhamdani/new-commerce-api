@@ -237,6 +237,79 @@ func (s *Server) ListOrders(w http.ResponseWriter, r *http.Request, params ListO
 	})(w, r)
 }
 
+type orderExportBody struct {
+	Status     optional[[]OrderStatus] `json:"status"`
+	Source     optional[OrderSource]   `json:"source"`
+	CustomerID optional[uuid.UUID]     `json:"customer_id"`
+	RefundOwed optional[bool]          `json:"refund_owed"`
+	PlacedFrom optional[string]        `json:"placed_from"`
+	PlacedTo   optional[string]        `json:"placed_to"`
+	Q          optional[string]        `json:"q"`
+}
+
+// ExportOrders is the accounting export (P1-107, §5.6): the §5.1 filters in
+// the body, answered 202 with the job to poll (BR-060, BR-065).
+func (s *Server) ExportOrders(w http.ResponseWriter, r *http.Request) {
+	requirePermission(auth.PermExportsRead, func(w http.ResponseWriter, r *http.Request) {
+		var body orderExportBody
+		if r.ContentLength != 0 {
+			if !decodeJSON(w, r, &body) {
+				return
+			}
+		}
+		if err := rejectNull(map[string]bool{"status": body.Status.Null, "source": body.Source.Null,
+			"customer_id": body.CustomerID.Null, "refund_owed": body.RefundOwed.Null,
+			"placed_from": body.PlacedFrom.Null, "placed_to": body.PlacedTo.Null, "q": body.Q.Null}); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		var f orders.Filter
+		for _, st := range body.Status.Value {
+			if !st.Valid() {
+				writeError(w, r, fieldErr("status", "status is pending, paid, processing, shipped, completed or cancelled"))
+				return
+			}
+			f.Status = append(f.Status, string(st))
+		}
+		if body.Source.Set {
+			if !body.Source.Value.Valid() {
+				writeError(w, r, fieldErr("source", "source is storefront or manual"))
+				return
+			}
+			src := string(body.Source.Value)
+			f.Source = &src
+		}
+		if body.CustomerID.Set {
+			f.CustomerID = &body.CustomerID.Value
+		}
+		if body.RefundOwed.Set {
+			f.RefundOwed = &body.RefundOwed.Value
+		}
+		if body.Q.Set {
+			f.Q = &body.Q.Value
+		}
+		var err error
+		if body.PlacedFrom.Set {
+			if f.PlacedFrom, err = timeParam("placed_from", &body.PlacedFrom.Value); err != nil {
+				writeError(w, r, err)
+				return
+			}
+		}
+		if body.PlacedTo.Set {
+			if f.PlacedTo, err = timeParam("placed_to", &body.PlacedTo.Value); err != nil {
+				writeError(w, r, err)
+				return
+			}
+		}
+		id, err := s.orders.StartExport(r.Context(), f)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, JobAccepted{JobId: id})
+	})(w, r)
+}
+
 func orderRowOut(o orders.Row) OrderListRow {
 	return OrderListRow{Id: o.ID, OrderNumber: o.OrderNumber, Source: OrderSource(o.Source),
 		Status: OrderStatus(o.Status), Version: o.Version,
