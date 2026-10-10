@@ -46,13 +46,24 @@ func run() error {
 	}
 	defer store.Close()
 
-	if _, err := store.LookupUserForAuth(ctx, email); err == nil {
-		slog.Info("already seeded; sign in with owner@example.com / development-password")
-		return nil
+	owner, err := store.LookupUserForAuth(ctx, email)
+	if err == nil {
+		slog.Info("shop already seeded; sign in with owner@example.com / development-password")
+	} else {
+		if owner, err = createShop(ctx, store); err != nil {
+			return err
+		}
+		slog.Info("seeded Demo Shop; sign in with owner@example.com / development-password")
 	}
+	return seedSamples(ctx, store, owner)
+}
+
+// createShop makes the Demo Shop and its owner, then reads the owner back the
+// way sign-in does.
+func createShop(ctx context.Context, store *db.Store) (db.AuthUser, error) {
 	hash, err := auth.HashPassword(password)
 	if err != nil {
-		return err
+		return db.AuthUser{}, err
 	}
 	tenantID, userID := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
 	err = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
@@ -65,8 +76,7 @@ func run() error {
 		return err
 	})
 	if err != nil {
-		return err
+		return db.AuthUser{}, err
 	}
-	slog.Info("seeded Demo Shop; sign in with owner@example.com / development-password")
-	return nil
+	return store.LookupUserForAuth(ctx, email)
 }
