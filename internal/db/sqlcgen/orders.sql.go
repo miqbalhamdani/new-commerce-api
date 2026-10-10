@@ -7,9 +7,109 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const createOrder = `-- name: CreateOrder :one
+INSERT INTO orders (id, tenant_id, source, order_number, customer, shipping_address, note,
+                    subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
+VALUES ($1, current_setting('app.tenant_id')::uuid, 'manual', $2,
+        $3, $4, $5,
+        $6, $7, $8, $9, now())
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+`
+
+type CreateOrderParams struct {
+	ID              uuid.UUID
+	OrderNumber     string
+	Customer        []byte
+	ShippingAddress []byte
+	Note            *string
+	Subtotal        int64
+	Shipping        int64
+	Discount        int64
+	Total           int64
+}
+
+func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
+	row := q.db.QueryRow(ctx, createOrder,
+		arg.ID,
+		arg.OrderNumber,
+		arg.Customer,
+		arg.ShippingAddress,
+		arg.Note,
+		arg.Subtotal,
+		arg.Shipping,
+		arg.Discount,
+		arg.Total,
+	)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Source,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.Status,
+		&i.Customer,
+		&i.ShippingAddress,
+		&i.Note,
+		&i.SubtotalAmount,
+		&i.ShippingAmount,
+		&i.DiscountAmount,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.PaymentMethod,
+		&i.ShippingCourier,
+		&i.ShippingService,
+		&i.Courier,
+		&i.TrackingNumber,
+		&i.PlacedAt,
+		&i.PaidAt,
+		&i.ShippedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+		&i.RefundedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createOrderLine = `-- name: CreateOrderLine :exec
+INSERT INTO order_lines (id, tenant_id, order_id, variant_id, sku_snapshot, title_snapshot,
+                         qty, unit_price, discount_amount)
+VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
+        $4, $5, $6, $7, $8)
+`
+
+type CreateOrderLineParams struct {
+	ID        uuid.UUID
+	OrderID   uuid.UUID
+	VariantID uuid.UUID
+	Sku       string
+	Title     string
+	Qty       int32
+	UnitPrice int64
+	Discount  int64
+}
+
+func (q *Queries) CreateOrderLine(ctx context.Context, arg CreateOrderLineParams) error {
+	_, err := q.db.Exec(ctx, createOrderLine,
+		arg.ID,
+		arg.OrderID,
+		arg.VariantID,
+		arg.Sku,
+		arg.Title,
+		arg.Qty,
+		arg.UnitPrice,
+		arg.Discount,
+	)
+	return err
+}
 
 const getOrder = `-- name: GetOrder :one
 SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at FROM orders WHERE id = $1
@@ -130,6 +230,22 @@ func (q *Queries) LockOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 	return i, err
 }
 
+const nextOrderNumber = `-- name: NextOrderNumber :one
+INSERT INTO order_sequences (tenant_id, last_value)
+VALUES (current_setting('app.tenant_id')::uuid, 1)
+ON CONFLICT (tenant_id) DO UPDATE SET last_value = order_sequences.last_value + 1
+RETURNING last_value
+`
+
+// BR-077. The upsert takes the counter row's lock itself, so no seed row per
+// tenant is needed; gaps from a rolled-back insert are fine, reuse is not.
+func (q *Queries) NextOrderNumber(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, nextOrderNumber)
+	var last_value int64
+	err := row.Scan(&last_value)
+	return last_value, err
+}
+
 const recordRefund = `-- name: RecordRefund :one
 UPDATE orders SET refunded_at = now(), version = version + 1, updated_at = now()
 WHERE id = $1
@@ -173,6 +289,17 @@ func (q *Queries) RecordRefund(ctx context.Context, id uuid.UUID) (Order, error)
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const tenantOrderPrefix = `-- name: TenantOrderPrefix :one
+SELECT order_prefix FROM tenants WHERE id = current_setting('app.tenant_id')::uuid
+`
+
+func (q *Queries) TenantOrderPrefix(ctx context.Context) (string, error) {
+	row := q.db.QueryRow(ctx, tenantOrderPrefix)
+	var order_prefix string
+	err := row.Scan(&order_prefix)
+	return order_prefix, err
 }
 
 const transitionOrder = `-- name: TransitionOrder :one
@@ -302,6 +429,37 @@ func (q *Queries) UpdatePendingOrder(ctx context.Context, arg UpdatePendingOrder
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const variantForOrder = `-- name: VariantForOrder :one
+SELECT v.id, v.sku, v.option_values, v.archived_at, variant_price(v)::bigint AS price, p.title
+FROM variants v JOIN products p ON p.id = v.product_id
+WHERE v.id = $1
+`
+
+type VariantForOrderRow struct {
+	ID           uuid.UUID
+	Sku          *string
+	OptionValues []string
+	ArchivedAt   *time.Time
+	Price        int64
+	Title        string
+}
+
+// BR-046, BR-078: what a manual order snapshots from the catalog. price is
+// variant_price(), the one function that decides what a variant costs now.
+func (q *Queries) VariantForOrder(ctx context.Context, id uuid.UUID) (VariantForOrderRow, error) {
+	row := q.db.QueryRow(ctx, variantForOrder, id)
+	var i VariantForOrderRow
+	err := row.Scan(
+		&i.ID,
+		&i.Sku,
+		&i.OptionValues,
+		&i.ArchivedAt,
+		&i.Price,
+		&i.Title,
 	)
 	return i, err
 }

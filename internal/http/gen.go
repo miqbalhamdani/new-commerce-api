@@ -285,6 +285,21 @@ func (e OrderPaymentMethod) Valid() bool {
 	}
 }
 
+// Defines values for OrderCreateRequestSource.
+const (
+	OrderCreateRequestSourceManual OrderCreateRequestSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the OrderCreateRequestSource enum.
+func (e OrderCreateRequestSource) Valid() bool {
+	switch e {
+	case OrderCreateRequestSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderPaymentStatus.
 const (
 	OrderPaymentStatusAmountMismatch OrderPaymentStatus = "amount_mismatch"
@@ -311,16 +326,16 @@ func (e OrderPaymentStatus) Valid() bool {
 
 // Defines values for OrderSource.
 const (
-	Manual     OrderSource = "manual"
-	Storefront OrderSource = "storefront"
+	OrderSourceManual     OrderSource = "manual"
+	OrderSourceStorefront OrderSource = "storefront"
 )
 
 // Valid indicates whether the value is a known member of the OrderSource enum.
 func (e OrderSource) Valid() bool {
 	switch e {
-	case Manual:
+	case OrderSourceManual:
 		return true
-	case Storefront:
+	case OrderSourceStorefront:
 		return true
 	default:
 		return false
@@ -1071,6 +1086,30 @@ type OrderCancelRequest struct {
 	// Reason Recorded in the audit row only; there is no column (BR-073).
 	Reason *string `json:"reason,omitempty"`
 }
+
+// OrderCreateRequest defines model for OrderCreateRequest.
+type OrderCreateRequest struct {
+	Customer struct {
+		Email *string `json:"email,omitempty"`
+		Name  string  `json:"name"`
+		Phone *string `json:"phone,omitempty"`
+	} `json:"customer"`
+	Lines []struct {
+		// Discount Per-line discount in minor units (BR-078).
+		Discount  *Money             `json:"discount,omitempty"`
+		Qty       int                `json:"qty"`
+		VariantId openapi_types.UUID `json:"variant_id"`
+	} `json:"lines"`
+	Note *string `json:"note,omitempty"`
+
+	// Shipping A typed shipping amount; `shipping_option` arrives with `P1-218` (BR-121).
+	Shipping        *Money                   `json:"shipping,omitempty"`
+	ShippingAddress ShippingAddressWrite     `json:"shipping_address"`
+	Source          OrderCreateRequestSource `json:"source"`
+}
+
+// OrderCreateRequestSource defines model for OrderCreateRequest.Source.
+type OrderCreateRequestSource string
 
 // OrderCustomerSnapshot The customer as they were when the order was placed (BR-076), not a live reference.
 type OrderCustomerSnapshot struct {
@@ -1834,6 +1873,9 @@ type PresignMediaJSONRequestBody = PresignRequest
 // UpdateMediaJSONRequestBody defines body for UpdateMedia for application/json ContentType.
 type UpdateMediaJSONRequestBody = MediaUpdate
 
+// CreateOrderJSONRequestBody defines body for CreateOrder for application/json ContentType.
+type CreateOrderJSONRequestBody = OrderCreateRequest
+
 // UpdateOrderJSONRequestBody defines body for UpdateOrder for application/json ContentType.
 type UpdateOrderJSONRequestBody = OrderUpdateRequest
 
@@ -2025,6 +2067,9 @@ type ServerInterface interface {
 	// ListOrders Orders, filtered and cursor-paginated
 	// (GET /orders)
 	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
+	// CreateOrder Enter a manual (WhatsApp) order
+	// (POST /orders)
+	CreateOrder(w http.ResponseWriter, r *http.Request)
 	// GetOrder One order, with its allowed transitions and audit trail
 	// (GET /orders/{id})
 	GetOrder(w http.ResponseWriter, r *http.Request, id Id)
@@ -2241,6 +2286,12 @@ func (_ Unimplemented) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id
 // ListOrders Orders, filtered and cursor-paginated
 // (GET /orders)
 func (_ Unimplemented) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateOrder Enter a manual (WhatsApp) order
+// (POST /orders)
+func (_ Unimplemented) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3156,6 +3207,20 @@ func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListOrders(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOrder operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrder(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrder(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4332,6 +4397,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders", wrapper.CreateOrder)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders/{id}", wrapper.GetOrder)
@@ -5839,6 +5907,76 @@ type ListOrders422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListOrders422ApplicationProblemPlusJSONResponse) VisitListOrdersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrderRequestObject struct {
+	Body *CreateOrderJSONRequestBody
+}
+
+type CreateOrderResponseObject interface {
+	VisitCreateOrderResponse(w http.ResponseWriter) error
+}
+
+type CreateOrder201JSONResponse Order
+
+func (response CreateOrder201JSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder401ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder403ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateOrder422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreateOrder422ApplicationProblemPlusJSONResponse) VisitCreateOrderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8254,6 +8392,9 @@ type StrictServerInterface interface {
 	// ListOrders Orders, filtered and cursor-paginated
 	// (GET /orders)
 	ListOrders(ctx context.Context, request ListOrdersRequestObject) (ListOrdersResponseObject, error)
+	// CreateOrder Enter a manual (WhatsApp) order
+	// (POST /orders)
+	CreateOrder(ctx context.Context, request CreateOrderRequestObject) (CreateOrderResponseObject, error)
 	// GetOrder One order, with its allowed transitions and audit trail
 	// (GET /orders/{id})
 	GetOrder(ctx context.Context, request GetOrderRequestObject) (GetOrderResponseObject, error)
@@ -8968,6 +9109,37 @@ func (sh *strictHandler) ListOrders(w http.ResponseWriter, r *http.Request, para
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListOrdersResponseObject); ok {
 		if err := validResponse.VisitListOrdersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateOrder operation middleware
+func (sh *strictHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	var request CreateOrderRequestObject
+
+	var body CreateOrderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOrder(ctx, request.(CreateOrderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOrder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOrderResponseObject); ok {
+		if err := validResponse.VisitCreateOrderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

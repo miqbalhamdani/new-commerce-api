@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -13,6 +16,116 @@ import (
 func (s *Server) GetOrder(w http.ResponseWriter, r *http.Request, id Id) {
 	requirePermission(auth.PermOrdersRead, func(w http.ResponseWriter, r *http.Request) {
 		s.writeOrderDetail(w, r, id)
+	})(w, r)
+}
+
+type orderCustomerBody struct {
+	Name  optional[string] `json:"name"`
+	Email optional[string] `json:"email"`
+	Phone optional[string] `json:"phone"`
+}
+
+type orderLineBody struct {
+	VariantID optional[uuid.UUID] `json:"variant_id"`
+	Qty       optional[int]       `json:"qty"`
+	Discount  optional[int64]     `json:"discount"`
+}
+
+type orderCreateBody struct {
+	Source          optional[string]               `json:"source"`
+	Customer        optional[orderCustomerBody]    `json:"customer"`
+	ShippingAddress optional[ShippingAddressWrite] `json:"shipping_address"`
+	Lines           optional[[]orderLineBody]      `json:"lines"`
+	Shipping        optional[int64]                `json:"shipping"`
+	Note            optional[string]               `json:"note"`
+}
+
+// CreateOrder is manual entry (P1-105, §5.4): prices come from the catalog, a
+// unit_price anywhere in the body is an unknown field, and the customer and
+// address are snapshotted verbatim (BR-046, BR-076, BR-078).
+func (s *Server) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	requirePermission(auth.PermOrdersWrite, func(w http.ResponseWriter, r *http.Request) {
+		var body orderCreateBody
+		// shipping_option arrives with P1-218; until then it is refused like
+		// status: a known concept this endpoint does not accept yet.
+		if !decodeJSON(w, r, &body, "status", "shipping_option") {
+			return
+		}
+		if err := rejectNull(map[string]bool{"source": body.Source.Null, "customer": body.Customer.Null,
+			"shipping_address": body.ShippingAddress.Null, "lines": body.Lines.Null,
+			"shipping": body.Shipping.Null, "note": body.Note.Null}); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if body.Source.Value != "manual" {
+			writeError(w, r, fieldErr("source", "source must be manual; storefront orders come from checkout"))
+			return
+		}
+		if !body.Customer.Set || body.Customer.Value.Name.Value == "" {
+			writeError(w, r, fieldErr("customer.name", "The customer needs at least a name."))
+			return
+		}
+		if !body.ShippingAddress.Set {
+			writeError(w, r, fieldErr("shipping_address", "A shipping address is required."))
+			return
+		}
+		if len(body.Lines.Value) == 0 {
+			writeError(w, r, fieldErr("lines", "An order needs at least one line."))
+			return
+		}
+		if body.Shipping.Value < 0 {
+			writeError(w, r, fieldErr("shipping", "shipping cannot be negative."))
+			return
+		}
+
+		in := orders.CreateInput{Shipping: body.Shipping.Value}
+		cust := map[string]any{"name": body.Customer.Value.Name.Value, "email": nil, "phone": nil}
+		if c := body.Customer.Value; c.Email.Set && !c.Email.Null {
+			cust["email"] = c.Email.Value
+		}
+		if c := body.Customer.Value; c.Phone.Set && !c.Phone.Null {
+			cust["phone"] = c.Phone.Value
+		}
+		var err error
+		if in.Customer, err = json.Marshal(cust); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if in.ShippingAddress, err = json.Marshal(body.ShippingAddress.Value); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if body.Note.Set && body.Note.Value != "" {
+			in.Note = &body.Note.Value
+		}
+		for i, l := range body.Lines.Value {
+			if l.VariantID.Value == uuid.Nil {
+				writeError(w, r, fieldErr(fmt.Sprintf("lines.%d.variant_id", i), "variant_id is required."))
+				return
+			}
+			if l.Qty.Value < 1 {
+				writeError(w, r, fieldErr(fmt.Sprintf("lines.%d.qty", i), "qty is at least 1."))
+				return
+			}
+			if l.Discount.Value < 0 {
+				writeError(w, r, fieldErr(fmt.Sprintf("lines.%d.discount", i), "discount cannot be negative."))
+				return
+			}
+			in.Lines = append(in.Lines, orders.CreateLine{VariantID: l.VariantID.Value,
+				Qty: l.Qty.Value, Discount: l.Discount.Value})
+		}
+
+		id, err := s.orders.Create(r.Context(), in)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		d, err := s.orders.Get(r.Context(), id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, orderOut(d))
 	})(w, r)
 }
 

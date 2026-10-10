@@ -74,7 +74,13 @@ func (o *optional[T]) UnmarshalJSON(b []byte) error {
 		o.Null = true
 		return nil
 	}
-	return json.Unmarshal(b, &o.Value)
+	// A fresh decoder would silently drop strictness: DisallowUnknownFields
+	// does not survive into a custom UnmarshalJSON, so without this an
+	// unknown field nested under an optional (a unit_price inside an order
+	// line, BR-089) would be accepted.
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	return dec.Decode(&o.Value)
 }
 
 // rejectNull is BR-009 for fields that may not be null: on create any field,
