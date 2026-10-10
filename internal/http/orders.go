@@ -1,13 +1,68 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 )
 
-// Orders: 04-api-spec.md §5.1 (P1-103).
+// Orders: 04-api-spec.md §5.1 (P1-103) and §5.2 (P1-104).
+
+func (s *Server) GetOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	requirePermission(auth.PermOrdersRead, func(w http.ResponseWriter, r *http.Request) {
+		s.writeOrderDetail(w, r, id)
+	})(w, r)
+}
+
+type orderUpdateBody struct {
+	ShippingAddress optional[ShippingAddressWrite] `json:"shipping_address"`
+	Note            optional[string]               `json:"note"`
+	Shipping        optional[int64]                `json:"shipping"`
+}
+
+// UpdateOrder is the §5.2 PATCH: address, note and shipping, only while the
+// order is pending, at the version in If-Match (BR-010, BR-079).
+func (s *Server) UpdateOrder(w http.ResponseWriter, r *http.Request, id Id, params UpdateOrderParams) {
+	requirePermission(auth.PermOrdersWrite, func(w http.ResponseWriter, r *http.Request) {
+		var body orderUpdateBody
+		// status changes only through the transition routes (BR-071), so it is
+		// refused like a server-managed field here.
+		if !decodeJSON(w, r, &body, "status") {
+			return
+		}
+		if err := rejectNull(map[string]bool{"shipping_address": body.ShippingAddress.Null,
+			"shipping": body.Shipping.Null}); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		var in orders.UpdateInput
+		if body.ShippingAddress.Set {
+			raw, err := json.Marshal(body.ShippingAddress.Value)
+			if err != nil {
+				writeError(w, r, err)
+				return
+			}
+			in.ShippingAddress = raw
+		}
+		if body.Note.Set {
+			if body.Note.Null {
+				in.ClearNote = true
+			} else {
+				in.Note = &body.Note.Value
+			}
+		}
+		if body.Shipping.Set {
+			in.Shipping = &body.Shipping.Value
+		}
+		if _, err := s.orders.UpdatePending(r.Context(), id, params.IfMatch, in); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		s.writeOrderDetail(w, r, id)
+	})(w, r)
+}
 
 func (s *Server) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
 	requirePermission(auth.PermOrdersRead, func(w http.ResponseWriter, r *http.Request) {

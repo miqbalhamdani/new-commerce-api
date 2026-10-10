@@ -36,3 +36,17 @@ RETURNING *;
 
 -- name: GetOrderLines :many
 SELECT * FROM order_lines WHERE order_id = $1 ORDER BY id;
+
+-- BR-079. Only the service calls it, under the lock, after the pending and
+-- version checks; the total is recomputed from the new shipping amount in the
+-- same statement.
+-- name: UpdatePendingOrder :one
+UPDATE orders SET
+    shipping_address = coalesce(sqlc.narg(shipping_address), shipping_address),
+    note             = CASE WHEN sqlc.arg(set_note)::bool THEN sqlc.narg(note) ELSE note END,
+    shipping_amount  = coalesce(sqlc.narg(shipping), shipping_amount),
+    total_amount     = subtotal_amount + coalesce(sqlc.narg(shipping), shipping_amount) - discount_amount,
+    version          = version + 1,
+    updated_at       = now()
+WHERE id = sqlc.arg(id)
+RETURNING *;

@@ -240,3 +240,68 @@ func (q *Queries) TransitionOrder(ctx context.Context, arg TransitionOrderParams
 	)
 	return i, err
 }
+
+const updatePendingOrder = `-- name: UpdatePendingOrder :one
+UPDATE orders SET
+    shipping_address = coalesce($1, shipping_address),
+    note             = CASE WHEN $2::bool THEN $3 ELSE note END,
+    shipping_amount  = coalesce($4, shipping_amount),
+    total_amount     = subtotal_amount + coalesce($4, shipping_amount) - discount_amount,
+    version          = version + 1,
+    updated_at       = now()
+WHERE id = $5
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+`
+
+type UpdatePendingOrderParams struct {
+	ShippingAddress []byte
+	SetNote         bool
+	Note            *string
+	Shipping        *int64
+	ID              uuid.UUID
+}
+
+// BR-079. Only the service calls it, under the lock, after the pending and
+// version checks; the total is recomputed from the new shipping amount in the
+// same statement.
+func (q *Queries) UpdatePendingOrder(ctx context.Context, arg UpdatePendingOrderParams) (Order, error) {
+	row := q.db.QueryRow(ctx, updatePendingOrder,
+		arg.ShippingAddress,
+		arg.SetNote,
+		arg.Note,
+		arg.Shipping,
+		arg.ID,
+	)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Source,
+		&i.CustomerID,
+		&i.OrderNumber,
+		&i.Status,
+		&i.Customer,
+		&i.ShippingAddress,
+		&i.Note,
+		&i.SubtotalAmount,
+		&i.ShippingAmount,
+		&i.DiscountAmount,
+		&i.TotalAmount,
+		&i.Currency,
+		&i.PaymentMethod,
+		&i.ShippingCourier,
+		&i.ShippingService,
+		&i.Courier,
+		&i.TrackingNumber,
+		&i.PlacedAt,
+		&i.PaidAt,
+		&i.ShippedAt,
+		&i.CompletedAt,
+		&i.CancelledAt,
+		&i.RefundedAt,
+		&i.Version,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
