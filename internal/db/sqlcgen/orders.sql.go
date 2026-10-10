@@ -51,6 +51,40 @@ func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 	return i, err
 }
 
+const getOrderLines = `-- name: GetOrderLines :many
+SELECT id, tenant_id, order_id, variant_id, sku_snapshot, title_snapshot, qty, unit_price, discount_amount FROM order_lines WHERE order_id = $1 ORDER BY id
+`
+
+func (q *Queries) GetOrderLines(ctx context.Context, orderID uuid.UUID) ([]OrderLine, error) {
+	rows, err := q.db.Query(ctx, getOrderLines, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderLine
+	for rows.Next() {
+		var i OrderLine
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.OrderID,
+			&i.VariantID,
+			&i.SkuSnapshot,
+			&i.TitleSnapshot,
+			&i.Qty,
+			&i.UnitPrice,
+			&i.DiscountAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockOrder = `-- name: LockOrder :one
 
 SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at FROM orders WHERE id = $1 FOR UPDATE

@@ -17,6 +17,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
@@ -99,6 +100,7 @@ func run() error {
 			Catalog: catalog.NewService(pool, files, jobsSvc),
 			Jobs:    jobsSvc,
 			Team:    team.NewService(pool, redis),
+			Orders:  orders.NewService(pool),
 			Invites: invites,
 		}, !config.IsDevelopment()),
 		signer,

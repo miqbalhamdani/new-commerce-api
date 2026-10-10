@@ -33,3 +33,6 @@ RETURNING *;
 UPDATE orders SET refunded_at = now(), version = version + 1, updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+-- name: GetOrderLines :many
+SELECT * FROM order_lines WHERE order_id = $1 ORDER BY id;

@@ -23,3 +23,12 @@ WHERE (sqlc.narg(subject_type)::text IS NULL OR a.subject_type = sqlc.narg(subje
        OR (a.created_at, a.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::bigint))
 ORDER BY a.created_at DESC, a.id DESC
 LIMIT sqlc.arg(lim);
+
+-- name: OrderAuditTrail :many
+-- The order detail embeds its own trail (04-api-spec.md §5.2): readable with
+-- orders:read alone, so ops see it without audit_log:read.
+SELECT a.action, a.actor_id, u.name AS actor_name, a.before, a.after, a.created_at
+FROM audit_log a
+LEFT JOIN users u ON u.id = a.actor_id
+WHERE a.subject_type = 'order' AND a.subject_id = $1
+ORDER BY a.created_at DESC, a.id DESC;

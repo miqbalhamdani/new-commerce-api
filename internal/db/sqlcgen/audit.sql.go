@@ -127,3 +127,49 @@ func (q *Queries) ListAudit(ctx context.Context, arg ListAuditParams) ([]ListAud
 	}
 	return items, nil
 }
+
+const orderAuditTrail = `-- name: OrderAuditTrail :many
+SELECT a.action, a.actor_id, u.name AS actor_name, a.before, a.after, a.created_at
+FROM audit_log a
+LEFT JOIN users u ON u.id = a.actor_id
+WHERE a.subject_type = 'order' AND a.subject_id = $1
+ORDER BY a.created_at DESC, a.id DESC
+`
+
+type OrderAuditTrailRow struct {
+	Action    string
+	ActorID   *uuid.UUID
+	ActorName *string
+	Before    []byte
+	After     []byte
+	CreatedAt time.Time
+}
+
+// The order detail embeds its own trail (04-api-spec.md §5.2): readable with
+// orders:read alone, so ops see it without audit_log:read.
+func (q *Queries) OrderAuditTrail(ctx context.Context, subjectID string) ([]OrderAuditTrailRow, error) {
+	rows, err := q.db.Query(ctx, orderAuditTrail, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrderAuditTrailRow
+	for rows.Next() {
+		var i OrderAuditTrailRow
+		if err := rows.Scan(
+			&i.Action,
+			&i.ActorID,
+			&i.ActorName,
+			&i.Before,
+			&i.After,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
