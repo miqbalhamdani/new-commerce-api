@@ -121,13 +121,12 @@ func UnknownField(name string) *Error {
 		WithFields(Field{Name: name, Detail: "not a field of this request"})
 }
 
-// CategoryInUse is the 409 for archiving a category that still has live
-// children or products in its subtree, with both counts (BR-036).
-func CategoryInUse(children, products int32) *Error {
+// CategoryInUse is the 409 for deleting a category that still has live
+// children, with the count (BR-036).
+func CategoryInUse(children int32) *Error {
 	return (&Error{Code: CodeCategoryInUse, Status: http.StatusConflict,
-		Title: "Category in use", Detail: "Move or archive its subcategories and products first."}).
-		WithFields(Field{Name: "children", Extra: map[string]any{"count": children}},
-			Field{Name: "products", Extra: map[string]any{"count": products}})
+		Title: "Category in use", Detail: "Move or delete its subcategories first."}).
+		WithFields(Field{Name: "children", Extra: map[string]any{"count": children}})
 }
 
 // DuplicateSKU is the 409 for a SKU another variant of this tenant holds,

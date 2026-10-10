@@ -56,6 +56,7 @@ type Category struct {
 	ArchivedAt *time.Time
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	Label      *string
 }
 
 type Job struct {

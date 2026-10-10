@@ -690,11 +690,15 @@ type Category struct {
 	Id         openapi_types.UUID `json:"id"`
 
 	// Kind Independent trees; a product may sit in several (BR-031).
-	Kind     CategoryKind        `json:"kind"`
+	Kind CategoryKind `json:"kind"`
+
+	// Label This category's own path segment when the client set one; `null` while it is
+	// derived from the name (BR-032).
+	Label    *string             `json:"label"`
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parent_id"`
 
-	// Path Derived by the database from names and parents; read-only (BR-032).
+	// Path Derived by the database from labels and parents; read-only (BR-032).
 	//
 	// Examples: apparel.outerwear.jackets
 	Path      string    `json:"path"`
@@ -711,7 +715,10 @@ type CategoryBrief struct {
 // CategoryCreate defines model for CategoryCreate.
 type CategoryCreate struct {
 	// Kind Independent trees; a product may sit in several (BR-031).
-	Kind     *CategoryKind       `json:"kind,omitempty"`
+	Kind *CategoryKind `json:"kind,omitempty"`
+
+	// Label This category's own path segment; defaults to the slugified name (BR-032).
+	Label    *string             `json:"label,omitempty"`
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
 }
@@ -724,11 +731,15 @@ type CategoryDetail struct {
 	Id              openapi_types.UUID `json:"id"`
 
 	// Kind Independent trees; a product may sit in several (BR-031).
-	Kind     CategoryKind        `json:"kind"`
+	Kind CategoryKind `json:"kind"`
+
+	// Label This category's own path segment when the client set one; `null` while it is
+	// derived from the name (BR-032).
+	Label    *string             `json:"label"`
 	Name     string              `json:"name"`
 	ParentId *openapi_types.UUID `json:"parent_id"`
 
-	// Path Derived by the database from names and parents; read-only (BR-032).
+	// Path Derived by the database from labels and parents; read-only (BR-032).
 	//
 	// Examples: apparel.outerwear.jackets
 	Path         string    `json:"path"`
@@ -756,6 +767,8 @@ type CategoryRef struct {
 
 // CategoryUpdate defines model for CategoryUpdate.
 type CategoryUpdate struct {
+	// Label `null` goes back to the label derived from the name (BR-032).
+	Label    *string             `json:"label,omitempty"`
 	Name     *string             `json:"name,omitempty"`
 	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
 }
@@ -1612,13 +1625,13 @@ type ServerInterface interface {
 	// CreateCategory Create a category
 	// (POST /categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
-	// ArchiveCategory Archive a category
+	// ArchiveCategory Delete a category
 	// (DELETE /categories/{id})
 	ArchiveCategory(w http.ResponseWriter, r *http.Request, id Id)
 	// GetCategory One category, with the counts the move dialog needs
 	// (GET /categories/{id})
 	GetCategory(w http.ResponseWriter, r *http.Request, id Id)
-	// UpdateCategory Rename or move a category
+	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
 	// GetJob A background job's progress and result
@@ -1777,7 +1790,7 @@ func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ArchiveCategory Archive a category
+// ArchiveCategory Delete a category
 // (DELETE /categories/{id})
 func (_ Unimplemented) ArchiveCategory(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1789,7 +1802,7 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id Id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// UpdateCategory Rename or move a category
+// UpdateCategory Rename, relabel or move a category
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -6552,13 +6565,13 @@ type StrictServerInterface interface {
 	// CreateCategory Create a category
 	// (POST /categories)
 	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
-	// ArchiveCategory Archive a category
+	// ArchiveCategory Delete a category
 	// (DELETE /categories/{id})
 	ArchiveCategory(ctx context.Context, request ArchiveCategoryRequestObject) (ArchiveCategoryResponseObject, error)
 	// GetCategory One category, with the counts the move dialog needs
 	// (GET /categories/{id})
 	GetCategory(ctx context.Context, request GetCategoryRequestObject) (GetCategoryResponseObject, error)
-	// UpdateCategory Rename or move a category
+	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
 	// GetJob A background job's progress and result

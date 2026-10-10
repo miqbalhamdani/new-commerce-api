@@ -41,6 +41,7 @@ func TestCatalogSchema(t *testing.T) {
 			{"archived_at", "timestamp with time zone", true},
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
+			{"label", "text", true},
 		}},
 		{"products", []column{
 			{"id", "uuid", false},
