@@ -904,6 +904,35 @@ type ConfirmMedia struct {
 	VariantId *openapi_types.UUID `json:"variant_id,omitempty"`
 }
 
+// Customer Never a password hash, session or token (BR-092).
+type Customer struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Email      string             `json:"email"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	OrderCount int                `json:"order_count"`
+	Phone      *string            `json:"phone"`
+}
+
+// CustomerDetail defines model for CustomerDetail.
+type CustomerDetail struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Email      string             `json:"email"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+	OrderCount int                `json:"order_count"`
+
+	// Orders The customer's orders, newest first, up to 50.
+	Orders []OrderListRow `json:"orders"`
+	Phone  *string        `json:"phone"`
+}
+
+// CustomerPage defines model for CustomerPage.
+type CustomerPage struct {
+	Data       []Customer `json:"data"`
+	NextCursor *string    `json:"next_cursor"`
+}
+
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
 // The code also appears as the last segment of a `Problem.type` URI, and directly in
 // per-row results where an operation partially succeeds (§7.3, §7.5).
@@ -1741,6 +1770,18 @@ type ListCategoriesParams struct {
 	Depth    *int                `form:"depth,omitempty" json:"depth,omitempty"`
 }
 
+// ListCustomersParams defines parameters for ListCustomers.
+type ListCustomersParams struct {
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+	// table is a sequential scan, so the parameter does not exist.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListOrdersParams defines parameters for ListOrders.
 type ListOrdersParams struct {
 	Status     *[]OrderStatus        `form:"status,omitempty" json:"status,omitempty"`
@@ -2049,6 +2090,12 @@ type ServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// ListCustomers Customers, searched and cursor-paginated
+	// (GET /customers)
+	ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams)
+	// GetCustomer One customer and their latest orders
+	// (GET /customers/{id})
+	GetCustomer(w http.ResponseWriter, r *http.Request, id Id)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(w http.ResponseWriter, r *http.Request, id Id)
@@ -2250,6 +2297,18 @@ func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, id Id
 // UpdateCategory Rename, relabel or move a category
 // (PATCH /categories/{id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCustomers Customers, searched and cursor-paginated
+// (GET /customers)
+func (_ Unimplemented) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCustomer One customer and their latest orders
+// (GET /customers/{id})
+func (_ Unimplemented) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2951,6 +3010,91 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCustomers operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCustomersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCustomer operation middleware
+func (siw *ServerInterfaceWrapper) GetCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCustomer(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4425,6 +4569,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orders/{id}/refund", wrapper.RefundOrder)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/customers/{id}", wrapper.GetCustomer)
+	})
 
 	return r
 }
@@ -5483,6 +5633,146 @@ func (response UpdateCategory422ApplicationProblemPlusJSONResponse) VisitUpdateC
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomersRequestObject struct {
+	Params ListCustomersParams
+}
+
+type ListCustomersResponseObject interface {
+	VisitListCustomersResponse(w http.ResponseWriter) error
+}
+
+type ListCustomers200JSONResponse CustomerPage
+
+func (response ListCustomers200JSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers401ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers403ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomers422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListCustomers422ApplicationProblemPlusJSONResponse) VisitListCustomersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomerRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetCustomerResponseObject interface {
+	VisitGetCustomerResponse(w http.ResponseWriter) error
+}
+
+type GetCustomer200JSONResponse CustomerDetail
+
+func (response GetCustomer200JSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer401ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer403ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCustomer404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCustomer404ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8374,6 +8664,12 @@ type StrictServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
+	// ListCustomers Customers, searched and cursor-paginated
+	// (GET /customers)
+	ListCustomers(ctx context.Context, request ListCustomersRequestObject) (ListCustomersResponseObject, error)
+	// GetCustomer One customer and their latest orders
+	// (GET /customers/{id})
+	GetCustomer(ctx context.Context, request GetCustomerRequestObject) (GetCustomerResponseObject, error)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
@@ -8936,6 +9232,58 @@ func (sh *strictHandler) UpdateCategory(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCategoryResponseObject); ok {
 		if err := validResponse.VisitUpdateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomers operation middleware
+func (sh *strictHandler) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
+	var request ListCustomersRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomers(ctx, request.(ListCustomersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomersResponseObject); ok {
+		if err := validResponse.VisitListCustomersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCustomer operation middleware
+func (sh *strictHandler) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	var request GetCustomerRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCustomer(ctx, request.(GetCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCustomerResponseObject); ok {
+		if err := validResponse.VisitGetCustomerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
