@@ -48,7 +48,7 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 		"city": body.ShippingAddress.City, "province": body.ShippingAddress.Province,
 		"postal_code": body.ShippingAddress.PostalCode})
 
-	o, lines, created, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
+	res, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
 		CartID: cartID, CustomerID: customerID, Customer: customer, ShippingAddress: address,
 		PaymentMethod: string(body.PaymentMethod), Note: body.Note,
 		Shipping:    orders.ShippingChoice{Courier: body.ShippingOption.CourierCode, Service: body.ShippingOption.CourierServiceCode},
@@ -59,10 +59,18 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 		return
 	}
 	status := http.StatusOK // a replay: the order this cart already made (BR-088)
-	if created {
+	if res.Created {
 		status = http.StatusCreated
 	}
-	httpkit.WriteJSON(w, status, s.checkoutOut(o, lines))
+	out := s.checkoutOut(res.Order, res.Lines)
+	if res.Payment != nil {
+		out.Payment = &Payment{SnapToken: res.Payment.Token, RedirectUrl: res.Payment.RedirectURL, ExpiresAt: res.Payment.ExpiresAt}
+	}
+	if res.PaymentError {
+		e := CheckoutOrderPaymentErrorPaymentUnavailable
+		out.PaymentError = &e
+	}
+	httpkit.WriteJSON(w, status, out)
 }
 
 func validCheckout(b CheckoutRequest) error {

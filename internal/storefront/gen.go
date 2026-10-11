@@ -42,6 +42,21 @@ func (e CategoryKind) Valid() bool {
 	}
 }
 
+// Defines values for CheckoutOrderPaymentError.
+const (
+	CheckoutOrderPaymentErrorPaymentUnavailable CheckoutOrderPaymentError = "payment_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the CheckoutOrderPaymentError enum.
+func (e CheckoutOrderPaymentError) Valid() bool {
+	switch e {
+	case CheckoutOrderPaymentErrorPaymentUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CheckoutOrderPaymentMethod.
 const (
 	CheckoutOrderPaymentMethodBankTransfer CheckoutOrderPaymentMethod = "bank_transfer"
@@ -342,8 +357,12 @@ type CheckoutOrder struct {
 	// order (BR-091).
 	OrderToken *string `json:"order_token"`
 
-	// Payment The Midtrans link to pay; `null` for bank transfer.
-	Payment       *Payment                   `json:"payment"`
+	// Payment The Midtrans link to pay; `null` for bank transfer, or when there is no live link.
+	Payment *Payment `json:"payment"`
+
+	// PaymentError `payment_unavailable` when a Midtrans order has no live payment link, because Midtrans
+	// did not answer or the link has expired; `null` otherwise.
+	PaymentError  *CheckoutOrderPaymentError `json:"payment_error"`
 	PaymentMethod CheckoutOrderPaymentMethod `json:"payment_method"`
 	PlacedAt      time.Time                  `json:"placed_at"`
 
@@ -367,6 +386,9 @@ type CheckoutOrder struct {
 	// Examples: 19900000
 	Total Money `json:"total"`
 }
+
+// CheckoutOrderPaymentError defines model for CheckoutOrder.PaymentError.
+type CheckoutOrderPaymentError string
 
 // CheckoutOrderPaymentMethod defines model for CheckoutOrder.PaymentMethod.
 type CheckoutOrderPaymentMethod string

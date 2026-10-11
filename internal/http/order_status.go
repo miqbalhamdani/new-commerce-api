@@ -122,6 +122,11 @@ func orderOut(d orders.Detail) Order {
 		PlacedAt: o.PlacedAt, PaidAt: o.PaidAt, ShippedAt: o.ShippedAt,
 		CompletedAt: o.CompletedAt, CancelledAt: o.CancelledAt, RefundedAt: o.RefundedAt,
 	}
+	for _, p := range d.Payments {
+		out.Payments = append(out.Payments, OrderPayment{ProviderOrderId: p.ProviderOrderID,
+			Status: OrderPaymentStatus(p.Status), TransactionStatus: p.TransactionStatus, Amount: p.GrossAmount,
+			PaidAt: p.PaidAt, CreatedAt: p.CreatedAt})
+	}
 	out.Lines = make([]OrderLine, len(d.Lines))
 	for i, l := range d.Lines {
 		out.Lines[i] = OrderLine{Id: l.ID, VariantId: l.VariantID, Sku: l.SkuSnapshot,

@@ -165,6 +165,25 @@ type OrderSequence struct {
 	LastValue int64
 }
 
+type Payment struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	OrderID           uuid.UUID
+	Provider          string
+	ProviderOrderID   string
+	Attempt           int32
+	Status            string
+	GrossAmount       int64
+	SnapToken         *string
+	RedirectUrl       *string
+	ExpiresAt         time.Time
+	TransactionStatus *string
+	LastNotification  []byte
+	PaidAt            *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type Product struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID

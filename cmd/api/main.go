@@ -21,6 +21,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
@@ -132,6 +133,7 @@ func run() error {
 		return err
 	}
 	ordersSvc.Rates = biteship.Cached{Quoter: quoter, Cache: redis}
+	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), Team: teamSvc,

@@ -1366,8 +1366,8 @@ type OrderPage struct {
 	NextCursor *string        `json:"next_cursor"`
 }
 
-// OrderPayment One Midtrans Snap attempt, newest first (BR-123). Always `[]` until `P1-220` builds
-// Midtrans at checkout; bank transfers never have a row.
+// OrderPayment One Midtrans Snap attempt, newest first (BR-123): `ERG-000123`, then `ERG-000123-2`, ….
+// Bank transfers never have a row.
 type OrderPayment struct {
 	// Amount An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only
