@@ -79,6 +79,42 @@ func (q *Queries) LockStorefrontSettings(ctx context.Context) (StorefrontSetting
 	return i, err
 }
 
+const storefrontConfig = `-- name: StorefrontConfig :one
+SELECT t.name AS shop_name, s.google_client_id,
+       coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
+       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key
+FROM tenants t
+LEFT JOIN storefront_settings s ON s.tenant_id = t.id
+WHERE t.id = current_setting('app.tenant_id')::uuid
+`
+
+type StorefrontConfigRow struct {
+	ShopName                 string
+	GoogleClientID           *string
+	BankTransferEnabled      bool
+	BankTransferInstructions *string
+	MidtransEnabled          bool
+	MidtransEnvironment      *string
+	MidtransClientKey        *string
+}
+
+// What a website renders sign-in and payment from (P1-224). A shop with no
+// settings row yet has the defaults: bank transfer on, nothing else.
+func (q *Queries) StorefrontConfig(ctx context.Context) (StorefrontConfigRow, error) {
+	row := q.db.QueryRow(ctx, storefrontConfig)
+	var i StorefrontConfigRow
+	err := row.Scan(
+		&i.ShopName,
+		&i.GoogleClientID,
+		&i.BankTransferEnabled,
+		&i.BankTransferInstructions,
+		&i.MidtransEnabled,
+		&i.MidtransEnvironment,
+		&i.MidtransClientKey,
+	)
+	return i, err
+}
+
 const updateStorefrontSettings = `-- name: UpdateStorefrontSettings :one
 UPDATE storefront_settings SET
     contact_email = $1,

@@ -150,6 +150,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for MidtransConfigEnvironment.
+const (
+	Production MidtransConfigEnvironment = "production"
+	Sandbox    MidtransConfigEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the MidtransConfigEnvironment enum.
+func (e MidtransConfigEnvironment) Valid() bool {
+	switch e {
+	case Production:
+		return true
+	case Sandbox:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderStatus.
 const (
 	OrderStatusCancelled  OrderStatus = "cancelled"
@@ -195,6 +213,24 @@ func (e PaymentStatus) Valid() bool {
 	case PaymentStatusPaid:
 		return true
 	case PaymentStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontConfigPaymentMethods.
+const (
+	StorefrontConfigPaymentMethodsBankTransfer StorefrontConfigPaymentMethods = "bank_transfer"
+	StorefrontConfigPaymentMethodsMidtrans     StorefrontConfigPaymentMethods = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontConfigPaymentMethods enum.
+func (e StorefrontConfigPaymentMethods) Valid() bool {
+	switch e {
+	case StorefrontConfigPaymentMethodsBankTransfer:
+		return true
+	case StorefrontConfigPaymentMethodsMidtrans:
 		return true
 	default:
 		return false
@@ -447,6 +483,18 @@ type MeUpdate struct {
 	Phone *string `json:"phone,omitempty"`
 }
 
+// MidtransConfig defines model for MidtransConfig.
+type MidtransConfig struct {
+	ClientKey   string                    `json:"client_key"`
+	Environment MidtransConfigEnvironment `json:"environment"`
+
+	// SnapJsUrl Examples: https://app.midtrans.com/snap/snap.js
+	SnapJsUrl string `json:"snap_js_url"`
+}
+
+// MidtransConfigEnvironment defines model for MidtransConfig.Environment.
+type MidtransConfigEnvironment string
+
 // Money Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 //
 // Examples: 19900000
@@ -644,6 +692,20 @@ type ShippingAddress struct {
 	PostalCode string  `json:"postal_code"`
 	Province   string  `json:"province"`
 }
+
+// StorefrontConfig defines model for StorefrontConfig.
+type StorefrontConfig struct {
+	BankTransferInstructions *string                          `json:"bank_transfer_instructions"`
+	GoogleClientId           *string                          `json:"google_client_id"`
+	Midtrans                 *MidtransConfig                  `json:"midtrans"`
+	PaymentMethods           []StorefrontConfigPaymentMethods `json:"payment_methods"`
+
+	// ShopName Examples: Toko ABC
+	ShopName string `json:"shop_name"`
+}
+
+// StorefrontConfigPaymentMethods defines model for StorefrontConfig.PaymentMethods.
+type StorefrontConfigPaymentMethods string
 
 // Tokens `access_token` is a 15-minute JWT to send as `Authorization: Bearer`. `refresh_token` is
 // the long-lived credential: keep it out of reach of other scripts, and swap it at
@@ -867,6 +929,9 @@ type ServerInterface interface {
 	// ListCategories The shop's categories, every tree or one kind
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
+	// GetConfig What the website needs to render sign-in and payment
+	// (GET /config)
+	GetConfig(w http.ResponseWriter, r *http.Request)
 	// RegisterCustomer Create a customer account and sign in
 	// (POST /customers)
 	RegisterCustomer(w http.ResponseWriter, r *http.Request)
@@ -960,6 +1025,12 @@ func (_ Unimplemented) SetCartItem(w http.ResponseWriter, r *http.Request, cartI
 // ListCategories The shop's categories, every tree or one kind
 // (GET /categories)
 func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetConfig What the website needs to render sign-in and payment
+// (GET /config)
+func (_ Unimplemented) GetConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1229,6 +1300,20 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCategories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetConfig(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConfig(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1626,6 +1711,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/brands", wrapper.ListBrands)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/config", wrapper.GetConfig)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/carts", wrapper.CreateCart)

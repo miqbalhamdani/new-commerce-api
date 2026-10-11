@@ -31,3 +31,13 @@ UPDATE storefront_settings SET
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
+
+-- name: StorefrontConfig :one
+-- What a website renders sign-in and payment from (P1-224). A shop with no
+-- settings row yet has the defaults: bank transfer on, nothing else.
+SELECT t.name AS shop_name, s.google_client_id,
+       coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
+       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key
+FROM tenants t
+LEFT JOIN storefront_settings s ON s.tenant_id = t.id
+WHERE t.id = current_setting('app.tenant_id')::uuid;

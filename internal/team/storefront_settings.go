@@ -197,3 +197,14 @@ func equal(x, y any) bool {
 		return x == y
 	}
 }
+
+// StorefrontConfig is what a shop's website reads once to render sign-in and
+// payment (P1-224): public by design, nothing secret in it.
+func (s *Service) StorefrontConfig(ctx context.Context) (sqlcgen.StorefrontConfigRow, error) {
+	var out sqlcgen.StorefrontConfigRow
+	err := s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) (err error) {
+		out, err = q.StorefrontConfig(ctx)
+		return err
+	})
+	return out, err
+}

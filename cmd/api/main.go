@@ -124,10 +124,12 @@ func run() error {
 	}
 	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
-			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), OrderTokens: orderTokens}),
+			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), Team: teamSvc,
+			OrderTokens: orderTokens}),
 		storefront.NewKeys(pool),
 		signer,
 	))
@@ -136,7 +138,7 @@ func run() error {
 			Auth:    auth.NewService(pool, signer),
 			Catalog: catalogSvc,
 			Jobs:    jobsSvc,
-			Team:    team.NewService(pool, redis, box),
+			Team:    teamSvc,
 			Orders:  ordersSvc,
 			Invites: invites,
 		}, !config.IsDevelopment()),

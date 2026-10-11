@@ -25,7 +25,9 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -58,6 +60,16 @@ func (m *mailbox) all() []email.Envelope {
 	return append([]email.Envelope(nil), m.sent...)
 }
 
+// testBox seals with a fixed test key, as cmd/api does with ENCRYPTION_KEY.
+func testBox(t *testing.T) *secrets.Box {
+	t.Helper()
+	box, err := secrets.New(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return box
+}
+
 // testSigner signs tokens the way cmd/api's signer does, with a test key.
 func testSigner(t *testing.T) *auth.Signer {
 	t.Helper()
@@ -86,7 +98,8 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	mail := &mailbox{}
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
-		Customers: customers.NewService(store, signer, resets, mail.queue), OrderTokens: tokens}), NewKeys(store), signer),
+		Customers: customers.NewService(store, signer, resets, mail.queue), Team: team.NewService(store, nil, testBox(t)),
+		OrderTokens: tokens}), NewKeys(store), signer),
 		key: key, signer: signer, resets: resets, mail: mail}
 }
 
@@ -194,7 +207,7 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	// Cleanups run after t.Context() is cancelled.
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
+		_, err := tx.Exec(ctx, `DELETE FROM storefront_settings; DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
 			DELETE FROM cart_items; DELETE FROM carts; DELETE FROM customer_sessions; DELETE FROM customers;
 			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)
