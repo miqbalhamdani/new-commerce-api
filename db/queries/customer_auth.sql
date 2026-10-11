@@ -52,3 +52,13 @@ WHERE id = sqlc.arg(id) AND password_hash IS NOT DISTINCT FROM sqlc.narg(old_has
 -- name: RevokeCustomerSessions :exec
 -- Every session, so a new password signs out whoever else had one (BR-094).
 UPDATE customer_sessions SET revoked_at = now() WHERE customer_id = $1 AND revoked_at IS NULL;
+
+-- name: UpdateCustomerProfile :one
+-- name stays when omitted; phone stays unless set_phone, and then may be
+-- cleared (BR-009).
+UPDATE customers
+SET name = coalesce(sqlc.narg(name), name),
+    phone = CASE WHEN sqlc.arg(set_phone)::bool THEN sqlc.narg(phone) ELSE phone END,
+    updated_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING *;

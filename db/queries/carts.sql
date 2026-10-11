@@ -50,3 +50,9 @@ LEFT JOIN storefront_variants sv ON sv.id = ci.variant_id
 JOIN product_media m ON m.variant_id = ci.variant_id OR m.product_id = sv.product_id
 WHERE ci.cart_id = $1
 ORDER BY ci.variant_id, (m.variant_id = ci.variant_id) IS TRUE DESC, m.position, m.id;
+
+-- name: ClaimCart :exec
+-- A signed-in shopper's cart becomes theirs if it is nobody's yet; it is
+-- never taken from another customer (BR-095).
+UPDATE carts SET customer_id = sqlc.arg(customer_id)
+WHERE id = sqlc.arg(id) AND customer_id IS NULL AND status = 'open';

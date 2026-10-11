@@ -100,6 +100,23 @@ func (q *Queries) CartLines(ctx context.Context, cartID uuid.UUID) ([]CartLinesR
 	return items, nil
 }
 
+const claimCart = `-- name: ClaimCart :exec
+UPDATE carts SET customer_id = $1
+WHERE id = $2 AND customer_id IS NULL AND status = 'open'
+`
+
+type ClaimCartParams struct {
+	CustomerID *uuid.UUID
+	ID         uuid.UUID
+}
+
+// A signed-in shopper's cart becomes theirs if it is nobody's yet; it is
+// never taken from another customer (BR-095).
+func (q *Queries) ClaimCart(ctx context.Context, arg ClaimCartParams) error {
+	_, err := q.db.Exec(ctx, claimCart, arg.CustomerID, arg.ID)
+	return err
+}
+
 const createCart = `-- name: CreateCart :one
 
 INSERT INTO carts (id, tenant_id, customer_id, expires_at)

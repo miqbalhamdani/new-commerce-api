@@ -90,3 +90,17 @@ SELECT * FROM orders WHERE cart_id = $1;
 
 -- name: CheckOutCart :exec
 UPDATE carts SET status = 'checked_out', updated_at = now() WHERE id = $1;
+
+-- name: CustomerOrders :many
+-- A customer's history, newest first (P1-208), on the my-orders index.
+SELECT o.id, o.order_number, o.status, o.total_amount, o.placed_at,
+       (SELECT coalesce(sum(l.qty), 0)::int FROM order_lines l WHERE l.order_id = o.id) AS item_count
+FROM orders o
+WHERE o.customer_id = sqlc.arg(customer_id)
+  AND (sqlc.narg(before_at)::timestamptz IS NULL
+       OR (o.placed_at, o.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid))
+ORDER BY o.placed_at DESC, o.id DESC
+LIMIT sqlc.arg(lim);
+
+-- name: OrderByNumber :one
+SELECT * FROM orders WHERE order_number = $1;

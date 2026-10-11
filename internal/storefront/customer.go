@@ -22,6 +22,14 @@ func customerFrom(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
+// signedIn is the signed-in customer, or nil for a guest.
+func signedIn(r *http.Request) *uuid.UUID {
+	if id, ok := customerFrom(r.Context()); ok {
+		return &id
+	}
+	return nil
+}
+
 // customerAuth reads an optional customer token (BR-086, BR-093). Absent is
 // fine: most routes are for guests too. Present means it must be a valid
 // storefront token for the key's own shop -- a staff token, an expired one,

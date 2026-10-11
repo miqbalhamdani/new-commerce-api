@@ -229,3 +229,43 @@ func (q *Queries) SetCustomerPassword(ctx context.Context, arg SetCustomerPasswo
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateCustomerProfile = `-- name: UpdateCustomerProfile :one
+UPDATE customers
+SET name = coalesce($1, name),
+    phone = CASE WHEN $2::bool THEN $3 ELSE phone END,
+    updated_at = now()
+WHERE id = $4
+RETURNING id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at
+`
+
+type UpdateCustomerProfileParams struct {
+	Name     *string
+	SetPhone bool
+	Phone    *string
+	ID       uuid.UUID
+}
+
+// name stays when omitted; phone stays unless set_phone, and then may be
+// cleared (BR-009).
+func (q *Queries) UpdateCustomerProfile(ctx context.Context, arg UpdateCustomerProfileParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, updateCustomerProfile,
+		arg.Name,
+		arg.SetPhone,
+		arg.Phone,
+		arg.ID,
+	)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Phone,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

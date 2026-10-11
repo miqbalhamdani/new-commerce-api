@@ -210,3 +210,39 @@ func (s *Service) tx(ctx context.Context, fn func(q *sqlcgen.Queries) error) err
 func fieldError(field, detail string) error {
 	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
 }
+
+// Me is the signed-in customer. A token can outlive its account by up to
+// its 15 minutes; that is a 404.
+func (s *Service) Me(ctx context.Context, id uuid.UUID) (Customer, error) {
+	var c Customer
+	err := s.tx(ctx, func(q *sqlcgen.Queries) (err error) {
+		c, err = q.CustomerByID(ctx, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperrors.NotFound("No such customer.")
+		}
+		return err
+	})
+	return c, err
+}
+
+// UpdateMe changes a customer's name or phone; nil name leaves it, and phone
+// is changed only when setPhone, to nil to clear it (BR-009). The email is
+// not editable in v2 (§11.9).
+func (s *Service) UpdateMe(ctx context.Context, id uuid.UUID, name *string, setPhone bool, phone *string) (Customer, error) {
+	if name != nil {
+		n := strings.TrimSpace(*name)
+		if n == "" {
+			return Customer{}, fieldError("name", "name cannot be empty")
+		}
+		name = &n
+	}
+	var c Customer
+	err := s.tx(ctx, func(q *sqlcgen.Queries) (err error) {
+		c, err = q.UpdateCustomerProfile(ctx, sqlcgen.UpdateCustomerProfileParams{ID: id, Name: name, SetPhone: setPhone, Phone: phone})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperrors.NotFound("No such customer.")
+		}
+		return err
+	})
+	return c, err
+}

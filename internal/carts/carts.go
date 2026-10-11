@@ -55,10 +55,11 @@ type Item struct {
 // Create starts an empty cart. Its id is a random v4, not the usual v7: the
 // id is the cart's bearer credential, and a v7's leading bits are a timestamp
 // (BR-005).
-func (s *Service) Create(ctx context.Context) (Cart, error) {
+// A signed-in shopper's cart is theirs from the start (BR-095).
+func (s *Service) Create(ctx context.Context, customerID *uuid.UUID) (Cart, error) {
 	var c Cart
 	err := s.tx(ctx, func(q *sqlcgen.Queries) error {
-		row, err := q.CreateCart(ctx, sqlcgen.CreateCartParams{ID: uuid.New()})
+		row, err := q.CreateCart(ctx, sqlcgen.CreateCartParams{ID: uuid.New(), CustomerID: customerID})
 		if err != nil {
 			return err
 		}
@@ -69,12 +70,15 @@ func (s *Service) Create(ctx context.Context) (Cart, error) {
 }
 
 // Get is an open cart, priced now. Unknown, expired and checked-out carts
-// are all 404 (§11.5).
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (Cart, error) {
+// are all 404 (§11.5). A signed-in shopper claims a cart nobody owns yet.
+func (s *Service) Get(ctx context.Context, id uuid.UUID, customerID *uuid.UUID) (Cart, error) {
 	var c Cart
 	err := s.tx(ctx, func(q *sqlcgen.Queries) error {
 		row, err := q.GetCart(ctx, id)
 		if err := open(row, err); err != nil {
+			return err
+		}
+		if err := claim(ctx, q, id, customerID); err != nil {
 			return err
 		}
 		c, err = s.priced(ctx, q, row)
@@ -87,7 +91,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Cart, error) {
 // visible, so a shopper can always clear one (BR-090). Adding anything else
 // needs a visible variant (BR-080). The cart's row lock serialises this with
 // checkout: an edit that waited on one finds the cart checked out.
-func (s *Service) SetItem(ctx context.Context, id, variantID uuid.UUID, qty int) (Cart, error) {
+func (s *Service) SetItem(ctx context.Context, id, variantID uuid.UUID, qty int, customerID *uuid.UUID) (Cart, error) {
 	if qty < 0 || qty > 999 {
 		return Cart{}, fieldError("qty", "qty is 0 to 999; 0 removes the item")
 	}
@@ -95,6 +99,9 @@ func (s *Service) SetItem(ctx context.Context, id, variantID uuid.UUID, qty int)
 	err := s.tx(ctx, func(q *sqlcgen.Queries) error {
 		row, err := q.LockCart(ctx, id)
 		if err := open(row, err); err != nil {
+			return err
+		}
+		if err := claim(ctx, q, id, customerID); err != nil {
 			return err
 		}
 		if qty == 0 {
@@ -121,6 +128,16 @@ func (s *Service) SetItem(ctx context.Context, id, variantID uuid.UUID, qty int)
 		return err
 	})
 	return c, err
+}
+
+// claim gives an unowned cart to the signed-in shopper, so a cart started as
+// a guest follows them after sign-in; it never takes one from another
+// customer (BR-095).
+func claim(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID, customerID *uuid.UUID) error {
+	if customerID == nil {
+		return nil
+	}
+	return q.ClaimCart(ctx, sqlcgen.ClaimCartParams{ID: id, CustomerID: customerID})
 }
 
 // open turns a missing, expired or checked-out cart into the one 404 they all

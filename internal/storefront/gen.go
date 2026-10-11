@@ -78,6 +78,24 @@ func (e CheckoutRequestPaymentMethod) Valid() bool {
 	}
 }
 
+// Defines values for CustomerOrderPaymentMethod.
+const (
+	CustomerOrderPaymentMethodBankTransfer CustomerOrderPaymentMethod = "bank_transfer"
+	CustomerOrderPaymentMethodMidtrans     CustomerOrderPaymentMethod = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the CustomerOrderPaymentMethod enum.
+func (e CustomerOrderPaymentMethod) Valid() bool {
+	switch e {
+	case CustomerOrderPaymentMethodBankTransfer:
+		return true
+	case CustomerOrderPaymentMethodMidtrans:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeCustomerAuthRequired     ErrorCode = "customer_auth_required"
@@ -126,6 +144,57 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeUnknownField:
 		return true
 	case ErrorCodeValidationFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrderStatus.
+const (
+	OrderStatusCancelled  OrderStatus = "cancelled"
+	OrderStatusCompleted  OrderStatus = "completed"
+	OrderStatusPaid       OrderStatus = "paid"
+	OrderStatusPending    OrderStatus = "pending"
+	OrderStatusProcessing OrderStatus = "processing"
+	OrderStatusShipped    OrderStatus = "shipped"
+)
+
+// Valid indicates whether the value is a known member of the OrderStatus enum.
+func (e OrderStatus) Valid() bool {
+	switch e {
+	case OrderStatusCancelled:
+		return true
+	case OrderStatusCompleted:
+		return true
+	case OrderStatusPaid:
+		return true
+	case OrderStatusPending:
+		return true
+	case OrderStatusProcessing:
+		return true
+	case OrderStatusShipped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentStatus.
+const (
+	PaymentStatusFailed  PaymentStatus = "failed"
+	PaymentStatusPaid    PaymentStatus = "paid"
+	PaymentStatusPending PaymentStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PaymentStatus enum.
+func (e PaymentStatus) Valid() bool {
+	switch e {
+	case PaymentStatusFailed:
+		return true
+	case PaymentStatusPaid:
+		return true
+	case PaymentStatusPending:
 		return true
 	default:
 		return false
@@ -266,9 +335,11 @@ type CheckoutOrder struct {
 // CheckoutOrderPaymentMethod defines model for CheckoutOrder.PaymentMethod.
 type CheckoutOrderPaymentMethod string
 
-// CheckoutRequest defines model for CheckoutRequest.
+// CheckoutRequest `contact` is required for a guest. With a customer token it may be left out, and the
+// customer's own name, email and phone are used; the order goes into their history
+// (BR-095).
 type CheckoutRequest struct {
-	Contact         Contact                      `json:"contact"`
+	Contact         *Contact                     `json:"contact,omitempty"`
 	Note            *string                      `json:"note,omitempty"`
 	PaymentMethod   CheckoutRequestPaymentMethod `json:"payment_method"`
 	ShippingAddress ShippingAddress              `json:"shipping_address"`
@@ -283,6 +354,49 @@ type Contact struct {
 	Name  string              `json:"name"`
 	Phone *string             `json:"phone,omitempty"`
 }
+
+// CustomerOrder defines model for CustomerOrder.
+type CustomerOrder struct {
+	CancelledAt *time.Time `json:"cancelled_at"`
+	CompletedAt *time.Time `json:"completed_at"`
+	Courier     *string    `json:"courier"`
+
+	// Discount Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Discount      Money                      `json:"discount"`
+	Lines         []OrderLine                `json:"lines"`
+	OrderNumber   string                     `json:"order_number"`
+	PaidAt        *time.Time                 `json:"paid_at"`
+	PaymentMethod CustomerOrderPaymentMethod `json:"payment_method"`
+
+	// PaymentStatus The Midtrans payment's state (`P1-220`); `null` for bank transfer, which the shop
+	// confirms by hand.
+	PaymentStatus *PaymentStatus `json:"payment_status"`
+	PlacedAt      time.Time      `json:"placed_at"`
+	ShippedAt     *time.Time     `json:"shipped_at"`
+
+	// Shipping Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Shipping        Money        `json:"shipping"`
+	ShippingAddress OrderAddress `json:"shipping_address"`
+	Status          OrderStatus  `json:"status"`
+
+	// Subtotal Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Subtotal Money `json:"subtotal"`
+
+	// Total Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Total          Money   `json:"total"`
+	TrackingNumber *string `json:"tracking_number"`
+}
+
+// CustomerOrderPaymentMethod defines model for CustomerOrder.PaymentMethod.
+type CustomerOrderPaymentMethod string
 
 // CustomerProfile defines model for CustomerProfile.
 type CustomerProfile struct {
@@ -318,10 +432,54 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// Me defines model for Me.
+type Me struct {
+	CreatedAt time.Time           `json:"created_at"`
+	Email     openapi_types.Email `json:"email"`
+	Id        openapi_types.UUID  `json:"id"`
+	Name      string              `json:"name"`
+	Phone     *string             `json:"phone"`
+}
+
+// MeUpdate defines model for MeUpdate.
+type MeUpdate struct {
+	Name  *string `json:"name,omitempty"`
+	Phone *string `json:"phone,omitempty"`
+}
+
 // Money Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 //
 // Examples: 19900000
 type Money = int64
+
+// MyOrderPage defines model for MyOrderPage.
+type MyOrderPage struct {
+	Data       []MyOrderRow `json:"data"`
+	NextCursor *string      `json:"next_cursor"`
+}
+
+// MyOrderRow defines model for MyOrderRow.
+type MyOrderRow struct {
+	// ItemCount The total quantity of every line.
+	ItemCount   int         `json:"item_count"`
+	OrderNumber string      `json:"order_number"`
+	PlacedAt    time.Time   `json:"placed_at"`
+	Status      OrderStatus `json:"status"`
+
+	// Total Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Total Money `json:"total"`
+}
+
+// OrderAddress defines model for OrderAddress.
+type OrderAddress struct {
+	City       string  `json:"city"`
+	Line1      string  `json:"line1"`
+	Line2      *string `json:"line2"`
+	PostalCode string  `json:"postal_code"`
+	Province   string  `json:"province"`
+}
 
 // OrderLine defines model for OrderLine.
 type OrderLine struct {
@@ -336,6 +494,9 @@ type OrderLine struct {
 	// Examples: 19900000
 	UnitPrice Money `json:"unit_price"`
 }
+
+// OrderStatus defines model for OrderStatus.
+type OrderStatus string
 
 // PasswordResetConfirm defines model for PasswordResetConfirm.
 type PasswordResetConfirm struct {
@@ -359,6 +520,9 @@ type Payment struct {
 	RedirectUrl string    `json:"redirect_url"`
 	SnapToken   string    `json:"snap_token"`
 }
+
+// PaymentStatus defines model for PaymentStatus.
+type PaymentStatus string
 
 // Problem RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -506,6 +670,9 @@ type Cursor = string
 // Limit defines model for Limit.
 type Limit = int
 
+// OrderNumber Examples: ERG-000123
+type OrderNumber = string
+
 // Conflict RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
 type Conflict = Problem
@@ -529,6 +696,15 @@ type UnprocessableEntity = Problem
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
 	Kind *CategoryKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListMyOrdersParams defines parameters for ListMyOrders.
+type ListMyOrdersParams struct {
+	// Limit Page size. Pairs with `cursor`; there is no `offset`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The previous page's `next_cursor`, opaque.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListProductsParams defines parameters for ListProducts.
@@ -571,6 +747,9 @@ type SetCartItemJSONRequestBody = CartItemWrite
 
 // RegisterCustomerJSONRequestBody defines body for RegisterCustomer for application/json ContentType.
 type RegisterCustomerJSONRequestBody = CustomerRegister
+
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody = MeUpdate
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -691,6 +870,21 @@ type ServerInterface interface {
 	// RegisterCustomer Create a customer account and sign in
 	// (POST /customers)
 	RegisterCustomer(w http.ResponseWriter, r *http.Request)
+	// GetMe The signed-in customer
+	// (GET /me)
+	GetMe(w http.ResponseWriter, r *http.Request)
+	// UpdateMe Change the signed-in customer's name or phone
+	// (PATCH /me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
+	// ListMyOrders The signed-in customer's orders, newest first
+	// (GET /me/orders)
+	ListMyOrders(w http.ResponseWriter, r *http.Request, params ListMyOrdersParams)
+	// GetMyOrder One of the signed-in customer's orders
+	// (GET /me/orders/{order_number})
+	GetMyOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
+	// GetGuestOrder A guest's order, with its order token
+	// (GET /orders/{order_number})
+	GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
 	// ListProducts The shop's visible products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -772,6 +966,36 @@ func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, pa
 // RegisterCustomer Create a customer account and sign in
 // (POST /customers)
 func (_ Unimplemented) RegisterCustomer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMe The signed-in customer
+// (GET /me)
+func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateMe Change the signed-in customer's name or phone
+// (PATCH /me)
+func (_ Unimplemented) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListMyOrders The signed-in customer's orders, newest first
+// (GET /me/orders)
+func (_ Unimplemented) ListMyOrders(w http.ResponseWriter, r *http.Request, params ListMyOrdersParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetMyOrder One of the signed-in customer's orders
+// (GET /me/orders/{order_number})
+func (_ Unimplemented) GetMyOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetGuestOrder A guest's order, with its order token
+// (GET /orders/{order_number})
+func (_ Unimplemented) GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1019,6 +1243,132 @@ func (siw *ServerInterfaceWrapper) RegisterCustomer(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RegisterCustomer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMe operation middleware
+func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyOrders operation middleware
+func (siw *ServerInterfaceWrapper) ListMyOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyOrdersParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyOrders(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMyOrder operation middleware
+func (siw *ServerInterfaceWrapper) GetMyOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "order_number" -------------
+	var orderNumber OrderNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_number", chi.URLParam(r, "order_number"), &orderNumber, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyOrder(w, r, orderNumber)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGuestOrder operation middleware
+func (siw *ServerInterfaceWrapper) GetGuestOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "order_number" -------------
+	var orderNumber OrderNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_number", chi.URLParam(r, "order_number"), &orderNumber, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGuestOrder(w, r, orderNumber)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1306,6 +1656,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/password-reset/confirm", wrapper.ConfirmPasswordReset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me", wrapper.GetMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/me", wrapper.UpdateMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/orders", wrapper.ListMyOrders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/orders/{order_number}", wrapper.GetMyOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orders/{order_number}", wrapper.GetGuestOrder)
 	})
 
 	return r

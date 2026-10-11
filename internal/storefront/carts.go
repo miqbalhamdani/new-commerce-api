@@ -25,7 +25,7 @@ func (s *Server) CreateCart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	c, err := s.carts.Create(r.Context())
+	c, err := s.carts.Create(r.Context(), signedIn(r))
 	if err != nil {
 		httpkit.WriteError(w, r, err)
 		return
@@ -34,7 +34,7 @@ func (s *Server) CreateCart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) GetCart(w http.ResponseWriter, r *http.Request, cartID CartId) {
-	c, err := s.carts.Get(r.Context(), cartID)
+	c, err := s.carts.Get(r.Context(), cartID, signedIn(r))
 	if err != nil {
 		httpkit.WriteError(w, r, err)
 		return
@@ -53,7 +53,7 @@ func (s *Server) SetCartItem(w http.ResponseWriter, r *http.Request, cartID Cart
 		httpkit.WriteError(w, r, fieldError("qty", "qty is required: 1 to 999, or 0 to remove the item"))
 		return
 	}
-	c, err := s.carts.SetItem(r.Context(), cartID, variantID, *body.Qty)
+	c, err := s.carts.SetItem(r.Context(), cartID, variantID, *body.Qty, signedIn(r))
 	if err != nil {
 		httpkit.WriteError(w, r, err)
 		return

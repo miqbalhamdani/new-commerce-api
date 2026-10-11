@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -22,6 +24,18 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 	if !httpkit.DecodeJSON(w, r, &body) {
 		return
 	}
+	// A signed-in customer's contact defaults to their profile, and the order
+	// goes into their history (BR-095); the customer comes from the token,
+	// never from the cart.
+	customerID := signedIn(r)
+	if body.Contact == nil && customerID != nil {
+		me, err := s.customers.Me(r.Context(), *customerID)
+		if err != nil {
+			httpkit.WriteError(w, r, err)
+			return
+		}
+		body.Contact = &Contact{Name: me.Name, Email: openapi_types.Email(me.Email), Phone: me.Phone}
+	}
 	// Checked before the cart is locked: a bad request should not queue
 	// behind someone else's checkout to be told so.
 	if err := validCheckout(body); err != nil {
@@ -35,7 +49,7 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 		"postal_code": body.ShippingAddress.PostalCode})
 
 	o, lines, created, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
-		CartID: cartID, Customer: customer, ShippingAddress: address,
+		CartID: cartID, CustomerID: customerID, Customer: customer, ShippingAddress: address,
 		PaymentMethod: string(body.PaymentMethod), Note: body.Note,
 	})
 	if err != nil {
@@ -55,6 +69,9 @@ func validCheckout(b CheckoutRequest) error {
 		if strings.TrimSpace(value) == "" {
 			bad = append(bad, apperrors.Field{Name: field, Detail: field + " is required"})
 		}
+	}
+	if b.Contact == nil {
+		b.Contact = &Contact{}
 	}
 	need("contact.name", b.Contact.Name)
 	need("contact.email", string(b.Contact.Email))
