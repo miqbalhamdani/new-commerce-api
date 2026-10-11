@@ -3,6 +3,7 @@ package email
 import (
 	"fmt"
 	"html"
+	"strings"
 )
 
 // Invitation is the staff invitation (BR-026, BR-128), in English (BR-016).
@@ -39,5 +40,52 @@ The link works once, for 30 minutes. If you did not ask, ignore this email: your
 <a href="%s">set a new password</a>.</p>
 <p>The link works once, for 30 minutes. If you did not ask, ignore this email: your password stays as it is.</p>`,
 		html.EscapeString(name), html.EscapeString(shop), html.EscapeString(link))
+	return subject, text, htmlBody
+}
+
+// OrderLine is one line of an order email.
+type OrderLine struct {
+	Title string
+	Qty   int
+	Total string // already formatted
+}
+
+// OrderPlaced is "we have your order" (BR-128): the lines, the total, and how
+// to pay when it is a bank transfer.
+func OrderPlaced(shop, name, number string, lines []OrderLine, total, bankInstructions string) (subject, text, htmlBody string) {
+	subject = fmt.Sprintf("Your %s order %s", shop, number)
+	var t, h strings.Builder
+	fmt.Fprintf(&t, "Hi %s,\n\nThank you for your order %s at %s.\n\n", name, number, shop)
+	fmt.Fprintf(&h, "<p>Hi %s,</p>\n<p>Thank you for your order <strong>%s</strong> at %s.</p>\n<ul>\n",
+		html.EscapeString(name), html.EscapeString(number), html.EscapeString(shop))
+	for _, l := range lines {
+		fmt.Fprintf(&t, "  %d × %s  %s\n", l.Qty, l.Title, l.Total)
+		fmt.Fprintf(&h, "<li>%d × %s — %s</li>\n", l.Qty, html.EscapeString(l.Title), html.EscapeString(l.Total))
+	}
+	fmt.Fprintf(&t, "\nTotal: %s\n", total)
+	fmt.Fprintf(&h, "</ul>\n<p>Total: <strong>%s</strong></p>\n", html.EscapeString(total))
+	if bankInstructions != "" {
+		fmt.Fprintf(&t, "\nTo pay by bank transfer:\n%s\n", bankInstructions)
+		fmt.Fprintf(&h, "<p>To pay by bank transfer:<br>%s</p>\n", html.EscapeString(bankInstructions))
+	}
+	return subject, t.String(), h.String()
+}
+
+// PaymentReceived is "we have your payment" (BR-128).
+func PaymentReceived(shop, name, number, total string) (subject, text, htmlBody string) {
+	subject = fmt.Sprintf("Payment received for %s", number)
+	text = fmt.Sprintf("Hi %s,\n\nWe have your payment of %s for order %s. %s is getting it ready.\n", name, total, number, shop)
+	htmlBody = fmt.Sprintf("<p>Hi %s,</p>\n<p>We have your payment of <strong>%s</strong> for order %s. %s is getting it ready.</p>",
+		html.EscapeString(name), html.EscapeString(total), html.EscapeString(number), html.EscapeString(shop))
+	return subject, text, htmlBody
+}
+
+// OrderShipped is "it is on its way", with the courier and the tracking
+// number (BR-128).
+func OrderShipped(shop, name, number, courier, tracking string) (subject, text, htmlBody string) {
+	subject = fmt.Sprintf("Your %s order %s has shipped", shop, number)
+	text = fmt.Sprintf("Hi %s,\n\nOrder %s is on its way with %s.\nTracking number: %s\n", name, number, courier, tracking)
+	htmlBody = fmt.Sprintf("<p>Hi %s,</p>\n<p>Order %s is on its way with <strong>%s</strong>.</p>\n<p>Tracking number: <strong>%s</strong></p>",
+		html.EscapeString(name), html.EscapeString(number), html.EscapeString(courier), html.EscapeString(tracking))
 	return subject, text, htmlBody
 }

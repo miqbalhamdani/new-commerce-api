@@ -11,6 +11,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // CreateLine is one requested line; the price is never in it (BR-078).
@@ -85,6 +86,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (uuid.UUID, error)
 	if err != nil {
 		return uuid.Nil, err
 	}
+	tenantID, _ := tenant.FromContext(ctx)
+	s.queueMail(ctx, "order_placed", tenantID, id)
 	return id, nil
 }
 

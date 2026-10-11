@@ -15,6 +15,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -39,6 +40,10 @@ type Service struct {
 	Midtrans *midtrans.Client
 	Box      *secrets.Box
 	APIURL   string
+
+	// Mail queues an order email for the worker (P1-228): email.Enqueue in
+	// production; nil sends none.
+	Mail func(ctx context.Context, e email.Envelope) error
 }
 
 // Rates is the cached Biteship quote (biteship.Cached).

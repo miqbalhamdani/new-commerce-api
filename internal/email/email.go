@@ -53,7 +53,7 @@ type Sender interface {
 
 // Envelope is what a service enqueues: which email, about whom.
 type Envelope struct {
-	Kind     string    `json:"kind"` // "invitation", "password_reset"
+	Kind     string    `json:"kind"` // "invitation", "password_reset", "order_placed", "payment_received", "order_shipped"
 	TenantID uuid.UUID `json:"tenant_id"`
 	UserID   uuid.UUID `json:"user_id"`
 	ActorID  uuid.UUID `json:"actor_id"`
@@ -61,6 +61,8 @@ type Envelope struct {
 	// the shop's own reset page (P1-207).
 	CustomerID uuid.UUID `json:"customer_id,omitzero"`
 	URL        string    `json:"url,omitempty"`
+	// OrderID is an order email's order (P1-228).
+	OrderID uuid.UUID `json:"order_id,omitzero"`
 }
 
 // Enqueue puts an envelope on the stream. Call it after the transaction that
@@ -218,6 +220,10 @@ func deliver(ctx context.Context, m queue.Message, renders map[string]Render, se
 	if err != nil || msg == nil {
 		return err
 	}
-	msg.Key = m.ID
+	// The renderer's own key wins -- an order email's is the order and the
+	// event, so even a second enqueue of one event is one email at Resend.
+	if msg.Key == "" {
+		msg.Key = m.ID
+	}
 	return sender.Send(ctx, *msg)
 }

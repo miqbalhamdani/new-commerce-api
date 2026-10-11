@@ -105,6 +105,10 @@ func run() error {
 	renders := map[string]email.Render{
 		"invitation":     team.InvitationMail(pool, invites, config.AdminURL()),
 		"password_reset": customers.ResetMail(pool, resets),
+		// P1-228: one renderer, three events.
+		"order_placed":     orders.OrderMail(pool),
+		"payment_received": orders.OrderMail(pool),
+		"order_shipped":    orders.OrderMail(pool),
 	}
 	go func() {
 		if err := email.Consume(ctx, redis, runner.Consumer, renders, sender, 60*time.Second, 5); err != nil {

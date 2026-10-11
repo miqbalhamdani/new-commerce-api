@@ -151,6 +151,7 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	ordersSvc.Rates = biteship.Cached{Quoter: rates, Cache: rates}
 	pay := newFakeMidtrans(t)
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = pay.client(), testBox(t), "http://api.test"
+	ordersSvc.Mail = mail.queue
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: ordersSvc,
 		Customers: cust, Team: team.NewService(store, nil, testBox(t)),

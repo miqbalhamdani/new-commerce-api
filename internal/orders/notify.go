@@ -87,12 +87,18 @@ func (s *Service) Notify(ctx context.Context, webhookID uuid.UUID, raw []byte) e
 		return &apperrors.Error{Code: "payment_unavailable", Status: 503, Title: "Payment status unavailable",
 			Detail: "Midtrans did not confirm the payment; send the notification again."}
 	}
-	return s.apply(ctx, n.OrderID, st, raw)
+	paid, err := s.apply(ctx, n.OrderID, st, raw)
+	if err == nil && paid != nil {
+		s.queueMail(ctx, "payment_received", paid.TenantID, paid.ID)
+	}
+	return err
 }
 
 // apply records what Get Status confirmed about one attempt (BR-125).
-func (s *Service) apply(ctx context.Context, providerOrderID string, st midtrans.Status, raw []byte) error {
-	return s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
+// It returns the order when this notification is what moved it to paid.
+func (s *Service) apply(ctx context.Context, providerOrderID string, st midtrans.Status, raw []byte) (*sqlcgen.Order, error) {
+	var paid *sqlcgen.Order
+	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
 		found, err := q.PaymentByProviderOrderID(ctx, providerOrderID)
 		if err != nil {
 			return err
@@ -138,7 +144,10 @@ func (s *Service) apply(ctx context.Context, providerOrderID string, st midtrans
 		// and the audit log says so for whoever handles refunds.
 		switch o.Status {
 		case "pending":
-			_, _, err = transition(ctx, q, tx, o.ID, "paid", TransitionInput{})
+			moved, changed, err := transition(ctx, q, tx, o.ID, "paid", TransitionInput{})
+			if changed {
+				paid = &moved
+			}
 			return err
 		case "cancelled":
 			return db.Audit(ctx, tx, db.AuditEntry{Action: "payment.after_cancel", SubjectType: "order",
@@ -146,6 +155,7 @@ func (s *Service) apply(ctx context.Context, providerOrderID string, st midtrans
 		}
 		return nil
 	})
+	return paid, err
 }
 
 // sameAmount is Midtrans' gross_amount, whole rupiah as a decimal string

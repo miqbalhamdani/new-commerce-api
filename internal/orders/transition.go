@@ -48,11 +48,19 @@ type TransitionInput struct {
 // (no version bump, no audit), refuses anything off the allow-list, stamps the
 // matching timestamp, bumps version and writes exactly one audit row.
 func (s *Service) Transition(ctx context.Context, id uuid.UUID, to string, in TransitionInput) (sqlcgen.Order, error) {
-	var out sqlcgen.Order
+	var (
+		out     sqlcgen.Order
+		changed bool
+	)
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) (err error) {
-		out, _, err = transition(ctx, q, tx, id, to, in)
+		out, changed, err = transition(ctx, q, tx, id, to, in)
 		return err
 	})
+	if err == nil && changed {
+		if kind := mailFor(to); kind != "" {
+			s.queueMail(ctx, kind, out.TenantID, out.ID)
+		}
+	}
 	return out, err
 }
 

@@ -158,6 +158,9 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (CheckoutResul
 	if err != nil {
 		return CheckoutResult{}, err
 	}
+	if res.Created {
+		s.queueMail(ctx, "order_placed", res.Order.TenantID, res.Order.ID)
+	}
 	if res.Order.PaymentMethod != "midtrans" {
 		return res, nil
 	}

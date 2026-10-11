@@ -136,6 +136,7 @@ func run() error {
 	}
 	ordersSvc.Rates = biteship.Cached{Quoter: quoter, Cache: redis}
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
+	ordersSvc.Mail = enqueueMail
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
