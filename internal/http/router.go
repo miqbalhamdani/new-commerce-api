@@ -32,7 +32,7 @@ func NewRouter(srv ServerInterface, signer *auth.Signer, limiter *RateLimiter) h
 // as a row that does not exist; anything else is 422 naming the parameter.
 func paramError(w http.ResponseWriter, r *http.Request, err error) {
 	name := paramName(err)
-	if name == "id" {
+	if name == "id" || name == "webhook_id" {
 		writeError(w, r, apperrors.NotFound("No such resource."))
 		return
 	}

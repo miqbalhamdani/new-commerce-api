@@ -76,6 +76,15 @@ func (f *fakeMidtrans) setDown(down bool) {
 	f.down = down
 }
 
+// confirm makes Get Status answer for orderID with transactionStatus, for
+// gross whole rupiah.
+func (f *fakeMidtrans) confirm(orderID, transactionStatus, gross string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status[orderID] = `{"status_code":"200","transaction_status":"` + transactionStatus +
+		`","fraud_status":"accept","gross_amount":"` + gross + `","order_id":"` + orderID + `"}`
+}
+
 func (f *fakeMidtrans) snapCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

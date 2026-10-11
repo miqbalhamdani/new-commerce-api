@@ -1169,6 +1169,26 @@ type MediaUpdate struct {
 	VariantId *openapi_types.UUID `json:"variant_id"`
 }
 
+// MidtransNotification Midtrans' HTTP notification. Only the fields the API reads are listed; Midtrans sends more,
+// and they are kept, not refused — this body is Midtrans', not a client's.
+type MidtransNotification struct {
+	FraudStatus *string `json:"fraud_status,omitempty"`
+
+	// GrossAmount Examples: 409000.00
+	GrossAmount string `json:"gross_amount"`
+
+	// OrderId Examples: ERG-000123
+	OrderId      string `json:"order_id"`
+	SignatureKey string `json:"signature_key"`
+
+	// StatusCode Examples: 200
+	StatusCode string `json:"status_code"`
+
+	// TransactionStatus Examples: settlement
+	TransactionStatus    *string                `json:"transaction_status,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
 // Money An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 // a float, a decimal string or an object; there is no currency field because there is only
 // one currency (BR-006, BR-029). Clients divide by 100 to display.
@@ -2221,6 +2241,144 @@ type UpdateUserJSONRequestBody = UserUpdate
 // UpdateVariantJSONRequestBody defines body for UpdateVariant for application/json ContentType.
 type UpdateVariantJSONRequestBody = VariantUpdate
 
+// MidtransNotificationJSONRequestBody defines body for MidtransNotification for application/json ContentType.
+type MidtransNotificationJSONRequestBody = MidtransNotification
+
+// Getter for additional properties for MidtransNotification. Returns the specified
+// element and whether it was found
+func (a MidtransNotification) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for MidtransNotification
+func (a *MidtransNotification) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for MidtransNotification to handle AdditionalProperties
+func (a *MidtransNotification) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["fraud_status"]; found {
+		err = json.Unmarshal(raw, &a.FraudStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'fraud_status': %w", err)
+		}
+		delete(object, "fraud_status")
+	}
+
+	if raw, found := object["gross_amount"]; found {
+		err = json.Unmarshal(raw, &a.GrossAmount)
+		if err != nil {
+			return fmt.Errorf("error reading 'gross_amount': %w", err)
+		}
+		delete(object, "gross_amount")
+	}
+
+	if raw, found := object["order_id"]; found {
+		err = json.Unmarshal(raw, &a.OrderId)
+		if err != nil {
+			return fmt.Errorf("error reading 'order_id': %w", err)
+		}
+		delete(object, "order_id")
+	}
+
+	if raw, found := object["signature_key"]; found {
+		err = json.Unmarshal(raw, &a.SignatureKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'signature_key': %w", err)
+		}
+		delete(object, "signature_key")
+	}
+
+	if raw, found := object["status_code"]; found {
+		err = json.Unmarshal(raw, &a.StatusCode)
+		if err != nil {
+			return fmt.Errorf("error reading 'status_code': %w", err)
+		}
+		delete(object, "status_code")
+	}
+
+	if raw, found := object["transaction_status"]; found {
+		err = json.Unmarshal(raw, &a.TransactionStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'transaction_status': %w", err)
+		}
+		delete(object, "transaction_status")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for MidtransNotification to handle AdditionalProperties
+func (a MidtransNotification) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.FraudStatus != nil {
+		object["fraud_status"], err = json.Marshal(a.FraudStatus)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'fraud_status': %w", err)
+		}
+	}
+
+	object["gross_amount"], err = json.Marshal(a.GrossAmount)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'gross_amount': %w", err)
+	}
+
+	object["order_id"], err = json.Marshal(a.OrderId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'order_id': %w", err)
+	}
+
+	object["signature_key"], err = json.Marshal(a.SignatureKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'signature_key': %w", err)
+	}
+
+	object["status_code"], err = json.Marshal(a.StatusCode)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'status_code': %w", err)
+	}
+
+	if a.TransactionStatus != nil {
+		object["transaction_status"], err = json.Marshal(a.TransactionStatus)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'transaction_status': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
 func (a ProblemError) Get(fieldName string) (value interface{}, found bool) {
@@ -2487,6 +2645,9 @@ type ServerInterface interface {
 	// UpdateVariant Edit one variant
 	// (PATCH /variants/{id})
 	UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams)
+	// MidtransNotification Midtrans reports a payment
+	// (POST /webhooks/midtrans/{webhook_id})
+	MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -2856,6 +3017,12 @@ func (_ Unimplemented) ArchiveVariant(w http.ResponseWriter, r *http.Request, id
 // UpdateVariant Edit one variant
 // (PATCH /variants/{id})
 func (_ Unimplemented) UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// MidtransNotification Midtrans reports a payment
+// (POST /webhooks/midtrans/{webhook_id})
+func (_ Unimplemented) MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4770,6 +4937,32 @@ func (siw *ServerInterfaceWrapper) UpdateVariant(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// MidtransNotification operation middleware
+func (siw *ServerInterfaceWrapper) MidtransNotification(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "webhook_id" -------------
+	var webhookId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "webhook_id", chi.URLParam(r, "webhook_id"), &webhookId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "webhook_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MidtransNotification(w, r, webhookId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -5026,6 +5219,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/shipping/rates", wrapper.ShippingRates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/webhooks/midtrans/{webhook_id}", wrapper.MidtransNotification)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
@@ -9663,6 +9859,69 @@ func (response UpdateVariant422ApplicationProblemPlusJSONResponse) VisitUpdateVa
 	return err
 }
 
+type MidtransNotificationRequestObject struct {
+	WebhookId openapi_types.UUID `json:"webhook_id"`
+	Body      *MidtransNotificationJSONRequestBody
+}
+
+type MidtransNotificationResponseObject interface {
+	VisitMidtransNotificationResponse(w http.ResponseWriter) error
+}
+
+type MidtransNotification200Response struct {
+}
+
+func (response MidtransNotification200Response) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type MidtransNotification401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response MidtransNotification401ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MidtransNotification404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response MidtransNotification404ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MidtransNotification503ApplicationProblemPlusJSONResponse Problem
+
+func (response MidtransNotification503ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListApiKeys The shop's storefront API keys
@@ -9848,6 +10107,9 @@ type StrictServerInterface interface {
 	// UpdateVariant Edit one variant
 	// (PATCH /variants/{id})
 	UpdateVariant(ctx context.Context, request UpdateVariantRequestObject) (UpdateVariantResponseObject, error)
+	// MidtransNotification Midtrans reports a payment
+	// (POST /webhooks/midtrans/{webhook_id})
+	MidtransNotification(ctx context.Context, request MidtransNotificationRequestObject) (MidtransNotificationResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -11645,6 +11907,39 @@ func (sh *strictHandler) UpdateVariant(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateVariantResponseObject); ok {
 		if err := validResponse.VisitUpdateVariantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MidtransNotification operation middleware
+func (sh *strictHandler) MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID) {
+	var request MidtransNotificationRequestObject
+
+	request.WebhookId = webhookId
+
+	var body MidtransNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MidtransNotification(ctx, request.(MidtransNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MidtransNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MidtransNotificationResponseObject); ok {
+		if err := validResponse.VisitMidtransNotificationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

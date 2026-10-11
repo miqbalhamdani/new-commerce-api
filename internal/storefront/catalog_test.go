@@ -41,6 +41,7 @@ type shop struct {
 	mail   *mailbox
 	rates  *fakeRates
 	pay    *fakeMidtrans
+	orders *orders.Service
 }
 
 // fakeRates stands in for Biteship: every courier asked for offers one
@@ -152,7 +153,7 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 		Carts: carts.NewService(store, files), Orders: ordersSvc,
 		Customers: customers.NewService(store, signer, resets, mail.queue), Team: team.NewService(store, nil, testBox(t)),
 		OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay}
+		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.

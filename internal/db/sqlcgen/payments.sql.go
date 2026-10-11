@@ -89,6 +89,34 @@ func (q *Queries) LatestPayment(ctx context.Context, orderID uuid.UUID) (Payment
 	return i, err
 }
 
+const lockPayment = `-- name: LockPayment :one
+SELECT id, tenant_id, order_id, provider, provider_order_id, attempt, status, gross_amount, snap_token, redirect_url, expires_at, transaction_status, last_notification, paid_at, created_at, updated_at FROM payments WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockPayment(ctx context.Context, id uuid.UUID) (Payment, error) {
+	row := q.db.QueryRow(ctx, lockPayment, id)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.OrderID,
+		&i.Provider,
+		&i.ProviderOrderID,
+		&i.Attempt,
+		&i.Status,
+		&i.GrossAmount,
+		&i.SnapToken,
+		&i.RedirectUrl,
+		&i.ExpiresAt,
+		&i.TransactionStatus,
+		&i.LastNotification,
+		&i.PaidAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const orderPayments = `-- name: OrderPayments :many
 SELECT id, tenant_id, order_id, provider, provider_order_id, attempt, status, gross_amount, snap_token, redirect_url, expires_at, transaction_status, last_notification, paid_at, created_at, updated_at FROM payments WHERE order_id = $1 ORDER BY attempt DESC
 `
@@ -129,6 +157,63 @@ func (q *Queries) OrderPayments(ctx context.Context, orderID uuid.UUID) ([]Payme
 		return nil, err
 	}
 	return items, nil
+}
+
+const paymentByProviderOrderID = `-- name: PaymentByProviderOrderID :one
+SELECT id, tenant_id, order_id, provider, provider_order_id, attempt, status, gross_amount, snap_token, redirect_url, expires_at, transaction_status, last_notification, paid_at, created_at, updated_at FROM payments WHERE provider_order_id = $1
+`
+
+// Read without a lock: the webhook locks the order first, then this row, the
+// order pay-again locks in too.
+func (q *Queries) PaymentByProviderOrderID(ctx context.Context, providerOrderID string) (Payment, error) {
+	row := q.db.QueryRow(ctx, paymentByProviderOrderID, providerOrderID)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.OrderID,
+		&i.Provider,
+		&i.ProviderOrderID,
+		&i.Attempt,
+		&i.Status,
+		&i.GrossAmount,
+		&i.SnapToken,
+		&i.RedirectUrl,
+		&i.ExpiresAt,
+		&i.TransactionStatus,
+		&i.LastNotification,
+		&i.PaidAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const recordNotification = `-- name: RecordNotification :exec
+UPDATE payments SET status = $1, transaction_status = $2,
+       last_notification = $3, paid_at = $4, updated_at = now()
+WHERE id = $5
+`
+
+type RecordNotificationParams struct {
+	Status            string
+	TransactionStatus *string
+	LastNotification  []byte
+	PaidAt            *time.Time
+	ID                uuid.UUID
+}
+
+// What Get Status confirmed, the verified body, and where that leaves the
+// attempt (BR-124, BR-125).
+func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotificationParams) error {
+	_, err := q.db.Exec(ctx, recordNotification,
+		arg.Status,
+		arg.TransactionStatus,
+		arg.LastNotification,
+		arg.PaidAt,
+		arg.ID,
+	)
+	return err
 }
 
 const setPaymentLink = `-- name: SetPaymentLink :exec

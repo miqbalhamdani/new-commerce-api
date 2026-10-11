@@ -16,3 +16,18 @@ SELECT * FROM payments WHERE order_id = $1 ORDER BY attempt DESC LIMIT 1;
 -- name: OrderPayments :many
 -- Newest first, as the admin order detail lists them.
 SELECT * FROM payments WHERE order_id = $1 ORDER BY attempt DESC;
+
+-- name: PaymentByProviderOrderID :one
+-- Read without a lock: the webhook locks the order first, then this row, the
+-- order pay-again locks in too.
+SELECT * FROM payments WHERE provider_order_id = $1;
+
+-- name: LockPayment :one
+SELECT * FROM payments WHERE id = $1 FOR UPDATE;
+
+-- name: RecordNotification :exec
+-- What Get Status confirmed, the verified body, and where that leaves the
+-- attempt (BR-124, BR-125).
+UPDATE payments SET status = sqlc.arg(status), transaction_status = sqlc.arg(transaction_status),
+       last_notification = sqlc.arg(last_notification), paid_at = sqlc.narg(paid_at), updated_at = now()
+WHERE id = sqlc.arg(id);
