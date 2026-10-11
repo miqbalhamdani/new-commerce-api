@@ -693,6 +693,40 @@ type ShippingAddress struct {
 	Province   string  `json:"province"`
 }
 
+// ShippingOption defines model for ShippingOption.
+type ShippingOption struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+
+	// CourierName Examples: JNE
+	CourierName string `json:"courier_name"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
+
+	// Duration Examples: 2 - 3 days
+	Duration string `json:"duration"`
+
+	// Price Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Price Money `json:"price"`
+
+	// ServiceName Examples: Reguler
+	ServiceName string `json:"service_name"`
+}
+
+// ShippingQuote defines model for ShippingQuote.
+type ShippingQuote struct {
+	Options     []ShippingOption `json:"options"`
+	WeightGrams int              `json:"weight_grams"`
+}
+
+// ShippingRatesRequest defines model for ShippingRatesRequest.
+type ShippingRatesRequest struct {
+	DestinationPostalCode string `json:"destination_postal_code"`
+}
+
 // StorefrontConfig defines model for StorefrontConfig.
 type StorefrontConfig struct {
 	BankTransferInstructions *string                          `json:"bank_transfer_instructions"`
@@ -734,6 +768,10 @@ type Limit = int
 
 // OrderNumber Examples: ERG-000123
 type OrderNumber = string
+
+// BadGateway RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
+// OpenTelemetry trace id; quote it when reporting a problem.
+type BadGateway = Problem
 
 // Conflict RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -806,6 +844,9 @@ type CheckoutJSONRequestBody = CheckoutRequest
 
 // SetCartItemJSONRequestBody defines body for SetCartItem for application/json ContentType.
 type SetCartItemJSONRequestBody = CartItemWrite
+
+// CartShippingRatesJSONRequestBody defines body for CartShippingRates for application/json ContentType.
+type CartShippingRatesJSONRequestBody = ShippingRatesRequest
 
 // RegisterCustomerJSONRequestBody defines body for RegisterCustomer for application/json ContentType.
 type RegisterCustomerJSONRequestBody = CustomerRegister
@@ -926,6 +967,9 @@ type ServerInterface interface {
 	// SetCartItem Set a variant's quantity in the cart
 	// (PUT /carts/{cart_id}/items/{variant_id})
 	SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID)
+	// CartShippingRates What shipping the cart to a postal code costs
+	// (POST /carts/{cart_id}/shipping-rates)
+	CartShippingRates(w http.ResponseWriter, r *http.Request, cartId CartId)
 	// ListCategories The shop's categories, every tree or one kind
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
@@ -1019,6 +1063,12 @@ func (_ Unimplemented) Checkout(w http.ResponseWriter, r *http.Request, cartId C
 // SetCartItem Set a variant's quantity in the cart
 // (PUT /carts/{cart_id}/items/{variant_id})
 func (_ Unimplemented) SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CartShippingRates What shipping the cart to a postal code costs
+// (POST /carts/{cart_id}/shipping-rates)
+func (_ Unimplemented) CartShippingRates(w http.ResponseWriter, r *http.Request, cartId CartId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1267,6 +1317,32 @@ func (siw *ServerInterfaceWrapper) SetCartItem(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetCartItem(w, r, cartId, variantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CartShippingRates operation middleware
+func (siw *ServerInterfaceWrapper) CartShippingRates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cart_id" -------------
+	var cartId CartId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cart_id", chi.URLParam(r, "cart_id"), &cartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CartShippingRates(w, r, cartId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1723,6 +1799,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/carts/{cart_id}/items/{variant_id}", wrapper.SetCartItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/carts/{cart_id}/shipping-rates", wrapper.CartShippingRates)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/carts/{cart_id}/checkout", wrapper.Checkout)

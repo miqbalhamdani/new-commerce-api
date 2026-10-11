@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
@@ -25,6 +26,15 @@ type Service struct {
 	store *db.Store
 	files *storage.Store
 	jobs  *jobs.Service
+
+	// Rates quotes shipping (BR-120, BR-121); nil quotes nothing, which only
+	// tests that never quote rely on.
+	Rates Rates
+}
+
+// Rates is the cached Biteship quote (biteship.Cached).
+type Rates interface {
+	Quote(ctx context.Context, tenantID uuid.UUID, r biteship.Request) ([]biteship.Option, error)
 }
 
 func NewService(store *db.Store, files *storage.Store, j *jobs.Service) *Service {

@@ -27,9 +27,10 @@ var auditCases []auditCase
 // auditExempt are the mutating routes that write no audit row, each with why.
 // Keep it short: an entry here is a write nobody can trace.
 var auditExempt = map[route]string{
-	{http.MethodPost, "/v1/auth/login"}:   "no actor yet; sign-in is not an admin write",
-	{http.MethodPost, "/v1/auth/refresh"}: "token rotation, not an admin write",
-	{http.MethodPost, "/v1/auth/logout"}:  "ends the caller's own session, not an admin write",
+	{http.MethodPost, "/v1/auth/login"}:     "no actor yet; sign-in is not an admin write",
+	{http.MethodPost, "/v1/auth/refresh"}:   "token rotation, not an admin write",
+	{http.MethodPost, "/v1/auth/logout"}:    "ends the caller's own session, not an admin write",
+	{http.MethodPost, "/v1/shipping/rates"}: "a quote: a read that takes a body, and writes nothing",
 }
 
 // TestEveryMutatingRouteIsAudited is P1-018's acceptance over the routes:

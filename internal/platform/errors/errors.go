@@ -34,6 +34,8 @@ const (
 	CodeCustomerAuth      = "customer_auth_required"
 	CodeEmptyCart         = "empty_cart"
 	CodeItemUnavailable   = "item_unavailable"
+	CodeShippingGone      = "shipping_unavailable"
+	CodeRatesUnavailable  = "shipping_rates_unavailable"
 	CodeInternal          = "internal"
 )
 
@@ -125,6 +127,20 @@ func ItemUnavailable(items ...Field) *Error {
 		Title:  "Item unavailable",
 		Detail: "Some items in the cart can no longer be bought. Remove them and check out again."}).
 		WithFields(items...)
+}
+
+// ShippingUnavailable is the 409 for a courier service the fresh quote no
+// longer offers (BR-121).
+func ShippingUnavailable() *Error {
+	return (&Error{Code: CodeShippingGone, Status: http.StatusConflict, Title: "Shipping unavailable",
+		Detail: "That courier service is no longer offered to this address. Get the rates again and choose one."}).
+		WithFields(Field{Name: "shipping_option", Detail: "no longer offered"})
+}
+
+// ShippingRatesUnavailable is the 502 for Biteship not answering (BR-121).
+func ShippingRatesUnavailable(cause error) *Error {
+	return (&Error{Code: CodeRatesUnavailable, Status: http.StatusBadGateway, Title: "Shipping rates unavailable",
+		Detail: "Shipping rates could not be fetched. Try again in a moment."}).WithCause(cause)
 }
 
 // PermissionDenied names the permission that was required.

@@ -1266,10 +1266,13 @@ type OrderCreateRequest struct {
 	} `json:"lines"`
 	Note *string `json:"note,omitempty"`
 
-	// Shipping A typed shipping amount; `shipping_option` arrives with `P1-218` (BR-121).
-	Shipping        *Money                   `json:"shipping,omitempty"`
-	ShippingAddress ShippingAddressWrite     `json:"shipping_address"`
-	Source          OrderCreateRequestSource `json:"source"`
+	// Shipping A typed shipping amount. Send this or `shipping_option`, not both.
+	Shipping        *Money               `json:"shipping,omitempty"`
+	ShippingAddress ShippingAddressWrite `json:"shipping_address"`
+
+	// ShippingOption A courier service picked from a quote; the server quotes again and charges that (BR-121).
+	ShippingOption *ShippingChoice          `json:"shipping_option,omitempty"`
+	Source         OrderCreateRequestSource `json:"source"`
 }
 
 // OrderCreateRequestSource defines model for OrderCreateRequest.Source.
@@ -1652,6 +1655,47 @@ type ShippingAddressWrite struct {
 	Province   string  `json:"province"`
 }
 
+// ShippingChoice A courier service picked from a quote; the server quotes again and charges that (BR-121).
+type ShippingChoice struct {
+	CourierCode        string `json:"courier_code"`
+	CourierServiceCode string `json:"courier_service_code"`
+}
+
+// ShippingOption defines model for ShippingOption.
+type ShippingOption struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+	CourierName string `json:"courier_name"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
+	Duration           string `json:"duration"`
+
+	// Price An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Price       Money  `json:"price"`
+	ServiceName string `json:"service_name"`
+}
+
+// ShippingQuote defines model for ShippingQuote.
+type ShippingQuote struct {
+	Options     []ShippingOption `json:"options"`
+	WeightGrams int              `json:"weight_grams"`
+}
+
+// ShippingRatesRequest defines model for ShippingRatesRequest.
+type ShippingRatesRequest struct {
+	DestinationPostalCode string `json:"destination_postal_code"`
+	Lines                 []struct {
+		Qty       int                `json:"qty"`
+		VariantId openapi_types.UUID `json:"variant_id"`
+	} `json:"lines"`
+}
+
 // StorefrontSettings defines model for StorefrontSettings.
 type StorefrontSettings struct {
 	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
@@ -1885,6 +1929,12 @@ type IfMatch = int
 
 // Limit defines model for Limit.
 type Limit = int
+
+// BadGateway RFC 9457 `application/problem+json`. Every error response in this API uses it.
+//
+// `trace_id` is the OpenTelemetry trace id — a support ticket quoting it goes straight to
+// the span. There is no separate `code` field: the code is the last segment of `type`.
+type BadGateway = Problem
 
 // BadRequest RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
@@ -2156,6 +2206,9 @@ type CreateVariantJSONRequestBody = VariantCreate
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = SettingsUpdate
 
+// ShippingRatesJSONRequestBody defines body for ShippingRates for application/json ContentType.
+type ShippingRatesJSONRequestBody = ShippingRatesRequest
+
 // UpdateStorefrontSettingsJSONRequestBody defines body for UpdateStorefrontSettings for application/json ContentType.
 type UpdateStorefrontSettingsJSONRequestBody = StorefrontSettingsUpdate
 
@@ -2404,6 +2457,9 @@ type ServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request)
+	// ShippingRates Quote shipping for a manual order
+	// (POST /shipping/rates)
+	ShippingRates(w http.ResponseWriter, r *http.Request)
 	// GetStorefrontSettings How the shop's website sells
 	// (GET /storefront-settings)
 	GetStorefrontSettings(w http.ResponseWriter, r *http.Request)
@@ -2740,6 +2796,12 @@ func (_ Unimplemented) GetSettings(w http.ResponseWriter, r *http.Request) {
 // UpdateSettings Change the shop's name, time zone or order prefix
 // (PATCH /settings)
 func (_ Unimplemented) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ShippingRates Quote shipping for a manual order
+// (POST /shipping/rates)
+func (_ Unimplemented) ShippingRates(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4422,6 +4484,20 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ShippingRates operation middleware
+func (siw *ServerInterfaceWrapper) ShippingRates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShippingRates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetStorefrontSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -4949,6 +5025,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/audit-log", wrapper.ListAuditLog)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/shipping/rates", wrapper.ShippingRates)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
 	})
 	r.Group(func(r chi.Router) {
@@ -4990,6 +5069,8 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 	return r
 }
+
+type BadGatewayApplicationProblemPlusJSONResponse Problem
 
 type BadRequestApplicationProblemPlusJSONResponse Problem
 
@@ -8818,6 +8899,92 @@ func (response UpdateSettings422ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type ShippingRatesRequestObject struct {
+	Body *ShippingRatesJSONRequestBody
+}
+
+type ShippingRatesResponseObject interface {
+	VisitShippingRatesResponse(w http.ResponseWriter) error
+}
+
+type ShippingRates200JSONResponse ShippingQuote
+
+func (response ShippingRates200JSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates401ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates403ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates422ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates502ApplicationProblemPlusJSONResponse struct {
+	BadGatewayApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates502ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetStorefrontSettingsRequestObject struct {
 }
 
@@ -9651,6 +9818,9 @@ type StrictServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
+	// ShippingRates Quote shipping for a manual order
+	// (POST /shipping/rates)
+	ShippingRates(ctx context.Context, request ShippingRatesRequestObject) (ShippingRatesResponseObject, error)
 	// GetStorefrontSettings How the shop's website sells
 	// (GET /storefront-settings)
 	GetStorefrontSettings(ctx context.Context, request GetStorefrontSettingsRequestObject) (GetStorefrontSettingsResponseObject, error)
@@ -11187,6 +11357,37 @@ func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ShippingRates operation middleware
+func (sh *strictHandler) ShippingRates(w http.ResponseWriter, r *http.Request) {
+	var request ShippingRatesRequestObject
+
+	var body ShippingRatesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShippingRates(ctx, request.(ShippingRatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShippingRates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShippingRatesResponseObject); ok {
+		if err := validResponse.VisitShippingRatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

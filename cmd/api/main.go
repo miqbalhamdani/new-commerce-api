@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -126,6 +127,11 @@ func run() error {
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
+	quoter, err := shippingQuoter()
+	if err != nil {
+		return err
+	}
+	ordersSvc.Rates = biteship.Cached{Quoter: quoter, Cache: redis}
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), Team: teamSvc,
@@ -175,4 +181,18 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// shippingQuoter is Biteship with the platform key (BR-120). Development
+// without one quotes fixed rates so checkout still works locally; anywhere
+// else a missing key is a startup failure, not a checkout that cannot ship.
+func shippingQuoter() (biteship.Quoter, error) {
+	if key := config.BiteshipAPIKey(); key != "" {
+		return biteship.NewClient(key, config.BiteshipURL()), nil
+	}
+	if config.IsDevelopment() {
+		slog.Warn("development mode: no BITESHIP_API_KEY, quoting fixed shipping rates")
+		return biteship.Fixed{}, nil
+	}
+	return nil, errors.New("BITESHIP_API_KEY is required when ENVIRONMENT is not \"development\"")
 }

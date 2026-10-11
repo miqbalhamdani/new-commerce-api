@@ -65,16 +65,17 @@ RETURNING last_value;
 -- BR-046, BR-078: what a manual order snapshots from the catalog. price is
 -- variant_price(), the one function that decides what a variant costs now.
 -- name: VariantForOrder :one
-SELECT v.id, v.sku, v.option_values, v.archived_at, variant_price(v)::bigint AS price, p.title
+SELECT v.id, v.sku, v.option_values, v.archived_at, variant_price(v)::bigint AS price, v.weight_grams, p.title
 FROM variants v JOIN products p ON p.id = v.product_id
 WHERE v.id = $1;
 
 -- name: CreateOrder :one
 INSERT INTO orders (id, tenant_id, source, customer_id, cart_id, order_number, customer, shipping_address,
-                    note, payment_method, subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
+                    note, payment_method, shipping_courier, shipping_service,
+                    subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
 VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(source), sqlc.narg(customer_id),
         sqlc.narg(cart_id), sqlc.arg(order_number), sqlc.arg(customer), sqlc.arg(shipping_address),
-        sqlc.narg(note), sqlc.arg(payment_method),
+        sqlc.narg(note), sqlc.arg(payment_method), sqlc.narg(shipping_courier), sqlc.narg(shipping_service),
         sqlc.arg(subtotal), sqlc.arg(shipping), sqlc.arg(discount), sqlc.arg(total), now())
 RETURNING *;
 

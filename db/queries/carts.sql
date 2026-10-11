@@ -34,7 +34,7 @@ SELECT EXISTS (SELECT 1 FROM storefront_variants WHERE id = $1);
 -- still says what it was (BR-090), and priced through storefront_variants
 -- only while it is visible.
 SELECT ci.variant_id, ci.qty, l.sku, l.option_values, l.product_title, l.product_slug, l.available,
-       sv.price_amount
+       sv.price_amount, sv.weight_grams
 FROM cart_items ci
 JOIN storefront_variant_labels l ON l.id = ci.variant_id
 LEFT JOIN storefront_variants sv ON sv.id = ci.variant_id

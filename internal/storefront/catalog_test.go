@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -38,6 +39,51 @@ type shop struct {
 	signer *auth.Signer
 	resets *auth.ResetTokens
 	mail   *mailbox
+	rates  *fakeRates
+}
+
+// fakeRates stands in for Biteship: every courier asked for offers one
+// Reguler service at price, until down is set.
+type fakeRates struct {
+	mu    sync.Mutex
+	price int64
+	down  bool
+	asks  int
+	cache map[string][]byte
+}
+
+func (f *fakeRates) Rates(_ context.Context, r biteship.Request) ([]biteship.Option, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asks++
+	if f.down {
+		return nil, biteship.ErrUnavailable
+	}
+	opts := []biteship.Option{}
+	for _, c := range r.Couriers {
+		opts = append(opts, biteship.Option{CourierCode: c, ServiceCode: "reg", CourierName: strings.ToUpper(c),
+			ServiceName: "Reguler", Price: f.price, Duration: "2 - 3 days"})
+	}
+	return opts, nil
+}
+
+func (f *fakeRates) set(price int64, down bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.price, f.down = price, down
+}
+
+func (f *fakeRates) Get(_ context.Context, k string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cache[k], nil
+}
+
+func (f *fakeRates) Set(_ context.Context, k string, v []byte, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cache[k] = v
+	return nil
 }
 
 // mailbox catches the envelopes a service would queue for the worker, so a
@@ -96,11 +142,14 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 		t.Fatal(err)
 	}
 	mail := &mailbox{}
+	rates := &fakeRates{price: 1100000, cache: map[string][]byte{}}
+	ordersSvc := orders.NewService(store, files, nil)
+	ordersSvc.Rates = biteship.Cached{Quoter: rates, Cache: rates}
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
-		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
+		Carts: carts.NewService(store, files), Orders: ordersSvc,
 		Customers: customers.NewService(store, signer, resets, mail.queue), Team: team.NewService(store, nil, testBox(t)),
 		OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer, resets: resets, mail: mail}
+		key: key, signer: signer, resets: resets, mail: mail, rates: rates}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.

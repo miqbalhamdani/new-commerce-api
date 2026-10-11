@@ -52,3 +52,10 @@ func EncryptionKey() (string, error) {
 // APIURL is the API's own public base, for URLs other systems call back on:
 // the Midtrans notification URL (BR-124). The domain arrives with P1-001.
 func APIURL() string { return Getenv("API_URL", "http://localhost:8080") }
+
+// BiteshipAPIKey is the platform's one Biteship key (BR-120); shops never
+// hold their own. Empty is development only, which then quotes fixed rates.
+func BiteshipAPIKey() string { return Getenv("BITESHIP_API_KEY", "") }
+
+// BiteshipURL is Biteship's API base.
+func BiteshipURL() string { return Getenv("BITESHIP_URL", "https://api.biteship.com") }

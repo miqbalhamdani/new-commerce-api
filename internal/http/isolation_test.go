@@ -34,6 +34,7 @@ import (
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
@@ -349,6 +350,9 @@ var newServer = func(t *testing.T) http.Handler {
 	}
 	redis := testRedis(t)
 	jobsSvc := jobs.NewService(store, redis)
+	ordersSvc := orders.NewService(store, testFiles(t), jobsSvc)
+	// Development's fixed rates: every offered courier, Reguler, Rp 10.000.
+	ordersSvc.Rates = biteship.Cached{Quoter: biteship.Fixed{}, Cache: redis}
 
 	// secureCookies false: httptest speaks plain HTTP.
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
@@ -356,7 +360,7 @@ var newServer = func(t *testing.T) http.Handler {
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Jobs:    jobsSvc,
 		Team:    team.NewService(store, redis, testBox(t)),
-		Orders:  orders.NewService(store, testFiles(t), jobsSvc),
+		Orders:  ordersSvc,
 		Invites: testInvites(t),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
