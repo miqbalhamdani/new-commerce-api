@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -81,12 +82,14 @@ func paramName(err error) string {
 // encode, as on the admin side.
 type Server struct {
 	catalog *catalog.Service
+	carts   *carts.Service
 }
 
 // Services are the domain use cases the storefront composes, one field per
 // domain package.
 type Services struct {
 	Catalog *catalog.Service
+	Carts   *carts.Service
 }
 
-func NewServer(svc Services) *Server { return &Server{catalog: svc.Catalog} }
+func NewServer(svc Services) *Server { return &Server{catalog: svc.Catalog, carts: svc.Carts} }

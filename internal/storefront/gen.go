@@ -134,6 +134,45 @@ type BrandRef struct {
 	Slug string `json:"slug"`
 }
 
+// Cart defines model for Cart.
+type Cart struct {
+	CartId    openapi_types.UUID `json:"cart_id"`
+	ExpiresAt time.Time          `json:"expires_at"`
+
+	// ItemCount The total quantity of every item.
+	ItemCount int        `json:"item_count"`
+	Items     []CartItem `json:"items"`
+
+	// Subtotal Available items only.
+	Subtotal Money `json:"subtotal"`
+}
+
+// CartItem defines model for CartItem.
+type CartItem struct {
+	// Available Whether the variant can still be bought (BR-080, BR-090).
+	Available bool `json:"available"`
+
+	// ImageUrl The 200 px image of the variant, else of the product; `null` if neither has one.
+	ImageUrl     *string  `json:"image_url"`
+	LineTotal    *Money   `json:"line_total"`
+	OptionValues []string `json:"option_values"`
+	ProductSlug  string   `json:"product_slug"`
+	Qty          int      `json:"qty"`
+	Sku          *string  `json:"sku"`
+
+	// Title Examples: Erigo Basic Tee — Black / M
+	Title string `json:"title"`
+
+	// UnitPrice Today's price (BR-046); `null` when the item is not available.
+	UnitPrice *Money             `json:"unit_price"`
+	VariantId openapi_types.UUID `json:"variant_id"`
+}
+
+// CartItemWrite defines model for CartItemWrite.
+type CartItemWrite struct {
+	Qty int `json:"qty"`
+}
+
 // Category defines model for Category.
 type Category struct {
 	Id       openapi_types.UUID  `json:"id"`
@@ -274,6 +313,9 @@ type ProductVariant struct {
 	WeightGrams  int     `json:"weight_grams"`
 }
 
+// CartId defines model for CartId.
+type CartId = openapi_types.UUID
+
 // Cursor defines model for Cursor.
 type Cursor = string
 
@@ -317,6 +359,9 @@ type ListProductsParams struct {
 
 // ListProductsParamsSort defines parameters for ListProducts.
 type ListProductsParamsSort string
+
+// SetCartItemJSONRequestBody defines body for SetCartItem for application/json ContentType.
+type SetCartItemJSONRequestBody = CartItemWrite
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -404,6 +449,15 @@ type ServerInterface interface {
 	// ListBrands The shop's brands
 	// (GET /brands)
 	ListBrands(w http.ResponseWriter, r *http.Request)
+	// CreateCart Start a cart
+	// (POST /carts)
+	CreateCart(w http.ResponseWriter, r *http.Request)
+	// GetCart A cart, priced now
+	// (GET /carts/{cart_id})
+	GetCart(w http.ResponseWriter, r *http.Request, cartId CartId)
+	// SetCartItem Set a variant's quantity in the cart
+	// (PUT /carts/{cart_id}/items/{variant_id})
+	SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID)
 	// ListCategories The shop's categories, every tree or one kind
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
@@ -422,6 +476,24 @@ type Unimplemented struct{}
 // ListBrands The shop's brands
 // (GET /brands)
 func (_ Unimplemented) ListBrands(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateCart Start a cart
+// (POST /carts)
+func (_ Unimplemented) CreateCart(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetCart A cart, priced now
+// (GET /carts/{cart_id})
+func (_ Unimplemented) GetCart(w http.ResponseWriter, r *http.Request, cartId CartId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SetCartItem Set a variant's quantity in the cart
+// (PUT /carts/{cart_id}/items/{variant_id})
+func (_ Unimplemented) SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -457,6 +529,81 @@ func (siw *ServerInterfaceWrapper) ListBrands(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListBrands(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCart operation middleware
+func (siw *ServerInterfaceWrapper) CreateCart(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCart(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCart operation middleware
+func (siw *ServerInterfaceWrapper) GetCart(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cart_id" -------------
+	var cartId CartId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cart_id", chi.URLParam(r, "cart_id"), &cartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCart(w, r, cartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetCartItem operation middleware
+func (siw *ServerInterfaceWrapper) SetCartItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cart_id" -------------
+	var cartId CartId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cart_id", chi.URLParam(r, "cart_id"), &cartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cart_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "variant_id" -------------
+	var variantId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "variant_id", chi.URLParam(r, "variant_id"), &variantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "variant_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetCartItem(w, r, cartId, variantId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -747,6 +894,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/brands", wrapper.ListBrands)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/carts", wrapper.CreateCart)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/carts/{cart_id}", wrapper.GetCart)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/carts/{cart_id}/items/{variant_id}", wrapper.SetCartItem)
 	})
 
 	return r

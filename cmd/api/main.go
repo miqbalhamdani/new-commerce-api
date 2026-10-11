@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
@@ -100,7 +101,7 @@ func run() error {
 	// the admin router.
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
-		storefront.NewServer(storefront.Services{Catalog: catalogSvc}),
+		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files)}),
 		storefront.NewKeys(pool),
 	))
 	mux.Handle("/v1/", httpapi.NewRouter(

@@ -1,8 +1,10 @@
 package storefront
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
@@ -33,19 +36,42 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	if err != nil {
 		t.Fatalf("object store: %v", err)
 	}
-	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil)}), NewKeys(store)), key: key}
+	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
+		Carts: carts.NewService(store, files)}), NewKeys(store)), key: key}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.
 func (s shop) get(t *testing.T, path string) (int, map[string]any, string) {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodGet, path, nil)
+	return s.do(t, http.MethodGet, path, nil)
+}
+
+// do sends a request with the shop's key and, if body is not nil, body as
+// JSON (a string is sent as it is).
+func (s shop) do(t *testing.T, method, path string, body any, headers ...string) (int, map[string]any, string) {
+	t.Helper()
+	var reader io.Reader
+	switch b := body.(type) {
+	case nil:
+	case string:
+		reader = strings.NewReader(b)
+	default:
+		raw, err := json.Marshal(b)
+		if err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+	r := httptest.NewRequest(method, path, reader)
 	r.Header.Set("X-Api-Key", s.key)
+	for i := 0; i+1 < len(headers); i += 2 {
+		r.Header.Set(headers[i], headers[i+1])
+	}
 	rec := httptest.NewRecorder()
 	s.h.ServeHTTP(rec, r)
-	var body map[string]any
-	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	return rec.Code, body, rec.Body.String()
+	var out map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return rec.Code, out, rec.Body.String()
 }
 
 // execTenant runs sql in tenantID. A {idXXXX} placeholder becomes a fresh
@@ -118,7 +144,8 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	// Cleanups run after t.Context() is cancelled.
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
+		_, err := tx.Exec(ctx, `DELETE FROM cart_items; DELETE FROM carts;
+			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)
 		return err
 	})

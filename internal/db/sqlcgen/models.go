@@ -46,6 +46,24 @@ type Brand struct {
 	UpdatedAt  time.Time
 }
 
+type Cart struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	CustomerID *uuid.UUID
+	Status     string
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type CartItem struct {
+	TenantID  uuid.UUID
+	CartID    uuid.UUID
+	VariantID uuid.UUID
+	Qty       int32
+	AddedAt   time.Time
+}
+
 type Category struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
@@ -116,6 +134,7 @@ type Order struct {
 	Version         int32
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	CartID          *uuid.UUID
 }
 
 type OrderLine struct {
@@ -208,6 +227,16 @@ type StorefrontVariant struct {
 	Currency           string
 	WeightGrams        int32
 	ProductTitle       string
+}
+
+type StorefrontVariantLabel struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	Sku          *string
+	OptionValues []string
+	ProductTitle string
+	ProductSlug  string
+	Available    *bool
 }
 
 type Tenant struct {

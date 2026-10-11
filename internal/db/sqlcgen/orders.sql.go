@@ -18,7 +18,7 @@ INSERT INTO orders (id, tenant_id, source, order_number, customer, shipping_addr
 VALUES ($1, current_setting('app.tenant_id')::uuid, 'manual', $2,
         $3, $4, $5,
         $6, $7, $8, $9, now())
-RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id
 `
 
 type CreateOrderParams struct {
@@ -75,6 +75,7 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
@@ -112,7 +113,7 @@ func (q *Queries) CreateOrderLine(ctx context.Context, arg CreateOrderLineParams
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at FROM orders WHERE id = $1
+SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id FROM orders WHERE id = $1
 `
 
 func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
@@ -147,6 +148,7 @@ func (q *Queries) GetOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
@@ -187,7 +189,7 @@ func (q *Queries) GetOrderLines(ctx context.Context, orderID uuid.UUID) ([]Order
 
 const lockOrder = `-- name: LockOrder :one
 
-SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at FROM orders WHERE id = $1 FOR UPDATE
+SELECT id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id FROM orders WHERE id = $1 FOR UPDATE
 `
 
 // Orders (Phase 2, 04-api-spec.md §5). Status changes only through the one
@@ -226,6 +228,7 @@ func (q *Queries) LockOrder(ctx context.Context, id uuid.UUID) (Order, error) {
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
@@ -249,7 +252,7 @@ func (q *Queries) NextOrderNumber(ctx context.Context) (int64, error) {
 const recordRefund = `-- name: RecordRefund :one
 UPDATE orders SET refunded_at = now(), version = version + 1, updated_at = now()
 WHERE id = $1
-RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id
 `
 
 // BR-075. Not a transition: the status stays cancelled. The caller holds the
@@ -287,6 +290,7 @@ func (q *Queries) RecordRefund(ctx context.Context, id uuid.UUID) (Order, error)
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
@@ -314,7 +318,7 @@ UPDATE orders SET
     version         = version + 1,
     updated_at      = now()
 WHERE id = $4
-RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id
 `
 
 type TransitionOrderParams struct {
@@ -364,6 +368,7 @@ func (q *Queries) TransitionOrder(ctx context.Context, arg TransitionOrderParams
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
@@ -377,7 +382,7 @@ UPDATE orders SET
     version          = version + 1,
     updated_at       = now()
 WHERE id = $5
-RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at
+RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id
 `
 
 type UpdatePendingOrderParams struct {
@@ -429,6 +434,7 @@ func (q *Queries) UpdatePendingOrder(ctx context.Context, arg UpdatePendingOrder
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CartID,
 	)
 	return i, err
 }
