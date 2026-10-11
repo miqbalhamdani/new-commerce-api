@@ -2,8 +2,8 @@
 //
 // It defines what an error *is* -- a code, a status, and something a person can
 // read -- and deliberately not how it is written to the wire. The wire shape is
-// RFC 9457 and lives in internal/http, which owns the generated Problem type;
-// nothing imports internal/http, so the taxonomy cannot live there.
+// RFC 9457 and lives in internal/httpkit, which the admin and storefront APIs
+// share.
 package errors
 
 import (
@@ -29,6 +29,8 @@ const (
 	CodeNotFound          = "not_found"
 	CodeRateLimited       = "rate_limited"
 	CodeUnauthenticated   = "unauthenticated"
+	CodeInvalidAPIKey     = "invalid_api_key"
+	CodeOriginNotAllowed  = "origin_not_allowed"
 	CodeInternal          = "internal"
 )
 
@@ -83,6 +85,21 @@ func (e *Error) WithFields(fields ...Field) *Error {
 func Unauthenticated(detail string) *Error {
 	return &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized,
 		Title: "Unauthenticated", Detail: detail}
+}
+
+// InvalidAPIKey is the storefront's 401 for an X-Api-Key that is missing,
+// unknown or revoked (BR-085). One answer for all three: telling them apart
+// would confirm which keys once existed.
+func InvalidAPIKey() *Error {
+	return &Error{Code: CodeInvalidAPIKey, Status: http.StatusUnauthorized,
+		Title: "Invalid API key", Detail: "Send a live storefront API key in X-Api-Key."}
+}
+
+// OriginNotAllowed is the 403 for a browser request from an origin other than
+// the key's allowed_origin (BR-083).
+func OriginNotAllowed() *Error {
+	return &Error{Code: CodeOriginNotAllowed, Status: http.StatusForbidden,
+		Title: "Origin not allowed", Detail: "This API key does not accept requests from this website."}
 }
 
 // PermissionDenied names the permission that was required.

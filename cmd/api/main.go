@@ -23,6 +23,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storefront"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
@@ -94,6 +95,10 @@ func run() error {
 		checker{name: "postgres", version: pool.ServerVersion},
 		checker{name: "redis", version: redis.ServerVersion},
 	))
+	// The storefront first: the longer pattern wins in ServeMux anyway, but a
+	// reader should not have to know that to see /v1/storefront never reaches
+	// the admin router.
+	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(storefront.NewServer(), storefront.NewKeys(pool)))
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
