@@ -42,6 +42,42 @@ func (e CategoryKind) Valid() bool {
 	}
 }
 
+// Defines values for CheckoutOrderPaymentMethod.
+const (
+	CheckoutOrderPaymentMethodBankTransfer CheckoutOrderPaymentMethod = "bank_transfer"
+	CheckoutOrderPaymentMethodMidtrans     CheckoutOrderPaymentMethod = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the CheckoutOrderPaymentMethod enum.
+func (e CheckoutOrderPaymentMethod) Valid() bool {
+	switch e {
+	case CheckoutOrderPaymentMethodBankTransfer:
+		return true
+	case CheckoutOrderPaymentMethodMidtrans:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CheckoutRequestPaymentMethod.
+const (
+	CheckoutRequestPaymentMethodBankTransfer CheckoutRequestPaymentMethod = "bank_transfer"
+	CheckoutRequestPaymentMethodMidtrans     CheckoutRequestPaymentMethod = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the CheckoutRequestPaymentMethod enum.
+func (e CheckoutRequestPaymentMethod) Valid() bool {
+	switch e {
+	case CheckoutRequestPaymentMethodBankTransfer:
+		return true
+	case CheckoutRequestPaymentMethodMidtrans:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeCustomerAuthRequired     ErrorCode = "customer_auth_required"
@@ -190,6 +226,64 @@ type CategoryList struct {
 	Data []Category `json:"data"`
 }
 
+// CheckoutOrder defines model for CheckoutOrder.
+type CheckoutOrder struct {
+	Lines []OrderLine `json:"lines"`
+
+	// OrderNumber Examples: ERG-000123
+	OrderNumber string `json:"order_number"`
+
+	// OrderToken Guests only, `null` for a signed-in customer. Send it as `X-Order-Token` to read the
+	// order (BR-091).
+	OrderToken *string `json:"order_token"`
+
+	// Payment The Midtrans link to pay; `null` for bank transfer.
+	Payment       *Payment                   `json:"payment"`
+	PaymentMethod CheckoutOrderPaymentMethod `json:"payment_method"`
+	PlacedAt      time.Time                  `json:"placed_at"`
+
+	// Shipping Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Shipping        Money   `json:"shipping"`
+	ShippingCourier *string `json:"shipping_courier"`
+	ShippingService *string `json:"shipping_service"`
+
+	// Status Examples: pending
+	Status string `json:"status"`
+
+	// Subtotal Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Subtotal Money `json:"subtotal"`
+
+	// Total Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Total Money `json:"total"`
+}
+
+// CheckoutOrderPaymentMethod defines model for CheckoutOrder.PaymentMethod.
+type CheckoutOrderPaymentMethod string
+
+// CheckoutRequest defines model for CheckoutRequest.
+type CheckoutRequest struct {
+	Contact         Contact                      `json:"contact"`
+	Note            *string                      `json:"note,omitempty"`
+	PaymentMethod   CheckoutRequestPaymentMethod `json:"payment_method"`
+	ShippingAddress ShippingAddress              `json:"shipping_address"`
+}
+
+// CheckoutRequestPaymentMethod defines model for CheckoutRequest.PaymentMethod.
+type CheckoutRequestPaymentMethod string
+
+// Contact defines model for Contact.
+type Contact struct {
+	Email openapi_types.Email `json:"email"`
+	Name  string              `json:"name"`
+	Phone *string             `json:"phone,omitempty"`
+}
+
 // ErrorCode The error codes this API returns, a subset of `04-api-spec.md` §1.1. The code is the last
 // segment of a `Problem.type` URI.
 type ErrorCode string
@@ -206,6 +300,27 @@ type Image struct {
 //
 // Examples: 19900000
 type Money = int64
+
+// OrderLine defines model for OrderLine.
+type OrderLine struct {
+	Qty int     `json:"qty"`
+	Sku *string `json:"sku"`
+
+	// Title Examples: Erigo Basic Tee — Black / M
+	Title string `json:"title"`
+
+	// UnitPrice Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	UnitPrice Money `json:"unit_price"`
+}
+
+// Payment A Midtrans Snap payment link (BR-123).
+type Payment struct {
+	ExpiresAt   time.Time `json:"expires_at"`
+	RedirectUrl string    `json:"redirect_url"`
+	SnapToken   string    `json:"snap_token"`
+}
 
 // Problem RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -313,6 +428,15 @@ type ProductVariant struct {
 	WeightGrams  int     `json:"weight_grams"`
 }
 
+// ShippingAddress defines model for ShippingAddress.
+type ShippingAddress struct {
+	City       string  `json:"city"`
+	Line1      string  `json:"line1"`
+	Line2      *string `json:"line2,omitempty"`
+	PostalCode string  `json:"postal_code"`
+	Province   string  `json:"province"`
+}
+
 // CartId defines model for CartId.
 type CartId = openapi_types.UUID
 
@@ -321,6 +445,10 @@ type Cursor = string
 
 // Limit defines model for Limit.
 type Limit = int
+
+// Conflict RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
+// OpenTelemetry trace id; quote it when reporting a problem.
+type Conflict = Problem
 
 // InvalidApiKey RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -359,6 +487,9 @@ type ListProductsParams struct {
 
 // ListProductsParamsSort defines parameters for ListProducts.
 type ListProductsParamsSort string
+
+// CheckoutJSONRequestBody defines body for Checkout for application/json ContentType.
+type CheckoutJSONRequestBody = CheckoutRequest
 
 // SetCartItemJSONRequestBody defines body for SetCartItem for application/json ContentType.
 type SetCartItemJSONRequestBody = CartItemWrite
@@ -455,6 +586,9 @@ type ServerInterface interface {
 	// GetCart A cart, priced now
 	// (GET /carts/{cart_id})
 	GetCart(w http.ResponseWriter, r *http.Request, cartId CartId)
+	// Checkout Turn the cart into an order
+	// (POST /carts/{cart_id}/checkout)
+	Checkout(w http.ResponseWriter, r *http.Request, cartId CartId)
 	// SetCartItem Set a variant's quantity in the cart
 	// (PUT /carts/{cart_id}/items/{variant_id})
 	SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID)
@@ -488,6 +622,12 @@ func (_ Unimplemented) CreateCart(w http.ResponseWriter, r *http.Request) {
 // GetCart A cart, priced now
 // (GET /carts/{cart_id})
 func (_ Unimplemented) GetCart(w http.ResponseWriter, r *http.Request, cartId CartId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Checkout Turn the cart into an order
+// (POST /carts/{cart_id}/checkout)
+func (_ Unimplemented) Checkout(w http.ResponseWriter, r *http.Request, cartId CartId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -569,6 +709,32 @@ func (siw *ServerInterfaceWrapper) GetCart(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCart(w, r, cartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Checkout operation middleware
+func (siw *ServerInterfaceWrapper) Checkout(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cart_id" -------------
+	var cartId CartId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cart_id", chi.URLParam(r, "cart_id"), &cartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Checkout(w, r, cartId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -903,6 +1069,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/carts/{cart_id}/items/{variant_id}", wrapper.SetCartItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/carts/{cart_id}/checkout", wrapper.Checkout)
 	})
 
 	return r

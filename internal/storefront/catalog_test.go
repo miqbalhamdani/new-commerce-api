@@ -16,9 +16,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
@@ -36,8 +38,13 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	if err != nil {
 		t.Fatalf("object store: %v", err)
 	}
+	tokens, err := auth.NewOrderTokens("test-order-token-key-at-least-32-bytes")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
-		Carts: carts.NewService(store, files)}), NewKeys(store)), key: key}
+		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
+		OrderTokens: tokens}), NewKeys(store)), key: key}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.
@@ -144,7 +151,8 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	// Cleanups run after t.Context() is cancelled.
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM cart_items; DELETE FROM carts;
+		_, err := tx.Exec(ctx, `DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
+			DELETE FROM cart_items; DELETE FROM carts;
 			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)
 		return err

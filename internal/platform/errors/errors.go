@@ -31,6 +31,8 @@ const (
 	CodeUnauthenticated   = "unauthenticated"
 	CodeInvalidAPIKey     = "invalid_api_key"
 	CodeOriginNotAllowed  = "origin_not_allowed"
+	CodeEmptyCart         = "empty_cart"
+	CodeItemUnavailable   = "item_unavailable"
 	CodeInternal          = "internal"
 )
 
@@ -100,6 +102,21 @@ func InvalidAPIKey() *Error {
 func OriginNotAllowed() *Error {
 	return &Error{Code: CodeOriginNotAllowed, Status: http.StatusForbidden,
 		Title: "Origin not allowed", Detail: "This API key does not accept requests from this website."}
+}
+
+// EmptyCart is the 422 for checking out a cart with nothing in it (BR-090).
+func EmptyCart() *Error {
+	return &Error{Code: CodeEmptyCart, Status: http.StatusUnprocessableEntity,
+		Title: "Empty cart", Detail: "The cart is empty."}
+}
+
+// ItemUnavailable is the 409 for checking out a cart holding items that can
+// no longer be bought; items names each one (BR-090).
+func ItemUnavailable(items ...Field) *Error {
+	return (&Error{Code: CodeItemUnavailable, Status: http.StatusConflict,
+		Title:  "Item unavailable",
+		Detail: "Some items in the cart can no longer be bought. Remove them and check out again."}).
+		WithFields(items...)
 }
 
 // PermissionDenied names the permission that was required.

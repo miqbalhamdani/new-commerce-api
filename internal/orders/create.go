@@ -34,14 +34,9 @@ type CreateInput struct {
 // tenant sequence (BR-077), every line priced by variant_price() and
 // snapshotted (BR-046, BR-076, BR-078).
 func (s *Service) Create(ctx context.Context, in CreateInput) (uuid.UUID, error) {
-	id := uuid.Must(uuid.NewV7())
+	var id uuid.UUID
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
-		type snapshot struct {
-			sku, title string
-			unitPrice  int64
-		}
-		var subtotal, discount int64
-		snaps := make([]snapshot, len(in.Lines))
+		lines := make([]newLine, len(in.Lines))
 		for i, l := range in.Lines {
 			field := func(name string) string { return fmt.Sprintf("lines.%d.%s", i, name) }
 			v, err := q.VariantForOrder(ctx, l.VariantID)
@@ -54,51 +49,93 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (uuid.UUID, error)
 			if v.ArchivedAt != nil {
 				return fieldError(field("variant_id"), "This variant is archived and cannot be ordered (BR-045).")
 			}
-			lineTotal := v.Price * int64(l.Qty)
-			if l.Discount > lineTotal {
+			if l.Discount > v.Price*int64(l.Qty) {
 				return fieldError(field("discount"), "A discount cannot exceed the line's total.")
 			}
-			snaps[i] = snapshot{sku: deref(v.Sku), title: titleSnapshot(v.Title, v.OptionValues), unitPrice: v.Price}
-			subtotal += lineTotal
-			discount += l.Discount
+			lines[i] = newLine{VariantID: l.VariantID, Qty: l.Qty, Discount: l.Discount,
+				SKU: deref(v.Sku), Title: titleSnapshot(v.Title, v.OptionValues), UnitPrice: v.Price}
 		}
-
-		prefix, err := q.TenantOrderPrefix(ctx)
+		o, err := insert(ctx, q, newOrder{Source: "manual", PaymentMethod: "bank_transfer",
+			Customer: in.Customer, ShippingAddress: in.ShippingAddress, Note: in.Note,
+			Shipping: in.Shipping, Lines: lines})
 		if err != nil {
 			return err
 		}
-		n, err := q.NextOrderNumber(ctx)
-		if err != nil {
-			return err
-		}
-		number := fmt.Sprintf("%s-%06d", prefix, n)
-
-		o, err := q.CreateOrder(ctx, sqlcgen.CreateOrderParams{
-			ID: id, OrderNumber: number, Customer: in.Customer, ShippingAddress: in.ShippingAddress,
-			Note: in.Note, Subtotal: subtotal, Shipping: in.Shipping, Discount: discount,
-			Total: subtotal + in.Shipping - discount,
-		})
-		if err != nil {
-			return err
-		}
-		for i, l := range in.Lines {
-			if err := q.CreateOrderLine(ctx, sqlcgen.CreateOrderLineParams{
-				ID: uuid.Must(uuid.NewV7()), OrderID: id, VariantID: l.VariantID,
-				Sku: snaps[i].sku, Title: snaps[i].title,
-				Qty: int32(l.Qty), UnitPrice: snaps[i].unitPrice, Discount: l.Discount,
-			}); err != nil {
-				return err
-			}
-		}
-		return db.Audit(ctx, tx, db.AuditEntry{
-			Action: "order.create", SubjectType: "order", SubjectID: id.String(),
-			After: map[string]any{"order_number": o.OrderNumber, "source": "manual", "total": o.TotalAmount},
-		})
+		id = o.ID
+		return auditCreate(ctx, tx, o)
 	})
 	if err != nil {
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+// newLine is an order line whose price has already been decided, through
+// variant_price() and nowhere else (BR-046).
+type newLine struct {
+	VariantID  uuid.UUID
+	Qty        int
+	Discount   int64
+	SKU, Title string
+	UnitPrice  int64
+}
+
+// newOrder is what insert writes. Manual entry and checkout differ in where
+// the lines come from, not in how an order is numbered and stored.
+type newOrder struct {
+	Source, PaymentMethod     string
+	CustomerID, CartID        *uuid.UUID
+	Customer, ShippingAddress []byte
+	Note                      *string
+	Shipping                  int64
+	Lines                     []newLine
+}
+
+// insert numbers an order from the tenant sequence (BR-077) and writes it and
+// its snapshotted lines (BR-076) in the caller's transaction. subtotal is
+// before discounts, so the total CHECK holds by construction (BR-078). The
+// caller writes the audit row.
+func insert(ctx context.Context, q *sqlcgen.Queries, in newOrder) (sqlcgen.Order, error) {
+	var subtotal, discount int64
+	for _, l := range in.Lines {
+		subtotal += l.UnitPrice * int64(l.Qty)
+		discount += l.Discount
+	}
+	prefix, err := q.TenantOrderPrefix(ctx)
+	if err != nil {
+		return sqlcgen.Order{}, err
+	}
+	n, err := q.NextOrderNumber(ctx)
+	if err != nil {
+		return sqlcgen.Order{}, err
+	}
+	o, err := q.CreateOrder(ctx, sqlcgen.CreateOrderParams{
+		ID: uuid.Must(uuid.NewV7()), Source: in.Source, CustomerID: in.CustomerID, CartID: in.CartID,
+		OrderNumber: fmt.Sprintf("%s-%06d", prefix, n), Customer: in.Customer,
+		ShippingAddress: in.ShippingAddress, Note: in.Note, PaymentMethod: in.PaymentMethod,
+		Subtotal: subtotal, Shipping: in.Shipping, Discount: discount, Total: subtotal + in.Shipping - discount,
+	})
+	if err != nil {
+		return sqlcgen.Order{}, err
+	}
+	for _, l := range in.Lines {
+		if err := q.CreateOrderLine(ctx, sqlcgen.CreateOrderLineParams{
+			ID: uuid.Must(uuid.NewV7()), OrderID: o.ID, VariantID: l.VariantID,
+			Sku: l.SKU, Title: l.Title, Qty: int32(l.Qty), UnitPrice: l.UnitPrice, Discount: l.Discount,
+		}); err != nil {
+			return sqlcgen.Order{}, err
+		}
+	}
+	return o, nil
+}
+
+// auditCreate is the one order.create row an order gets (BR-018), whoever
+// placed it; a shopper's checkout records no actor.
+func auditCreate(ctx context.Context, tx pgx.Tx, o sqlcgen.Order) error {
+	return db.Audit(ctx, tx, db.AuditEntry{
+		Action: "order.create", SubjectType: "order", SubjectID: o.ID.String(),
+		After: map[string]any{"order_number": o.OrderNumber, "source": o.Source, "total": o.TotalAmount},
+	})
 }
 
 // titleSnapshot is the ERD's 'Erigo Basic Tee — Black / M' (BR-076).
