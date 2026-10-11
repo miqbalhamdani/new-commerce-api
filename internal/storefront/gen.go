@@ -5,11 +5,42 @@ package storefront
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for CategoryKind.
+const (
+	CategoryKindActivity   CategoryKind = "activity"
+	CategoryKindCategory   CategoryKind = "category"
+	CategoryKindCollection CategoryKind = "collection"
+	CategoryKindCustom     CategoryKind = "custom"
+	CategoryKindSeries     CategoryKind = "series"
+)
+
+// Valid indicates whether the value is a known member of the CategoryKind enum.
+func (e CategoryKind) Valid() bool {
+	switch e {
+	case CategoryKindActivity:
+		return true
+	case CategoryKindCategory:
+		return true
+	case CategoryKindCollection:
+		return true
+	case CategoryKindCustom:
+		return true
+	case CategoryKindSeries:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for ErrorCode.
 const (
@@ -65,9 +96,77 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for ListProductsParamsSort.
+const (
+	MinusPriceMin  ListProductsParamsSort = "-price_min"
+	MinusUpdatedAt ListProductsParamsSort = "-updated_at"
+	PriceMin       ListProductsParamsSort = "price_min"
+	Title          ListProductsParamsSort = "title"
+)
+
+// Valid indicates whether the value is a known member of the ListProductsParamsSort enum.
+func (e ListProductsParamsSort) Valid() bool {
+	switch e {
+	case MinusPriceMin:
+		return true
+	case MinusUpdatedAt:
+		return true
+	case PriceMin:
+		return true
+	case Title:
+		return true
+	default:
+		return false
+	}
+}
+
+// BrandList defines model for BrandList.
+type BrandList struct {
+	Data []BrandRef `json:"data"`
+}
+
+// BrandRef defines model for BrandRef.
+type BrandRef struct {
+	// Name Examples: Erigo
+	Name string `json:"name"`
+
+	// Slug Examples: erigo
+	Slug string `json:"slug"`
+}
+
+// Category defines model for Category.
+type Category struct {
+	Id       openapi_types.UUID  `json:"id"`
+	Kind     CategoryKind        `json:"kind"`
+	Name     string              `json:"name"`
+	ParentId *openapi_types.UUID `json:"parent_id"`
+	Path     string              `json:"path"`
+}
+
+// CategoryKind defines model for CategoryKind.
+type CategoryKind string
+
+// CategoryList defines model for CategoryList.
+type CategoryList struct {
+	Data []Category `json:"data"`
+}
+
 // ErrorCode The error codes this API returns, a subset of `04-api-spec.md` §1.1. The code is the last
 // segment of a `Problem.type` URI.
 type ErrorCode string
+
+// Image `url` is the 800 px rendition in a list and the 1600 px one on a product, or the original
+// until those exist. `sizes` has a URL per width (`1600`, `800`, `200`) once the image
+// has been processed, a few seconds after upload; until then it is empty.
+type Image struct {
+	Sizes map[string]string `json:"sizes"`
+	Url   string            `json:"url"`
+}
+
+// Money Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+//
+// Examples: 19900000
+type Money = int64
 
 // Problem RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -99,6 +198,88 @@ type ProblemError struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
+// ProductCategory defines model for ProductCategory.
+type ProductCategory struct {
+	Kind CategoryKind `json:"kind"`
+	Name string       `json:"name"`
+	Path string       `json:"path"`
+}
+
+// ProductDetail defines model for ProductDetail.
+type ProductDetail struct {
+	Attributes  map[string]interface{} `json:"attributes"`
+	Brand       *BrandRef              `json:"brand"`
+	Categories  []ProductCategory      `json:"categories"`
+	Description *string                `json:"description"`
+	Id          openapi_types.UUID     `json:"id"`
+	Images      []ProductImage         `json:"images"`
+	OptionNames []string               `json:"option_names"`
+	Slug        string                 `json:"slug"`
+	Title       string                 `json:"title"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	Variants    []ProductVariant       `json:"variants"`
+}
+
+// ProductImage defines model for ProductImage.
+type ProductImage struct {
+	Sizes map[string]string `json:"sizes"`
+	Url   string            `json:"url"`
+
+	// VariantId The variant this image shows, or `null` for the whole product.
+	VariantId *openapi_types.UUID `json:"variant_id"`
+}
+
+// ProductListItem defines model for ProductListItem.
+type ProductListItem struct {
+	Brand *BrandRef `json:"brand"`
+	Image *Image    `json:"image"`
+
+	// PriceMax Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	PriceMax Money `json:"price_max"`
+
+	// PriceMin Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	PriceMin Money  `json:"price_min"`
+	Slug     string `json:"slug"`
+	Title    string `json:"title"`
+}
+
+// ProductPage defines model for ProductPage.
+type ProductPage struct {
+	Data       []ProductListItem `json:"data"`
+	NextCursor *string           `json:"next_cursor"`
+}
+
+// ProductVariant defines model for ProductVariant.
+type ProductVariant struct {
+	Id     openapi_types.UUID `json:"id"`
+	OnSale bool               `json:"on_sale"`
+
+	// OptionValues Examples: ["Black","S"]
+	OptionValues []string `json:"option_values"`
+
+	// Price Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Price Money `json:"price"`
+
+	// RegularPrice Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	RegularPrice Money   `json:"regular_price"`
+	Sku          *string `json:"sku"`
+	WeightGrams  int     `json:"weight_grams"`
+}
+
+// Cursor defines model for Cursor.
+type Cursor = string
+
+// Limit defines model for Limit.
+type Limit = int
+
 // InvalidApiKey RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
 type InvalidApiKey = Problem
@@ -114,6 +295,28 @@ type OriginNotAllowed = Problem
 // UnprocessableEntity RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
 type UnprocessableEntity = Problem
+
+// ListCategoriesParams defines parameters for ListCategories.
+type ListCategoriesParams struct {
+	Kind *CategoryKind `form:"kind,omitempty" json:"kind,omitempty"`
+}
+
+// ListProductsParams defines parameters for ListProducts.
+type ListProductsParams struct {
+	Category *string                 `form:"category,omitempty" json:"category,omitempty"`
+	Brand    *string                 `form:"brand,omitempty" json:"brand,omitempty"`
+	Q        *string                 `form:"q,omitempty" json:"q,omitempty"`
+	Sort     *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`; there is no `offset`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The previous page's `next_cursor`, opaque.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListProductsParamsSort defines parameters for ListProducts.
+type ListProductsParamsSort string
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -198,11 +401,47 @@ func (a ProblemError) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListBrands The shop's brands
+	// (GET /brands)
+	ListBrands(w http.ResponseWriter, r *http.Request)
+	// ListCategories The shop's categories, every tree or one kind
+	// (GET /categories)
+	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
+	// ListProducts The shop's visible products
+	// (GET /products)
+	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
+	// GetProduct One visible product with its visible variants
+	// (GET /products/{slug})
+	GetProduct(w http.ResponseWriter, r *http.Request, slug string)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// ListBrands The shop's brands
+// (GET /brands)
+func (_ Unimplemented) ListBrands(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListCategories The shop's categories, every tree or one kind
+// (GET /categories)
+func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListProducts The shop's visible products
+// (GET /products)
+func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetProduct One visible product with its visible variants
+// (GET /products/{slug})
+func (_ Unimplemented) GetProduct(w http.ResponseWriter, r *http.Request, slug string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ServerInterfaceWrapper converts contexts to parameters.
 type ServerInterfaceWrapper struct {
@@ -212,6 +451,177 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListBrands operation middleware
+func (siw *ServerInterfaceWrapper) ListBrands(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBrands(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCategoriesParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCategories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProducts operation middleware
+func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListProductsParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "brand" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "brand", r.URL.Query(), &params.Brand, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "brand"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "brand", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProducts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProduct operation middleware
+func (siw *ServerInterfaceWrapper) GetProduct(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", chi.URLParam(r, "slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProduct(w, r, slug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -320,6 +730,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 	}
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/products", wrapper.ListProducts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/products/{slug}", wrapper.GetProduct)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/brands", wrapper.ListBrands)
+	})
 
 	return r
 }

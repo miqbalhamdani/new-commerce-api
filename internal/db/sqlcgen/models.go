@@ -184,6 +184,32 @@ type RefreshToken struct {
 	CreatedAt   time.Time
 }
 
+type StorefrontProduct struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Slug        string
+	Title       string
+	Description *string
+	BrandID     *uuid.UUID
+	Attributes  []byte
+	OptionNames []string
+	UpdatedAt   time.Time
+}
+
+type StorefrontVariant struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	OptionValues       []string
+	PriceAmount        int64
+	RegularPriceAmount int64
+	OnSale             bool
+	Currency           string
+	WeightGrams        int32
+	ProductTitle       string
+}
+
 type Tenant struct {
 	ID          uuid.UUID
 	Name        string

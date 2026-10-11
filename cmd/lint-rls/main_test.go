@@ -65,6 +65,26 @@ func TestLintRLS(t *testing.T) {
 		})
 	}
 
+	// A tenant view without security_invoker reads its tables as its owner,
+	// who bypasses RLS: every tenant's rows come through it (03-erd.md §4).
+	t.Run("fails on a tenant view without security_invoker", func(t *testing.T) {
+		const view = "lint_rls_probe_view"
+		drop := `DROP VIEW IF EXISTS ` + view
+		if _, err := conn.Exec(ctx, `CREATE VIEW `+view+` AS SELECT id, tenant_id FROM products`); err != nil {
+			t.Fatalf("create view: %v", err)
+		}
+		t.Cleanup(func() { _, _ = conn.Exec(context.WithoutCancel(ctx), drop) })
+		if err := run(ctx); err == nil {
+			t.Error("run() = nil, want an error for a view that bypasses RLS")
+		}
+		if _, err := conn.Exec(ctx, `ALTER VIEW `+view+` SET (security_invoker = true)`); err != nil {
+			t.Fatalf("alter view: %v", err)
+		}
+		if err := run(ctx); err != nil {
+			t.Errorf("run() = %v once the view is security_invoker", err)
+		}
+	})
+
 	t.Run("passes again once the table is protected", func(t *testing.T) {
 		table := createUnprotected(ctx, t, conn, "lint_rls_probe", ``)
 		if _, err := conn.Exec(ctx, `SELECT enable_tenant_rls($1)`, table); err != nil {

@@ -98,11 +98,15 @@ func run() error {
 	// The storefront first: the longer pattern wins in ServeMux anyway, but a
 	// reader should not have to know that to see /v1/storefront never reaches
 	// the admin router.
-	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(storefront.NewServer(), storefront.NewKeys(pool)))
+	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
+		storefront.NewServer(storefront.Services{Catalog: catalogSvc}),
+		storefront.NewKeys(pool),
+	))
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
-			Catalog: catalog.NewService(pool, files, jobsSvc),
+			Catalog: catalogSvc,
 			Jobs:    jobsSvc,
 			Team:    team.NewService(pool, redis),
 			Orders:  orders.NewService(pool, files, jobsSvc),

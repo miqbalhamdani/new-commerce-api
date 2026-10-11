@@ -19,5 +19,3 @@ var (
 )
 
 type optional[T any] = httpkit.Optional[T]
-
-func ptr[T any](v T) *T { return &v }
