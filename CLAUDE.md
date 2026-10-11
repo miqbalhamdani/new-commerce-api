@@ -66,13 +66,15 @@ internal/
   auth/           JWT, argon2id, RBAC
   queue/          Redis: rate-limit windows now, Redis Streams from P1-060
   http/           chi router, middleware, handlers, DTOs (admin)
+  httpkit/        problem+json, strict JSON decoding, cursors, tracing -- shared by http and storefront
   catalog/        (Phase 1) products, variants, categories, brands, media
   storage/        object store (R2 / MinIO): presign, HEAD, public URLs, lifecycle rules
   images/         WebP derivatives via libvips (cgo). Worker only -- cmd/api never imports it
   email/          senders (Resend; SMTP and stdout in development) and templates
   jobs/           jobs rows + Redis Streams runner (BR-060)
   team/           users, invitations, settings, audit-log reads
-  storefront/     (P1-202) storefront routes; never imports the admin http package, nor it this
+  storefront/     storefront routes from contracts/storefront.yaml, behind the API-key middleware;
+                  never imports the admin http package, nor it this (a test enforces it)
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries
 contracts/        submodule, pinned to a tag — READ ONLY from here
@@ -204,10 +206,10 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
 
 ## HTTP
 
-- The generated server interface comes from `contracts/openapi.yaml` via `oapi-codegen`. Do not
-  hand-write route registration for a documented endpoint. `openapi.yaml` covers `/v1` admin only,
-  and a path appears there when its backlog item is done; the storefront has its own public
-  document (P1-213).
+- The generated server interfaces come from `contracts/openapi.yaml` (admin, `internal/http`) and
+  `contracts/storefront.yaml` (`internal/storefront`) via `oapi-codegen`. Do not hand-write route
+  registration for a documented endpoint. A path appears in either file when its backlog item is
+  done; P1-213 publishes the storefront one.
 - **Errors are RFC 9457** `application/problem+json` with a `trace_id`. Use `platform/errors`;
   never `http.Error` in a handler, and never `200` with an error body.
 - **A permission check goes at the handler boundary**, as `requirePermission("resource:action", …)`

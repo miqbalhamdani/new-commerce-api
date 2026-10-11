@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -249,4 +250,26 @@ func seedSignedOwner(ctx context.Context, t *testing.T, store *db.Store, tenantI
 	s := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleOwner)
 	s.marker, s.tenantID = tenantID.String(), tenantID.String()
 	return s
+}
+
+// TestCustomerTokenOnAdmin is BR-086 from the admin side: a valid customer
+// token, for the very shop, opens no admin route.
+func TestCustomerTokenOnAdmin(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	tenantID := uuid.Must(uuid.NewV7())
+	seedSignedOwner(ctx, t, store, tenantID)
+	signer, err := auth.NewSigner(isoSigningKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	customer, err := signer.IssueCustomer(uuid.Must(uuid.NewV7()), tenantID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	newServer(t).ServeHTTP(rec, bearerRequest(t, http.MethodGet, "/v1/settings", customer))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("customer token on GET /v1/settings: %d %s, want 401", rec.Code, rec.Body)
+	}
 }

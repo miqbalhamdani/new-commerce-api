@@ -13,8 +13,11 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -23,6 +26,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storefront"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
@@ -94,13 +98,41 @@ func run() error {
 		checker{name: "postgres", version: pool.ServerVersion},
 		checker{name: "redis", version: redis.ServerVersion},
 	))
+	// The storefront first: the longer pattern wins in ServeMux anyway, but a
+	// reader should not have to know that to see /v1/storefront never reaches
+	// the admin router.
+	orderTokenSecret, err := config.OrderTokenSecret()
+	if err != nil {
+		return err
+	}
+	orderTokens, err := auth.NewOrderTokens(orderTokenSecret)
+	if err != nil {
+		return err
+	}
+	resetSecret, err := config.PasswordResetSecret()
+	if err != nil {
+		return err
+	}
+	resets, err := auth.NewResetTokens(resetSecret)
+	if err != nil {
+		return err
+	}
+	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
+	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	ordersSvc := orders.NewService(pool, files, jobsSvc)
+	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
+		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
+			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), OrderTokens: orderTokens}),
+		storefront.NewKeys(pool),
+		signer,
+	))
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
-			Catalog: catalog.NewService(pool, files, jobsSvc),
+			Catalog: catalogSvc,
 			Jobs:    jobsSvc,
 			Team:    team.NewService(pool, redis),
-			Orders:  orders.NewService(pool, files, jobsSvc),
+			Orders:  ordersSvc,
 			Invites: invites,
 		}, !config.IsDevelopment()),
 		signer,

@@ -2,8 +2,8 @@
 //
 // It defines what an error *is* -- a code, a status, and something a person can
 // read -- and deliberately not how it is written to the wire. The wire shape is
-// RFC 9457 and lives in internal/http, which owns the generated Problem type;
-// nothing imports internal/http, so the taxonomy cannot live there.
+// RFC 9457 and lives in internal/httpkit, which the admin and storefront APIs
+// share.
 package errors
 
 import (
@@ -29,6 +29,11 @@ const (
 	CodeNotFound          = "not_found"
 	CodeRateLimited       = "rate_limited"
 	CodeUnauthenticated   = "unauthenticated"
+	CodeInvalidAPIKey     = "invalid_api_key"
+	CodeOriginNotAllowed  = "origin_not_allowed"
+	CodeCustomerAuth      = "customer_auth_required"
+	CodeEmptyCart         = "empty_cart"
+	CodeItemUnavailable   = "item_unavailable"
 	CodeInternal          = "internal"
 )
 
@@ -83,6 +88,43 @@ func (e *Error) WithFields(fields ...Field) *Error {
 func Unauthenticated(detail string) *Error {
 	return &Error{Code: CodeUnauthenticated, Status: http.StatusUnauthorized,
 		Title: "Unauthenticated", Detail: detail}
+}
+
+// InvalidAPIKey is the storefront's 401 for an X-Api-Key that is missing,
+// unknown or revoked (BR-085). One answer for all three: telling them apart
+// would confirm which keys once existed.
+func InvalidAPIKey() *Error {
+	return &Error{Code: CodeInvalidAPIKey, Status: http.StatusUnauthorized,
+		Title: "Invalid API key", Detail: "Send a live storefront API key in X-Api-Key."}
+}
+
+// OriginNotAllowed is the 403 for a browser request from an origin other than
+// the key's allowed_origin (BR-083).
+func OriginNotAllowed() *Error {
+	return &Error{Code: CodeOriginNotAllowed, Status: http.StatusForbidden,
+		Title: "Origin not allowed", Detail: "This API key does not accept requests from this website."}
+}
+
+// CustomerAuthRequired is the storefront's 401 for a customer or order token
+// that is missing, invalid, expired or for another shop (BR-082, BR-086).
+func CustomerAuthRequired(detail string) *Error {
+	return &Error{Code: CodeCustomerAuth, Status: http.StatusUnauthorized,
+		Title: "Customer sign-in required", Detail: detail}
+}
+
+// EmptyCart is the 422 for checking out a cart with nothing in it (BR-090).
+func EmptyCart() *Error {
+	return &Error{Code: CodeEmptyCart, Status: http.StatusUnprocessableEntity,
+		Title: "Empty cart", Detail: "The cart is empty."}
+}
+
+// ItemUnavailable is the 409 for checking out a cart holding items that can
+// no longer be bought; items names each one (BR-090).
+func ItemUnavailable(items ...Field) *Error {
+	return (&Error{Code: CodeItemUnavailable, Status: http.StatusConflict,
+		Title:  "Item unavailable",
+		Detail: "Some items in the cart can no longer be bought. Remove them and check out again."}).
+		WithFields(items...)
 }
 
 // PermissionDenied names the permission that was required.

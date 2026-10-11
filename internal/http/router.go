@@ -7,7 +7,6 @@ import (
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 
 	"github.com/go-chi/chi/v5"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 )
@@ -62,18 +61,4 @@ func paramName(err error) string {
 		return many.ParamName
 	}
 	return "query"
-}
-
-// tracing starts a span per request and names it after the matched route
-// pattern rather than the URL, so /v1/products/{id} is one operation instead of
-// one per product.
-func tracing(next http.Handler) http.Handler {
-	return otelhttp.NewHandler(next, "",
-		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-			if route := chi.RouteContext(r.Context()); route != nil && route.RoutePattern() != "" {
-				return r.Method + " " + route.RoutePattern()
-			}
-			return r.Method + " " + r.URL.Path
-		}),
-	)
 }

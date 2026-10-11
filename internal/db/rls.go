@@ -15,7 +15,8 @@ type RLSProblem struct {
 func (p RLSProblem) String() string { return p.Table + ": " + p.Reason }
 
 // CheckTenantRLS returns every table in the public schema that has a tenant_id
-// column but is not properly protected.
+// column but is not properly protected, and every such view that reads as its
+// owner rather than its caller.
 //
 // Three things can be wrong and only one of them is loud:
 //
@@ -74,6 +75,40 @@ func (s *Store) CheckTenantRLS(ctx context.Context) ([]RLSProblem, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate tenant tables: %w", err)
+	}
+
+	// A view has no policy of its own. With security_invoker it reads its
+	// tables as the caller, so their policies apply; without it, it reads them
+	// as its owner, who bypasses RLS, and every tenant's rows come through
+	// (03-erd.md §4).
+	views, err := s.pool.Query(ctx, `
+		SELECT c.relname
+		  FROM pg_class c
+		  JOIN pg_namespace n ON n.oid = c.relnamespace
+		 WHERE c.relkind = 'v'
+		   AND n.nspname = 'public'
+		   AND EXISTS (
+		       SELECT 1 FROM pg_attribute a
+		        WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
+		          AND a.attnum > 0 AND NOT a.attisdropped)
+		   AND NOT EXISTS (
+		       SELECT 1 FROM unnest(coalesce(c.reloptions, '{}')) o
+		        WHERE o ~* '^security_invoker=(true|on|yes|1)$')
+		 ORDER BY c.relname`)
+	if err != nil {
+		return nil, fmt.Errorf("enumerate tenant views: %w", err)
+	}
+	defer views.Close()
+	for views.Next() {
+		var view string
+		if err := views.Scan(&view); err != nil {
+			return nil, fmt.Errorf("scan tenant view: %w", err)
+		}
+		problems = append(problems, RLSProblem{view,
+			"view has tenant_id but not security_invoker = true -- it reads as its owner and bypasses RLS"})
+	}
+	if err := views.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tenant views: %w", err)
 	}
 	return problems, nil
 }

@@ -70,10 +70,11 @@ FROM variants v JOIN products p ON p.id = v.product_id
 WHERE v.id = $1;
 
 -- name: CreateOrder :one
-INSERT INTO orders (id, tenant_id, source, order_number, customer, shipping_address, note,
-                    subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
-VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, 'manual', sqlc.arg(order_number),
-        sqlc.arg(customer), sqlc.arg(shipping_address), sqlc.narg(note),
+INSERT INTO orders (id, tenant_id, source, customer_id, cart_id, order_number, customer, shipping_address,
+                    note, payment_method, subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
+VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(source), sqlc.narg(customer_id),
+        sqlc.narg(cart_id), sqlc.arg(order_number), sqlc.arg(customer), sqlc.arg(shipping_address),
+        sqlc.narg(note), sqlc.arg(payment_method),
         sqlc.arg(subtotal), sqlc.arg(shipping), sqlc.arg(discount), sqlc.arg(total), now())
 RETURNING *;
 
@@ -82,3 +83,24 @@ INSERT INTO order_lines (id, tenant_id, order_id, variant_id, sku_snapshot, titl
                          qty, unit_price, discount_amount)
 VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(order_id), sqlc.arg(variant_id),
         sqlc.arg(sku), sqlc.arg(title), sqlc.arg(qty), sqlc.arg(unit_price), sqlc.arg(discount));
+
+-- name: OrderByCart :one
+-- The order a checked-out cart made: a replayed checkout returns it (BR-088).
+SELECT * FROM orders WHERE cart_id = $1;
+
+-- name: CheckOutCart :exec
+UPDATE carts SET status = 'checked_out', updated_at = now() WHERE id = $1;
+
+-- name: CustomerOrders :many
+-- A customer's history, newest first (P1-208), on the my-orders index.
+SELECT o.id, o.order_number, o.status, o.total_amount, o.placed_at,
+       (SELECT coalesce(sum(l.qty), 0)::int FROM order_lines l WHERE l.order_id = o.id) AS item_count
+FROM orders o
+WHERE o.customer_id = sqlc.arg(customer_id)
+  AND (sqlc.narg(before_at)::timestamptz IS NULL
+       OR (o.placed_at, o.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::uuid))
+ORDER BY o.placed_at DESC, o.id DESC
+LIMIT sqlc.arg(lim);
+
+-- name: OrderByNumber :one
+SELECT * FROM orders WHERE order_number = $1;

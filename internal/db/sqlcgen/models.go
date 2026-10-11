@@ -46,6 +46,24 @@ type Brand struct {
 	UpdatedAt  time.Time
 }
 
+type Cart struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	CustomerID *uuid.UUID
+	Status     string
+	ExpiresAt  time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type CartItem struct {
+	TenantID  uuid.UUID
+	CartID    uuid.UUID
+	VariantID uuid.UUID
+	Qty       int32
+	AddedAt   time.Time
+}
+
 type Category struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
@@ -69,6 +87,17 @@ type Customer struct {
 	EmailVerifiedAt *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type CustomerSession struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	CustomerID        uuid.UUID
+	RefreshTokenHash  string
+	PreviousTokenHash *string
+	ExpiresAt         time.Time
+	RevokedAt         *time.Time
+	CreatedAt         time.Time
 }
 
 type Job struct {
@@ -116,6 +145,7 @@ type Order struct {
 	Version         int32
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	CartID          *uuid.UUID
 }
 
 type OrderLine struct {
@@ -182,6 +212,42 @@ type RefreshToken struct {
 	ExpiresAt   time.Time
 	RevokedAt   *time.Time
 	CreatedAt   time.Time
+}
+
+type StorefrontProduct struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	Slug        string
+	Title       string
+	Description *string
+	BrandID     *uuid.UUID
+	Attributes  []byte
+	OptionNames []string
+	UpdatedAt   time.Time
+}
+
+type StorefrontVariant struct {
+	ID                 uuid.UUID
+	TenantID           uuid.UUID
+	ProductID          uuid.UUID
+	Sku                *string
+	OptionValues       []string
+	PriceAmount        int64
+	RegularPriceAmount int64
+	OnSale             bool
+	Currency           string
+	WeightGrams        int32
+	ProductTitle       string
+}
+
+type StorefrontVariantLabel struct {
+	ID           uuid.UUID
+	TenantID     uuid.UUID
+	Sku          *string
+	OptionValues []string
+	ProductTitle string
+	ProductSlug  string
+	Available    *bool
 }
 
 type Tenant struct {

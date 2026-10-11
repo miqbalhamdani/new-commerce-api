@@ -15,6 +15,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/images"
@@ -93,7 +94,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	renders := map[string]email.Render{"invitation": team.InvitationMail(pool, invites, config.AdminURL())}
+	resetSecret, err := config.PasswordResetSecret()
+	if err != nil {
+		return err
+	}
+	resets, err := auth.NewResetTokens(resetSecret)
+	if err != nil {
+		return err
+	}
+	renders := map[string]email.Render{
+		"invitation":     team.InvitationMail(pool, invites, config.AdminURL()),
+		"password_reset": customers.ResetMail(pool, resets),
+	}
 	go func() {
 		if err := email.Consume(ctx, redis, runner.Consumer, renders, sender, 60*time.Second, 5); err != nil {
 			slog.Error("email consumer stopped", "error", err)

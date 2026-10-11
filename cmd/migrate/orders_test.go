@@ -64,6 +64,8 @@ func TestOrdersSchema(t *testing.T) {
 			{"version", "integer", false},
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
+			// P1-204 adds it, so it lands last rather than where the ERD lists it.
+			{"cart_id", "uuid", true},
 		}},
 		{"order_lines", []column{
 			{"id", "uuid", false},

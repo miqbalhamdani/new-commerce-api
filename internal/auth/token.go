@@ -39,6 +39,14 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// The two audiences an access token can be for (BR-086). They share one
+// signing key, so the audience is the whole of what keeps a customer token
+// off admin routes and a staff token off storefront ones.
+const (
+	AudienceAdmin      = "admin"
+	AudienceStorefront = "storefront"
+)
+
 // Signer issues and verifies access tokens.
 type Signer struct {
 	secret []byte
@@ -54,13 +62,24 @@ func NewSigner(secret string) (*Signer, error) {
 	return &Signer{secret: []byte(secret)}, nil
 }
 
-// Issue returns a signed access token for a user.
+// Issue returns a signed admin access token for a staff user.
 func (s *Signer) Issue(userID, tenantID uuid.UUID, role string, now time.Time) (string, error) {
+	return s.issue(AudienceAdmin, userID, tenantID, role, now)
+}
+
+// IssueCustomer returns a signed storefront access token for a shop's
+// customer (BR-093): sub is the customer, tid the shop, and no role.
+func (s *Signer) IssueCustomer(customerID, tenantID uuid.UUID, now time.Time) (string, error) {
+	return s.issue(AudienceStorefront, customerID, tenantID, "", now)
+}
+
+func (s *Signer) issue(audience string, subject, tenantID uuid.UUID, role string, now time.Time) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		TenantID: tenantID,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.String(),
+			Subject:   subject.String(),
+			Audience:  jwt.ClaimStrings{audience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL)),
 		},
@@ -72,14 +91,21 @@ func (s *Signer) Issue(userID, tenantID uuid.UUID, role string, now time.Time) (
 	return signed, nil
 }
 
-// Parse verifies a token and returns its claims.
-func (s *Signer) Parse(raw string) (*Claims, error) {
+// Parse verifies an admin token and returns its claims. A customer token,
+// or any token without aud = admin, is invalid here (BR-086).
+func (s *Signer) Parse(raw string) (*Claims, error) { return s.parse(raw, AudienceAdmin) }
+
+// ParseCustomer verifies a storefront token. A staff token is invalid here.
+func (s *Signer) ParseCustomer(raw string) (*Claims, error) { return s.parse(raw, AudienceStorefront) }
+
+func (s *Signer) parse(raw, audience string) (*Claims, error) {
 	// The algorithm is pinned. Without this, a token whose header says "none"
 	// -- or an RS256 token verified with the public key as an HMAC secret --
 	// parses successfully. It is the classic JWT forgery.
 	parsed, err := jwt.ParseWithClaims(raw, &Claims{},
 		func(*jwt.Token) (any, error) { return s.secret, nil },
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithAudience(audience),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)

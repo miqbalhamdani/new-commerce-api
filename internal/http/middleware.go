@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"net/netip"
-	"strings"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -66,29 +64,4 @@ func unauthenticated(r *http.Request) bool {
 	default:
 		return false
 	}
-}
-
-func bearerToken(r *http.Request) (string, bool) {
-	header := r.Header.Get("Authorization")
-	// Case-insensitive: RFC 7235 makes the scheme name case-insensitive, and
-	// clients do vary.
-	if len(header) < 7 || !strings.EqualFold(header[:7], "bearer ") {
-		return "", false
-	}
-	token := strings.TrimSpace(header[7:])
-	return token, token != ""
-}
-
-// clientIP is the peer address of the connection.
-//
-// ponytail: RemoteAddr only. Behind Caddy (P1-001) that is the proxy's address;
-// once the proxy is fixed, trust its X-Forwarded-For hop and nothing further
-// left -- trusting the header from anyone lets a client write its own IP into
-// the audit log.
-func clientIP(r *http.Request) netip.Addr {
-	ap, err := netip.ParseAddrPort(r.RemoteAddr)
-	if err != nil {
-		return netip.Addr{}
-	}
-	return ap.Addr().Unmap()
 }
