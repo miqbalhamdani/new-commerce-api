@@ -111,3 +111,45 @@ func TestInvitationEmail(t *testing.T) {
 		t.Errorf("token in the link: %+v %v", inv, err)
 	}
 }
+
+// TestInvitationReplyTo renders an invitation without the stream: Reply-To is
+// the shop's contact email once it has one, and the inviter before (BR-128).
+func TestInvitationReplyTo(t *testing.T) {
+	ctx := t.Context()
+	store, err := db.New(ctx, config.AppDatabaseURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(store.Close)
+	invites, _ := auth.NewInviteSigner(strings.Repeat("k", 32))
+	tenantID, owner, invited := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	tctx := tenant.NewContext(ctx, tenantID)
+	exec := func(sql string) {
+		t.Helper()
+		if err := store.InTenantTx(tctx, func(tx pgx.Tx) error { _, err := tx.Exec(tctx, sql); return err }); err != nil {
+			t.Fatalf("exec: %v", err)
+		}
+	}
+	exec(`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ('` + tenantID.String() + `', 'Toko ABC', 'toko-` + tenantID.String() + `', 'TKA')`)
+	exec(`INSERT INTO users (id, tenant_id, email, name, role, status) VALUES ('` + owner.String() + `', current_setting('app.tenant_id')::uuid, 'budi-` + owner.String() + `@tokoabc.com', 'Budi', 'owner', 'active')`)
+	exec(`INSERT INTO users (id, tenant_id, email, name, role, status) VALUES ('` + invited.String() + `', current_setting('app.tenant_id')::uuid, 'rina-` + invited.String() + `@example.com', 'Rina', 'ops', 'invited')`)
+	t.Cleanup(func() {
+		bg := tenant.NewContext(context.WithoutCancel(ctx), tenantID)
+		_ = store.InTenantTx(bg, func(tx pgx.Tx) error {
+			_, err := tx.Exec(bg, `DELETE FROM storefront_settings; DELETE FROM users; DELETE FROM tenants WHERE id = $1`, tenantID)
+			return err
+		})
+	})
+	render := team.InvitationMail(store, invites, "http://admin.test")
+	env := email.Envelope{Kind: "invitation", TenantID: tenantID, UserID: invited, ActorID: owner}
+
+	m, err := render(ctx, env)
+	if err != nil || m == nil || !strings.HasPrefix(m.ReplyTo, "budi-") {
+		t.Fatalf("no settings row: %+v %v, want Reply-To the inviter", m, err)
+	}
+	exec(`INSERT INTO storefront_settings (tenant_id, midtrans_webhook_id, contact_email)
+		VALUES (current_setting('app.tenant_id')::uuid, gen_random_uuid(), 'halo@tokoabc.com')`)
+	if m, err = render(ctx, env); err != nil || m.ReplyTo != "halo@tokoabc.com" || m.FromName != "Toko ABC" {
+		t.Errorf("with a contact email: %+v %v", m, err)
+	}
+}

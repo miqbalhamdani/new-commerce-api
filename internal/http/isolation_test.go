@@ -355,7 +355,7 @@ var newServer = func(t *testing.T) http.Handler {
 		Auth:    auth.NewService(store, signer),
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Jobs:    jobsSvc,
-		Team:    team.NewService(store, redis),
+		Team:    team.NewService(store, redis, testBox(t)),
 		Orders:  orders.NewService(store, testFiles(t), jobsSvc),
 		Invites: testInvites(t),
 	}, false), signer,

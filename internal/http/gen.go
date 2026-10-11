@@ -102,6 +102,54 @@ func (e CategoryKind) Valid() bool {
 	}
 }
 
+// Defines values for CourierCode.
+const (
+	Anteraja  CourierCode = "anteraja"
+	Idexpress CourierCode = "idexpress"
+	Jne       CourierCode = "jne"
+	Jnt       CourierCode = "jnt"
+	Lion      CourierCode = "lion"
+	Ninja     CourierCode = "ninja"
+	Pos       CourierCode = "pos"
+	Rpx       CourierCode = "rpx"
+	Sap       CourierCode = "sap"
+	Sicepat   CourierCode = "sicepat"
+	Tiki      CourierCode = "tiki"
+	Wahana    CourierCode = "wahana"
+)
+
+// Valid indicates whether the value is a known member of the CourierCode enum.
+func (e CourierCode) Valid() bool {
+	switch e {
+	case Anteraja:
+		return true
+	case Idexpress:
+		return true
+	case Jne:
+		return true
+	case Jnt:
+		return true
+	case Lion:
+		return true
+	case Ninja:
+		return true
+	case Pos:
+		return true
+	case Rpx:
+		return true
+	case Sap:
+		return true
+	case Sicepat:
+		return true
+	case Tiki:
+		return true
+	case Wahana:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeCategoryInUse            ErrorCode = "category_in_use"
@@ -492,6 +540,42 @@ func (e SettingsStatus) Valid() bool {
 	case SettingsStatusClosed:
 		return true
 	case SettingsStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontSettingsMidtransEnvironment.
+const (
+	StorefrontSettingsMidtransEnvironmentProduction StorefrontSettingsMidtransEnvironment = "production"
+	StorefrontSettingsMidtransEnvironmentSandbox    StorefrontSettingsMidtransEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontSettingsMidtransEnvironment enum.
+func (e StorefrontSettingsMidtransEnvironment) Valid() bool {
+	switch e {
+	case StorefrontSettingsMidtransEnvironmentProduction:
+		return true
+	case StorefrontSettingsMidtransEnvironmentSandbox:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontSettingsUpdateMidtransEnvironment.
+const (
+	StorefrontSettingsUpdateMidtransEnvironmentProduction StorefrontSettingsUpdateMidtransEnvironment = "production"
+	StorefrontSettingsUpdateMidtransEnvironmentSandbox    StorefrontSettingsUpdateMidtransEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontSettingsUpdateMidtransEnvironment enum.
+func (e StorefrontSettingsUpdateMidtransEnvironment) Valid() bool {
+	switch e {
+	case StorefrontSettingsUpdateMidtransEnvironmentProduction:
+		return true
+	case StorefrontSettingsUpdateMidtransEnvironmentSandbox:
 		return true
 	default:
 		return false
@@ -951,6 +1035,9 @@ type ConfirmMedia struct {
 	R2Key     string              `json:"r2_key"`
 	VariantId *openapi_types.UUID `json:"variant_id,omitempty"`
 }
+
+// CourierCode A Biteship courier code (BR-120).
+type CourierCode string
 
 // Customer Never a password hash, session or token (BR-092).
 type Customer struct {
@@ -1565,6 +1652,52 @@ type ShippingAddressWrite struct {
 	Province   string  `json:"province"`
 }
 
+// StorefrontSettings defines model for StorefrontSettings.
+type StorefrontSettings struct {
+	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
+	BankTransferInstructions *string `json:"bank_transfer_instructions"`
+
+	// ContactEmail Reply-To on every email the shop sends (BR-128).
+	ContactEmail *openapi_types.Email `json:"contact_email"`
+
+	// GoogleClientId The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
+	GoogleClientId      *string                                `json:"google_client_id"`
+	MidtransClientKey   *string                                `json:"midtrans_client_key"`
+	MidtransEnabled     bool                                   `json:"midtrans_enabled"`
+	MidtransEnvironment *StorefrontSettingsMidtransEnvironment `json:"midtrans_environment"`
+
+	// MidtransNotificationUrl Where Midtrans tells the API about payments; sent with every Snap transaction (BR-124).
+	MidtransNotificationUrl string `json:"midtrans_notification_url"`
+	MidtransServerKeySet    bool   `json:"midtrans_server_key_set"`
+
+	// OriginPostalCode Examples: 40115
+	OriginPostalCode *string       `json:"origin_postal_code"`
+	ShippingCouriers []CourierCode `json:"shipping_couriers"`
+	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+// StorefrontSettingsMidtransEnvironment defines model for StorefrontSettings.MidtransEnvironment.
+type StorefrontSettingsMidtransEnvironment string
+
+// StorefrontSettingsUpdate defines model for StorefrontSettingsUpdate.
+type StorefrontSettingsUpdate struct {
+	BankTransferEnabled      *bool                                        `json:"bank_transfer_enabled,omitempty"`
+	BankTransferInstructions *string                                      `json:"bank_transfer_instructions,omitempty"`
+	ContactEmail             *openapi_types.Email                         `json:"contact_email,omitempty"`
+	GoogleClientId           *string                                      `json:"google_client_id,omitempty"`
+	MidtransClientKey        *string                                      `json:"midtrans_client_key,omitempty"`
+	MidtransEnabled          *bool                                        `json:"midtrans_enabled,omitempty"`
+	MidtransEnvironment      *StorefrontSettingsUpdateMidtransEnvironment `json:"midtrans_environment,omitempty"`
+
+	// MidtransServerKey Write-only; `null` removes it (and so needs Midtrans off).
+	MidtransServerKey *string        `json:"midtrans_server_key,omitempty"`
+	OriginPostalCode  *string        `json:"origin_postal_code,omitempty"`
+	ShippingCouriers  *[]CourierCode `json:"shipping_couriers,omitempty"`
+}
+
+// StorefrontSettingsUpdateMidtransEnvironment defines model for StorefrontSettingsUpdate.MidtransEnvironment.
+type StorefrontSettingsUpdateMidtransEnvironment string
+
 // User defines model for User.
 type User struct {
 	CreatedAt   time.Time           `json:"created_at"`
@@ -2023,6 +2156,9 @@ type CreateVariantJSONRequestBody = VariantCreate
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = SettingsUpdate
 
+// UpdateStorefrontSettingsJSONRequestBody defines body for UpdateStorefrontSettings for application/json ContentType.
+type UpdateStorefrontSettingsJSONRequestBody = StorefrontSettingsUpdate
+
 // InviteUserJSONRequestBody defines body for InviteUser for application/json ContentType.
 type InviteUserJSONRequestBody = InviteUser
 
@@ -2268,6 +2404,12 @@ type ServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request)
+	// GetStorefrontSettings How the shop's website sells
+	// (GET /storefront-settings)
+	GetStorefrontSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateStorefrontSettings Change how the shop's website sells
+	// (PATCH /storefront-settings)
+	UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request)
 	// ListUsers The shop's staff
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -2598,6 +2740,18 @@ func (_ Unimplemented) GetSettings(w http.ResponseWriter, r *http.Request) {
 // UpdateSettings Change the shop's name, time zone or order prefix
 // (PATCH /settings)
 func (_ Unimplemented) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetStorefrontSettings How the shop's website sells
+// (GET /storefront-settings)
+func (_ Unimplemented) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateStorefrontSettings Change how the shop's website sells
+// (PATCH /storefront-settings)
+func (_ Unimplemented) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4268,6 +4422,34 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetStorefrontSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStorefrontSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStorefrontSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStorefrontSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -4744,6 +4926,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/settings", wrapper.UpdateSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/storefront-settings", wrapper.GetStorefrontSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/storefront-settings", wrapper.UpdateStorefrontSettings)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api-keys", wrapper.ListApiKeys)
@@ -8630,6 +8818,129 @@ func (response UpdateSettings422ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type GetStorefrontSettingsRequestObject struct {
+}
+
+type GetStorefrontSettingsResponseObject interface {
+	VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetStorefrontSettings200JSONResponse StorefrontSettings
+
+func (response GetStorefrontSettings200JSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetStorefrontSettings401ApplicationProblemPlusJSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetStorefrontSettings403ApplicationProblemPlusJSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettingsRequestObject struct {
+	Body *UpdateStorefrontSettingsJSONRequestBody
+}
+
+type UpdateStorefrontSettingsResponseObject interface {
+	VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateStorefrontSettings200JSONResponse StorefrontSettings
+
+func (response UpdateStorefrontSettings200JSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings401ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings403ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings422ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -9340,6 +9651,12 @@ type StrictServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
+	// GetStorefrontSettings How the shop's website sells
+	// (GET /storefront-settings)
+	GetStorefrontSettings(ctx context.Context, request GetStorefrontSettingsRequestObject) (GetStorefrontSettingsResponseObject, error)
+	// UpdateStorefrontSettings Change how the shop's website sells
+	// (PATCH /storefront-settings)
+	UpdateStorefrontSettings(ctx context.Context, request UpdateStorefrontSettingsRequestObject) (UpdateStorefrontSettingsResponseObject, error)
 	// ListUsers The shop's staff
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -10870,6 +11187,61 @@ func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStorefrontSettings operation middleware
+func (sh *strictHandler) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetStorefrontSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStorefrontSettings(ctx, request.(GetStorefrontSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStorefrontSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStorefrontSettingsResponseObject); ok {
+		if err := validResponse.VisitGetStorefrontSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateStorefrontSettings operation middleware
+func (sh *strictHandler) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	var request UpdateStorefrontSettingsRequestObject
+
+	var body UpdateStorefrontSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateStorefrontSettings(ctx, request.(UpdateStorefrontSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateStorefrontSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateStorefrontSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateStorefrontSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

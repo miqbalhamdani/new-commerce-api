@@ -48,3 +48,7 @@ func EncryptionKey() (string, error) {
 	}
 	return "", errors.New("ENCRYPTION_KEY is required when ENVIRONMENT is not \"development\"")
 }
+
+// APIURL is the API's own public base, for URLs other systems call back on:
+// the Midtrans notification URL (BR-124). The domain arrives with P1-001.
+func APIURL() string { return Getenv("API_URL", "http://localhost:8080") }

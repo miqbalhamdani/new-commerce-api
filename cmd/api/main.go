@@ -25,6 +25,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storefront"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
@@ -117,6 +118,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	box, err := secrets.FromEnv()
+	if err != nil {
+		return err
+	}
 	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
@@ -131,7 +136,7 @@ func run() error {
 			Auth:    auth.NewService(pool, signer),
 			Catalog: catalogSvc,
 			Jobs:    jobsSvc,
-			Team:    team.NewService(pool, redis),
+			Team:    team.NewService(pool, redis, box),
 			Orders:  ordersSvc,
 			Invites: invites,
 		}, !config.IsDevelopment()),

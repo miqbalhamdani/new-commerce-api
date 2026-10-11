@@ -24,12 +24,16 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 		tctx := tenant.NewContext(ctx, e.TenantID)
 		var user, inviter sqlcgen.User
 		var shop sqlcgen.Tenant
+		var replyTo *string
 		err := store.InTenantTx(tctx, func(tx pgx.Tx) (err error) {
 			q := sqlcgen.New(tx)
 			if user, err = q.GetUser(tctx, e.UserID); err != nil {
 				return err
 			}
 			if inviter, err = q.GetUser(tctx, e.ActorID); err != nil {
+				return err
+			}
+			if replyTo, err = ContactEmail(tctx, q); err != nil {
 				return err
 			}
 			shop, err = q.GetTenant(tctx, e.TenantID)
@@ -46,9 +50,27 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 		}
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now())
 		subject, text, html := email.Invitation(shop.Name, inviter.Name, user.Role, link)
-		// ponytail: Reply-To is the inviter until storefront_settings has the
-		// shop's contact email (P1-216).
-		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: string(inviter.Email),
+		// Reply-To is the shop's contact email (BR-128), or the inviter for a
+		// shop that has not set one.
+		reply := string(inviter.Email)
+		if replyTo != nil {
+			reply = *replyTo
+		}
+		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: reply,
 			Subject: subject, Text: text, HTML: html}, nil
 	}
+}
+
+// ContactEmail is the shop's Reply-To for every email it sends (BR-128), or
+// nil when it has none -- including a shop whose settings row does not exist
+// yet.
+func ContactEmail(ctx context.Context, q *sqlcgen.Queries) (*string, error) {
+	st, err := q.GetStorefrontSettings(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return st.ContactEmail, nil
 }

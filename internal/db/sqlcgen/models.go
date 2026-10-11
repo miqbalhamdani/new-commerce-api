@@ -226,6 +226,22 @@ type StorefrontProduct struct {
 	UpdatedAt   time.Time
 }
 
+type StorefrontSetting struct {
+	TenantID                 uuid.UUID
+	ContactEmail             *string
+	GoogleClientID           *string
+	OriginPostalCode         *string
+	ShippingCouriers         []string
+	BankTransferEnabled      bool
+	BankTransferInstructions *string
+	MidtransEnabled          bool
+	MidtransEnvironment      *string
+	MidtransClientKey        *string
+	MidtransServerKey        []byte
+	MidtransWebhookID        uuid.UUID
+	UpdatedAt                time.Time
+}
+
 type StorefrontVariant struct {
 	ID                 uuid.UUID
 	TenantID           uuid.UUID
