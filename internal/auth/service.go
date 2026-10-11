@@ -265,6 +265,11 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 	return out, nil
 }
 
+// VerifyNothing spends what verifying a password costs, for a sign-in that
+// has no hash to check -- no such account, or one with no password -- so the
+// failure cannot be told from a wrong password with a stopwatch (BR-021).
+func VerifyNothing(password string) { _ = VerifyPassword(dummyHash, password) }
+
 // dummyHash is a real argon2id hash of a value nobody knows, verified against
 // when there is no user, so that the failing path costs the same as the
 // succeeding one.

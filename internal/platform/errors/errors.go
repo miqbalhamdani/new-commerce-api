@@ -31,6 +31,7 @@ const (
 	CodeUnauthenticated   = "unauthenticated"
 	CodeInvalidAPIKey     = "invalid_api_key"
 	CodeOriginNotAllowed  = "origin_not_allowed"
+	CodeCustomerAuth      = "customer_auth_required"
 	CodeEmptyCart         = "empty_cart"
 	CodeItemUnavailable   = "item_unavailable"
 	CodeInternal          = "internal"
@@ -102,6 +103,13 @@ func InvalidAPIKey() *Error {
 func OriginNotAllowed() *Error {
 	return &Error{Code: CodeOriginNotAllowed, Status: http.StatusForbidden,
 		Title: "Origin not allowed", Detail: "This API key does not accept requests from this website."}
+}
+
+// CustomerAuthRequired is the storefront's 401 for a customer or order token
+// that is missing, invalid, expired or for another shop (BR-082, BR-086).
+func CustomerAuthRequired(detail string) *Error {
+	return &Error{Code: CodeCustomerAuth, Status: http.StatusUnauthorized,
+		Title: "Customer sign-in required", Detail: detail}
 }
 
 // EmptyCart is the 422 for checking out a cart with nothing in it (BR-090).

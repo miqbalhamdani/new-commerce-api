@@ -17,6 +17,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -28,7 +29,7 @@ const BaseURL = "/v1/storefront"
 // NewRouter mounts the generated storefront routes behind the key middleware.
 // As on the admin side, no route is registered by hand: a route exists
 // because storefront.yaml says so.
-func NewRouter(srv ServerInterface, keys *Keys) http.Handler {
+func NewRouter(srv ServerInterface, keys *Keys, signer *auth.Signer) http.Handler {
 	r := chi.NewRouter()
 	// problem+json for the routes that do not exist too, never chi's text.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -42,8 +43,9 @@ func NewRouter(srv ServerInterface, keys *Keys) http.Handler {
 	})
 	// Around the router rather than r.Use: chi runs Use middleware only once a
 	// route exists, and the key check must hold for every request, routed or
-	// not. Tracing outermost, so a refused key still has a trace id.
-	return httpkit.Tracing(keys.Middleware(routes))
+	// not. Tracing outermost, so a refused key still has a trace id; the
+	// customer token after the key, which it is checked against.
+	return httpkit.Tracing(keys.Middleware(customerAuth(signer)(routes)))
 }
 
 // paramError answers a path or query parameter the generated binder could not
@@ -86,6 +88,7 @@ type Server struct {
 	catalog     *catalog.Service
 	carts       *carts.Service
 	orders      *orders.Service
+	customers   *customers.Service
 	orderTokens *auth.OrderTokens
 }
 
@@ -95,9 +98,11 @@ type Services struct {
 	Catalog     *catalog.Service
 	Carts       *carts.Service
 	Orders      *orders.Service
+	Customers   *customers.Service
 	OrderTokens *auth.OrderTokens
 }
 
 func NewServer(svc Services) *Server {
-	return &Server{catalog: svc.Catalog, carts: svc.Carts, orders: svc.Orders, orderTokens: svc.OrderTokens}
+	return &Server{catalog: svc.Catalog, carts: svc.Carts, orders: svc.Orders, customers: svc.Customers,
+		orderTokens: svc.OrderTokens}
 }

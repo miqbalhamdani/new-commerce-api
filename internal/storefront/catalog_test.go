@@ -19,6 +19,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
@@ -28,8 +29,19 @@ import (
 
 // shop is a storefront router plus a client for one key.
 type shop struct {
-	h   http.Handler
-	key string
+	h      http.Handler
+	key    string
+	signer *auth.Signer
+}
+
+// testSigner signs tokens the way cmd/api's signer does, with a test key.
+func testSigner(t *testing.T) *auth.Signer {
+	t.Helper()
+	signer, err := auth.NewSigner("test-jwt-signing-key-at-least-32-bytes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
 }
 
 func newShop(t *testing.T, store *db.Store, key string) shop {
@@ -42,9 +54,11 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	if err != nil {
 		t.Fatal(err)
 	}
+	signer := testSigner(t)
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
-		OrderTokens: tokens}), NewKeys(store)), key: key}
+		Customers: customers.NewService(store, signer), OrderTokens: tokens}), NewKeys(store), signer),
+		key: key, signer: signer}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.
@@ -152,7 +166,7 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
-			DELETE FROM cart_items; DELETE FROM carts;
+			DELETE FROM cart_items; DELETE FROM carts; DELETE FROM customer_sessions; DELETE FROM customers;
 			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)
 		return err

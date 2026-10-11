@@ -113,3 +113,38 @@ func TestRefreshToken(t *testing.T) {
 		}
 	})
 }
+
+// TestAudiences is BR-086: staff tokens are refused on storefront routes and
+// customer tokens on admin routes, and a token for neither is refused by both.
+// One key signs both kinds, so the audience is all that separates them.
+func TestAudiences(t *testing.T) {
+	signer, err := NewSigner("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	staff, _ := signer.Issue(uuid.New(), uuid.New(), RoleOwner, now)
+	customer, _ := signer.IssueCustomer(uuid.New(), uuid.New(), now)
+	noAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{TenantID: uuid.New(),
+		RegisteredClaims: jwt.RegisteredClaims{Subject: uuid.NewString(),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute))}}).SignedString(signer.secret)
+
+	if _, err := signer.Parse(staff); err != nil {
+		t.Errorf("admin refuses a staff token: %v", err)
+	}
+	if c, err := signer.ParseCustomer(customer); err != nil || c.Role != "" {
+		t.Errorf("storefront refuses a customer token: %v %+v", err, c)
+	}
+	for what, err := range map[string]error{
+		"a customer token on admin":        second(signer.Parse(customer)),
+		"a staff token on the storefront":  second(signer.ParseCustomer(staff)),
+		"a token with no audience, admin":  second(signer.Parse(noAudience)),
+		"one with no audience, storefront": second(signer.ParseCustomer(noAudience)),
+	} {
+		if err == nil {
+			t.Errorf("%s was accepted", what)
+		}
+	}
+}
+
+func second[T any](_ T, err error) error { return err }

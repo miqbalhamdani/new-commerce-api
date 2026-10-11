@@ -15,6 +15,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
+	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
@@ -111,8 +112,9 @@ func run() error {
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
-			Orders: ordersSvc, OrderTokens: orderTokens}),
+			Orders: ordersSvc, Customers: customers.NewService(pool, signer), OrderTokens: orderTokens}),
 		storefront.NewKeys(pool),
+		signer,
 	))
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{

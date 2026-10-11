@@ -284,6 +284,22 @@ type Contact struct {
 	Phone *string             `json:"phone,omitempty"`
 }
 
+// CustomerProfile defines model for CustomerProfile.
+type CustomerProfile struct {
+	Email openapi_types.Email `json:"email"`
+	Id    openapi_types.UUID  `json:"id"`
+	Name  string              `json:"name"`
+	Phone *string             `json:"phone"`
+}
+
+// CustomerRegister defines model for CustomerRegister.
+type CustomerRegister struct {
+	Email    openapi_types.Email `json:"email"`
+	Name     string              `json:"name"`
+	Password string              `json:"password"`
+	Phone    *string             `json:"phone,omitempty"`
+}
+
 // ErrorCode The error codes this API returns, a subset of `04-api-spec.md` §1.1. The code is the last
 // segment of a `Problem.type` URI.
 type ErrorCode string
@@ -294,6 +310,12 @@ type ErrorCode string
 type Image struct {
 	Sizes map[string]string `json:"sizes"`
 	Url   string            `json:"url"`
+}
+
+// LoginRequest defines model for LoginRequest.
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // Money Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
@@ -428,6 +450,12 @@ type ProductVariant struct {
 	WeightGrams  int     `json:"weight_grams"`
 }
 
+// RefreshRequest defines model for RefreshRequest.
+type RefreshRequest struct {
+	// RefreshToken Examples: rt_8d1f…
+	RefreshToken string `json:"refresh_token"`
+}
+
 // ShippingAddress defines model for ShippingAddress.
 type ShippingAddress struct {
 	City       string  `json:"city"`
@@ -435,6 +463,22 @@ type ShippingAddress struct {
 	Line2      *string `json:"line2,omitempty"`
 	PostalCode string  `json:"postal_code"`
 	Province   string  `json:"province"`
+}
+
+// Tokens `access_token` is a 15-minute JWT to send as `Authorization: Bearer`. `refresh_token` is
+// the long-lived credential: keep it out of reach of other scripts, and swap it at
+// `/auth/refresh` before the access token runs out (BR-093).
+type Tokens struct {
+	AccessToken string          `json:"access_token"`
+	Customer    CustomerProfile `json:"customer"`
+
+	// ExpiresIn Seconds until `access_token` expires.
+	//
+	// Examples: 900
+	ExpiresIn int `json:"expires_in"`
+
+	// RefreshToken Examples: rt_8d1f…
+	RefreshToken string `json:"refresh_token"`
 }
 
 // CartId defines model for CartId.
@@ -488,11 +532,23 @@ type ListProductsParams struct {
 // ListProductsParamsSort defines parameters for ListProducts.
 type ListProductsParamsSort string
 
+// LoginJSONRequestBody defines body for Login for application/json ContentType.
+type LoginJSONRequestBody = LoginRequest
+
+// LogoutJSONRequestBody defines body for Logout for application/json ContentType.
+type LogoutJSONRequestBody = RefreshRequest
+
+// RefreshJSONRequestBody defines body for Refresh for application/json ContentType.
+type RefreshJSONRequestBody = RefreshRequest
+
 // CheckoutJSONRequestBody defines body for Checkout for application/json ContentType.
 type CheckoutJSONRequestBody = CheckoutRequest
 
 // SetCartItemJSONRequestBody defines body for SetCartItem for application/json ContentType.
 type SetCartItemJSONRequestBody = CartItemWrite
+
+// RegisterCustomerJSONRequestBody defines body for RegisterCustomer for application/json ContentType.
+type RegisterCustomerJSONRequestBody = CustomerRegister
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -577,6 +633,15 @@ func (a ProblemError) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Login Sign in with email and password
+	// (POST /auth/login)
+	Login(w http.ResponseWriter, r *http.Request)
+	// Logout Sign out of one session
+	// (POST /auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request)
+	// Refresh Swap a refresh token for new tokens
+	// (POST /auth/refresh)
+	Refresh(w http.ResponseWriter, r *http.Request)
 	// ListBrands The shop's brands
 	// (GET /brands)
 	ListBrands(w http.ResponseWriter, r *http.Request)
@@ -595,6 +660,9 @@ type ServerInterface interface {
 	// ListCategories The shop's categories, every tree or one kind
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
+	// RegisterCustomer Create a customer account and sign in
+	// (POST /customers)
+	RegisterCustomer(w http.ResponseWriter, r *http.Request)
 	// ListProducts The shop's visible products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -606,6 +674,24 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Login Sign in with email and password
+// (POST /auth/login)
+func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Logout Sign out of one session
+// (POST /auth/logout)
+func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Refresh Swap a refresh token for new tokens
+// (POST /auth/refresh)
+func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ListBrands The shop's brands
 // (GET /brands)
@@ -643,6 +729,12 @@ func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, pa
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// RegisterCustomer Create a customer account and sign in
+// (POST /customers)
+func (_ Unimplemented) RegisterCustomer(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListProducts The shop's visible products
 // (GET /products)
 func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
@@ -663,6 +755,48 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// Login operation middleware
+func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Login(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Refresh operation middleware
+func (siw *ServerInterfaceWrapper) Refresh(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Refresh(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListBrands operation middleware
 func (siw *ServerInterfaceWrapper) ListBrands(w http.ResponseWriter, r *http.Request) {
@@ -803,6 +937,20 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCategories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegisterCustomer operation middleware
+func (siw *ServerInterfaceWrapper) RegisterCustomer(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegisterCustomer(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1072,6 +1220,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/carts/{cart_id}/checkout", wrapper.Checkout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customers", wrapper.RegisterCustomer)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/refresh", wrapper.Refresh)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
 	})
 
 	return r

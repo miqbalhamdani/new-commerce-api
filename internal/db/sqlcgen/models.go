@@ -89,6 +89,17 @@ type Customer struct {
 	UpdatedAt       time.Time
 }
 
+type CustomerSession struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	CustomerID        uuid.UUID
+	RefreshTokenHash  string
+	PreviousTokenHash *string
+	ExpiresAt         time.Time
+	RevokedAt         *time.Time
+	CreatedAt         time.Time
+}
+
 type Job struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
