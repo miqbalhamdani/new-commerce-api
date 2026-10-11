@@ -51,6 +51,8 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 	o, lines, created, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
 		CartID: cartID, CustomerID: customerID, Customer: customer, ShippingAddress: address,
 		PaymentMethod: string(body.PaymentMethod), Note: body.Note,
+		Shipping:    orders.ShippingChoice{Courier: body.ShippingOption.CourierCode, Service: body.ShippingOption.CourierServiceCode},
+		Destination: body.ShippingAddress.PostalCode,
 	})
 	if err != nil {
 		httpkit.WriteError(w, r, err)
@@ -80,6 +82,9 @@ func validCheckout(b CheckoutRequest) error {
 	need("shipping_address.province", b.ShippingAddress.Province)
 	if !postalCode.MatchString(b.ShippingAddress.PostalCode) {
 		bad = append(bad, apperrors.Field{Name: "shipping_address.postal_code", Detail: "postal_code is 5 digits"})
+	}
+	if b.ShippingOption.CourierCode == "" || b.ShippingOption.CourierServiceCode == "" {
+		bad = append(bad, apperrors.Field{Name: "shipping_option", Detail: "shipping_option is required: a courier service from the shipping rates"})
 	}
 	if b.PaymentMethod == "" {
 		bad = append(bad, apperrors.Field{Name: "payment_method", Detail: "payment_method is required"})

@@ -379,6 +379,9 @@ type CheckoutRequest struct {
 	Note            *string                      `json:"note,omitempty"`
 	PaymentMethod   CheckoutRequestPaymentMethod `json:"payment_method"`
 	ShippingAddress ShippingAddress              `json:"shipping_address"`
+
+	// ShippingOption A courier service picked from `/shipping-rates`; nothing in it is a price (BR-089).
+	ShippingOption ShippingChoice `json:"shipping_option"`
 }
 
 // CheckoutRequestPaymentMethod defines model for CheckoutRequest.PaymentMethod.
@@ -691,6 +694,15 @@ type ShippingAddress struct {
 	Line2      *string `json:"line2,omitempty"`
 	PostalCode string  `json:"postal_code"`
 	Province   string  `json:"province"`
+}
+
+// ShippingChoice A courier service picked from `/shipping-rates`; nothing in it is a price (BR-089).
+type ShippingChoice struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
 }
 
 // ShippingOption defines model for ShippingOption.

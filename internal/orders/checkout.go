@@ -21,6 +21,10 @@ type CheckoutInput struct {
 	Customer, ShippingAddress []byte
 	PaymentMethod             string
 	Note                      *string
+	// Shipping is the courier service picked from /shipping-rates, quoted
+	// again here for Destination (BR-121).
+	Shipping    ShippingChoice
+	Destination string
 }
 
 // Checkout turns a cart into an order, once (BR-088). It returns the order,
@@ -92,9 +96,23 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (sqlcgen.Order
 			return apperrors.ItemUnavailable(unavailable...)
 		}
 
+		// Quoted again, after the replay branch above so a replay never
+		// waits on Biteship, and through q so the lock holder takes no second
+		// connection. Within the quote's window this is the price shown
+		// (BR-121); a failure here makes no order.
+		opts, err := s.quote(ctx, q, cartParcel(items, in.Destination))
+		if err != nil {
+			return err
+		}
+		ship, err := chosen(opts, in.Shipping)
+		if err != nil {
+			return err
+		}
+
 		o, err = insert(ctx, q, newOrder{Source: "storefront", PaymentMethod: in.PaymentMethod,
 			CustomerID: in.CustomerID, CartID: &in.CartID, Customer: in.Customer,
-			ShippingAddress: in.ShippingAddress, Note: in.Note, Lines: newLines})
+			ShippingAddress: in.ShippingAddress, Note: in.Note, Lines: newLines,
+			Shipping: ship.Price, ShippingCourier: &ship.CourierCode, ShippingService: &ship.ServiceCode})
 		if err != nil {
 			return err
 		}
