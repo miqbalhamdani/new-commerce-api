@@ -17,6 +17,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
@@ -39,10 +40,16 @@ const refreshPrefix = "rt_"
 type Service struct {
 	store  *db.Store
 	signer *auth.Signer
+	resets *auth.ResetTokens
+	mail   Mailer
 }
 
-func NewService(store *db.Store, signer *auth.Signer) *Service {
-	return &Service{store: store, signer: signer}
+// Mailer queues an email for the worker, after the change that caused it
+// has committed: email.Enqueue on the Redis stream in production.
+type Mailer func(ctx context.Context, e email.Envelope) error
+
+func NewService(store *db.Store, signer *auth.Signer, resets *auth.ResetTokens, mail Mailer) *Service {
+	return &Service{store: store, signer: signer, resets: resets, mail: mail}
 }
 
 // Register creates an account with a password and signs it in. An email

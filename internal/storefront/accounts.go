@@ -82,3 +82,28 @@ func tokensOut(t customers.Tokens) Tokens {
 func profileOut(c customers.Customer) CustomerProfile {
 	return CustomerProfile{Id: c.ID, Email: openapi_types.Email(c.Email), Name: c.Name, Phone: c.Phone}
 }
+
+func (s *Server) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body PasswordResetRequest
+	if !httpkit.DecodeJSON(w, r, &body) {
+		return
+	}
+	if err := s.customers.RequestReset(r.Context(), body.Email, body.ResetUrl, KeyFromContext(r.Context()).AllowedOrigin); err != nil {
+		httpkit.WriteError(w, r, err)
+		return
+	}
+	// The same answer whether or not the email has an account (BR-094).
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body PasswordResetConfirm
+	if !httpkit.DecodeJSON(w, r, &body) {
+		return
+	}
+	if err := s.customers.ConfirmReset(r.Context(), body.Token, body.Password); err != nil {
+		httpkit.WriteError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

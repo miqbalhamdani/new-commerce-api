@@ -53,10 +53,14 @@ type Sender interface {
 
 // Envelope is what a service enqueues: which email, about whom.
 type Envelope struct {
-	Kind     string    `json:"kind"` // "invitation"
+	Kind     string    `json:"kind"` // "invitation", "password_reset"
 	TenantID uuid.UUID `json:"tenant_id"`
 	UserID   uuid.UUID `json:"user_id"`
 	ActorID  uuid.UUID `json:"actor_id"`
+	// CustomerID and URL are a customer's mail: a reset link goes to URL,
+	// the shop's own reset page (P1-207).
+	CustomerID uuid.UUID `json:"customer_id,omitzero"`
+	URL        string    `json:"url,omitempty"`
 }
 
 // Enqueue puts an envelope on the stream. Call it after the transaction that

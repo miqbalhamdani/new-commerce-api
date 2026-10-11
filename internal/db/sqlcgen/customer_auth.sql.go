@@ -112,6 +112,27 @@ func (q *Queries) CustomerByID(ctx context.Context, id uuid.UUID) (Customer, err
 	return i, err
 }
 
+const lockCustomer = `-- name: LockCustomer :one
+SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
+	row := q.db.QueryRow(ctx, lockCustomer, id)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Phone,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockCustomerSession = `-- name: LockCustomerSession :one
 SELECT id, tenant_id, customer_id, refresh_token_hash, previous_token_hash, expires_at, revoked_at, created_at FROM customer_sessions
 WHERE refresh_token_hash = $1 OR previous_token_hash = $1
@@ -161,6 +182,16 @@ func (q *Queries) RevokeCustomerSessionByToken(ctx context.Context, arg RevokeCu
 	return err
 }
 
+const revokeCustomerSessions = `-- name: RevokeCustomerSessions :exec
+UPDATE customer_sessions SET revoked_at = now() WHERE customer_id = $1 AND revoked_at IS NULL
+`
+
+// Every session, so a new password signs out whoever else had one (BR-094).
+func (q *Queries) RevokeCustomerSessions(ctx context.Context, customerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeCustomerSessions, customerID)
+	return err
+}
+
 const rotateCustomerSession = `-- name: RotateCustomerSession :exec
 UPDATE customer_sessions
 SET previous_token_hash = refresh_token_hash, refresh_token_hash = $1,
@@ -176,4 +207,25 @@ type RotateCustomerSessionParams struct {
 func (q *Queries) RotateCustomerSession(ctx context.Context, arg RotateCustomerSessionParams) error {
 	_, err := q.db.Exec(ctx, rotateCustomerSession, arg.NewHash, arg.ID)
 	return err
+}
+
+const setCustomerPassword = `-- name: SetCustomerPassword :execrows
+UPDATE customers SET password_hash = $1, updated_at = now()
+WHERE id = $2 AND password_hash IS NOT DISTINCT FROM $3
+`
+
+type SetCustomerPasswordParams struct {
+	NewHash *string
+	ID      uuid.UUID
+	OldHash *string
+}
+
+// Only while the hash is still the one a reset link was minted against: of
+// two confirms racing on one link, exactly one sets it (BR-094).
+func (q *Queries) SetCustomerPassword(ctx context.Context, arg SetCustomerPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCustomerPassword, arg.NewHash, arg.ID, arg.OldHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

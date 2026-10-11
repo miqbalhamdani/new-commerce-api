@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
@@ -32,6 +34,28 @@ type shop struct {
 	h      http.Handler
 	key    string
 	signer *auth.Signer
+	resets *auth.ResetTokens
+	mail   *mailbox
+}
+
+// mailbox catches the envelopes a service would queue for the worker, so a
+// test reads them without racing a worker for the Redis stream.
+type mailbox struct {
+	mu   sync.Mutex
+	sent []email.Envelope
+}
+
+func (m *mailbox) queue(_ context.Context, e email.Envelope) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = append(m.sent, e)
+	return nil
+}
+
+func (m *mailbox) all() []email.Envelope {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]email.Envelope(nil), m.sent...)
 }
 
 // testSigner signs tokens the way cmd/api's signer does, with a test key.
@@ -55,10 +79,15 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 		t.Fatal(err)
 	}
 	signer := testSigner(t)
+	resets, err := auth.NewResetTokens("test-reset-key-at-least-32-bytes-long")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mail := &mailbox{}
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
-		Customers: customers.NewService(store, signer), OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer}
+		Customers: customers.NewService(store, signer, resets, mail.queue), OrderTokens: tokens}), NewKeys(store), signer),
+		key: key, signer: signer, resets: resets, mail: mail}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.

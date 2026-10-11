@@ -39,3 +39,16 @@ UPDATE customer_sessions SET revoked_at = now() WHERE id = $1 AND revoked_at IS 
 -- name: RevokeCustomerSessionByToken :exec
 UPDATE customer_sessions SET revoked_at = now()
 WHERE customer_id = sqlc.arg(customer_id) AND refresh_token_hash = sqlc.arg(token_hash) AND revoked_at IS NULL;
+
+-- name: LockCustomer :one
+SELECT * FROM customers WHERE id = $1 FOR UPDATE;
+
+-- name: SetCustomerPassword :execrows
+-- Only while the hash is still the one a reset link was minted against: of
+-- two confirms racing on one link, exactly one sets it (BR-094).
+UPDATE customers SET password_hash = sqlc.arg(new_hash), updated_at = now()
+WHERE id = sqlc.arg(id) AND password_hash IS NOT DISTINCT FROM sqlc.narg(old_hash);
+
+-- name: RevokeCustomerSessions :exec
+-- Every session, so a new password signs out whoever else had one (BR-094).
+UPDATE customer_sessions SET revoked_at = now() WHERE customer_id = $1 AND revoked_at IS NULL;

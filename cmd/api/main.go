@@ -17,6 +17,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -108,11 +109,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	resetSecret, err := config.PasswordResetSecret()
+	if err != nil {
+		return err
+	}
+	resets, err := auth.NewResetTokens(resetSecret)
+	if err != nil {
+		return err
+	}
+	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
-			Orders: ordersSvc, Customers: customers.NewService(pool, signer), OrderTokens: orderTokens}),
+			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), OrderTokens: orderTokens}),
 		storefront.NewKeys(pool),
 		signer,
 	))

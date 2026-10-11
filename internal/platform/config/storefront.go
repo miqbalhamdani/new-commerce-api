@@ -17,3 +17,17 @@ func OrderTokenSecret() (string, error) {
 	}
 	return "", errors.New("ORDER_TOKEN_SECRET is required when ENVIRONMENT is not \"development\"")
 }
+
+const devPasswordResetSecret = "insecure-development-only-reset-key-32"
+
+// PasswordResetSecret signs customer password reset links (BR-094). Like
+// INVITE_SECRET, a deployed environment has no default.
+func PasswordResetSecret() (string, error) {
+	if v := Getenv("PASSWORD_RESET_SECRET", ""); v != "" {
+		return v, nil
+	}
+	if IsDevelopment() {
+		return devPasswordResetSecret, nil
+	}
+	return "", errors.New("PASSWORD_RESET_SECRET is required when ENVIRONMENT is not \"development\"")
+}
