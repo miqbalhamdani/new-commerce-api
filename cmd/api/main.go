@@ -125,6 +125,8 @@ func run() error {
 		return err
 	}
 	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
+	customersSvc := customers.NewService(pool, signer, resets, enqueueMail)
+	customersSvc.Google = auth.NewGoogleVerifier()
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
@@ -136,7 +138,7 @@ func run() error {
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
-			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), Team: teamSvc,
+			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
 			OrderTokens: orderTokens}),
 		storefront.NewKeys(pool),
 		signer,

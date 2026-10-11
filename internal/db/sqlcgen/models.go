@@ -89,6 +89,15 @@ type Customer struct {
 	UpdatedAt       time.Time
 }
 
+type CustomerIdentity struct {
+	TenantID   uuid.UUID
+	CustomerID uuid.UUID
+	Provider   string
+	Subject    string
+	Email      *string
+	CreatedAt  time.Time
+}
+
 type CustomerSession struct {
 	ID                uuid.UUID
 	TenantID          uuid.UUID

@@ -479,6 +479,11 @@ type CustomerRegister struct {
 // segment of a `Problem.type` URI.
 type ErrorCode string
 
+// GoogleSignIn defines model for GoogleSignIn.
+type GoogleSignIn struct {
+	IdToken string `json:"id_token"`
+}
+
 // Image `url` is the 800 px rendition in a list and the 1600 px one on a product, or the original
 // until those exist. `sizes` has a URL per width (`1600`, `800`, `200`) once the image
 // has been processed, a few seconds after upload; until then it is empty.
@@ -858,6 +863,9 @@ type ListProductsParams struct {
 // ListProductsParamsSort defines parameters for ListProducts.
 type ListProductsParamsSort string
 
+// GoogleSignInJSONRequestBody defines body for GoogleSignIn for application/json ContentType.
+type GoogleSignInJSONRequestBody = GoogleSignIn
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -971,6 +979,9 @@ func (a ProblemError) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GoogleSignIn Sign in with Google
+	// (POST /auth/google)
+	GoogleSignIn(w http.ResponseWriter, r *http.Request)
 	// Login Sign in with email and password
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -1042,6 +1053,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GoogleSignIn Sign in with Google
+// (POST /auth/google)
+func (_ Unimplemented) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Login Sign in with email and password
 // (POST /auth/login)
@@ -1183,6 +1200,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GoogleSignIn operation middleware
+func (siw *ServerInterfaceWrapper) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GoogleSignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -1880,6 +1911,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/google", wrapper.GoogleSignIn)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/refresh", wrapper.Refresh)

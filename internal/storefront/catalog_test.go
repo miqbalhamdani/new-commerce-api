@@ -42,6 +42,7 @@ type shop struct {
 	rates  *fakeRates
 	pay    *fakeMidtrans
 	orders *orders.Service
+	cust   *customers.Service
 }
 
 // fakeRates stands in for Biteship: every courier asked for offers one
@@ -144,6 +145,7 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 		t.Fatal(err)
 	}
 	mail := &mailbox{}
+	cust := customers.NewService(store, signer, resets, mail.queue)
 	rates := &fakeRates{price: 1100000, cache: map[string][]byte{}}
 	ordersSvc := orders.NewService(store, files, nil)
 	ordersSvc.Rates = biteship.Cached{Quoter: rates, Cache: rates}
@@ -151,9 +153,9 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = pay.client(), testBox(t), "http://api.test"
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: ordersSvc,
-		Customers: customers.NewService(store, signer, resets, mail.queue), Team: team.NewService(store, nil, testBox(t)),
+		Customers: cust, Team: team.NewService(store, nil, testBox(t)),
 		OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc}
+		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.
@@ -260,7 +262,7 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	// Cleanups run after t.Context() is cancelled.
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM storefront_settings; DELETE FROM payments; DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
+		_, err := tx.Exec(ctx, `DELETE FROM storefront_settings; DELETE FROM customer_identities; DELETE FROM payments; DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
 			DELETE FROM cart_items; DELETE FROM carts; DELETE FROM customer_sessions; DELETE FROM customers;
 			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)
