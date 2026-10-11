@@ -31,3 +31,8 @@ SELECT * FROM payments WHERE id = $1 FOR UPDATE;
 UPDATE payments SET status = sqlc.arg(status), transaction_status = sqlc.arg(transaction_status),
        last_notification = sqlc.arg(last_notification), paid_at = sqlc.narg(paid_at), updated_at = now()
 WHERE id = sqlc.arg(id);
+
+-- name: FailStalePayment :exec
+-- A pending attempt with no live link makes way for the next (BR-123: one
+-- live attempt per order).
+UPDATE payments SET status = 'failed', updated_at = now() WHERE id = $1 AND status = 'pending';

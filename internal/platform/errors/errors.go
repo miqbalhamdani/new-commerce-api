@@ -143,6 +143,13 @@ func ShippingRatesUnavailable(cause error) *Error {
 		Detail: "Shipping rates could not be fetched. Try again in a moment."}).WithCause(cause)
 }
 
+// PaymentUnavailable is the 502 for Midtrans not giving a payment link
+// (BR-126): the order stands, and the shopper asks again shortly.
+func PaymentUnavailable(cause error) *Error {
+	return (&Error{Code: "payment_unavailable", Status: http.StatusBadGateway, Title: "Payment unavailable",
+		Detail: "The payment page could not be opened. Try again in a moment."}).WithCause(cause)
+}
+
 // PermissionDenied names the permission that was required.
 //
 // That naming is an acceptance criterion, not a nicety (BR-024): it is the

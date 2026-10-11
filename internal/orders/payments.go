@@ -13,6 +13,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 )
 
 // Midtrans payments (P1-220…P1-222; BR-122..BR-126).
@@ -75,6 +76,22 @@ func linkOf(p *sqlcgen.Payment) *PayLink {
 // the attempt's row has committed, and may be slow or fail: the order and
 // attempt stand either way, and pay-again can ask again (BR-126).
 func (s *Service) openSnap(ctx context.Context, st sqlcgen.StorefrontSetting, o sqlcgen.Order, p sqlcgen.Payment) (*PayLink, error) {
+	link, err := s.snap(ctx, st, o, p)
+	if err != nil {
+		return nil, err
+	}
+	err = s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) error {
+		return q.SetPaymentLink(ctx, sqlcgen.SetPaymentLinkParams{ID: p.ID, SnapToken: &link.Token, RedirectUrl: &link.RedirectURL})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return link, nil
+}
+
+// snap is the Midtrans call itself, storing nothing: the shop's key opened
+// for this one call (BR-129), the attempt's id and amount in whole rupiah.
+func (s *Service) snap(ctx context.Context, st sqlcgen.StorefrontSetting, o sqlcgen.Order, p sqlcgen.Payment) (*PayLink, error) {
 	if s.Midtrans == nil || s.Box == nil || st.MidtransEnvironment == nil {
 		return nil, midtrans.ErrUnavailable
 	}
@@ -99,13 +116,69 @@ func (s *Service) openSnap(ctx context.Context, st sqlcgen.StorefrontSetting, o 
 		slog.WarnContext(ctx, "midtrans did not open a payment link", "error", err)
 		return nil, err
 	}
-	err = s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) error {
+	return &PayLink{Token: link.Token, RedirectURL: link.RedirectURL, ExpiresAt: p.ExpiresAt}, nil
+}
+
+// PayAgain is a link to pay a pending Midtrans order (P1-222, BR-126): the
+// live one if there is one, else a new attempt for the order's total as it is
+// now. The caller has already checked the order is the shopper's.
+//
+// It holds the order's lock through the Midtrans call, so two taps at once
+// get one link. When Midtrans fails, the new attempt still commits: its id
+// may already exist at Midtrans, and is never offered twice (BR-123).
+func (s *Service) PayAgain(ctx context.Context, orderID uuid.UUID) (*PayLink, error) {
+	var (
+		link    *PayLink
+		snapErr error
+	)
+	err := s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) error {
+		o, err := q.LockOrder(ctx, orderID)
+		if err != nil {
+			return notFound(err, "order")
+		}
+		if o.PaymentMethod != "midtrans" || o.Status != "pending" {
+			return fieldError("order_number", "This order has no payment to make: it is paid, cancelled, or not paid through Midtrans.")
+		}
+		st, err := settingsOf(ctx, q)
+		if err != nil {
+			return err
+		}
+		if !takes(st, "midtrans") {
+			return fieldError("order_number", "This shop no longer takes payments through Midtrans; contact the shop.")
+		}
+		var next int32 = 1
+		latest, err := q.LatestPayment(ctx, o.ID)
+		switch {
+		case err == nil && live(&latest, o):
+			link = linkOf(&latest)
+			return nil
+		case err == nil:
+			if err := q.FailStalePayment(ctx, latest.ID); err != nil {
+				return err
+			}
+			next = latest.Attempt + 1
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		if err := wholeRupiah(o.TotalAmount); err != nil {
+			return err
+		}
+		p, err := newAttempt(ctx, q, o, next)
+		if err != nil {
+			return err
+		}
+		if link, snapErr = s.snap(ctx, st, o, p); snapErr != nil {
+			return nil // keep the attempt; answer 502 below
+		}
 		return q.SetPaymentLink(ctx, sqlcgen.SetPaymentLinkParams{ID: p.ID, SnapToken: &link.Token, RedirectUrl: &link.RedirectURL})
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &PayLink{Token: link.Token, RedirectURL: link.RedirectURL, ExpiresAt: p.ExpiresAt}, nil
+	if snapErr != nil {
+		return nil, apperrors.PaymentUnavailable(snapErr)
+	}
+	return link, nil
 }
 
 // wholeRupiah refuses a Midtrans total with sen in it: Midtrans takes whole

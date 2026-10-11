@@ -61,6 +61,17 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 	return i, err
 }
 
+const failStalePayment = `-- name: FailStalePayment :exec
+UPDATE payments SET status = 'failed', updated_at = now() WHERE id = $1 AND status = 'pending'
+`
+
+// A pending attempt with no live link makes way for the next (BR-123: one
+// live attempt per order).
+func (q *Queries) FailStalePayment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, failStalePayment, id)
+	return err
+}
+
 const latestPayment = `-- name: LatestPayment :one
 SELECT id, tenant_id, order_id, provider, provider_order_id, attempt, status, gross_amount, snap_token, redirect_url, expires_at, transaction_status, last_notification, paid_at, created_at, updated_at FROM payments WHERE order_id = $1 ORDER BY attempt DESC LIMIT 1
 `

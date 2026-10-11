@@ -1028,6 +1028,9 @@ type ServerInterface interface {
 	// GetGuestOrder A guest's order, with its order token
 	// (GET /orders/{order_number})
 	GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
+	// PayAgain A link to pay a pending Midtrans order
+	// (POST /orders/{order_number}/payment)
+	PayAgain(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
 	// ListProducts The shop's visible products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -1151,6 +1154,12 @@ func (_ Unimplemented) GetMyOrder(w http.ResponseWriter, r *http.Request, orderN
 // GetGuestOrder A guest's order, with its order token
 // (GET /orders/{order_number})
 func (_ Unimplemented) GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PayAgain A link to pay a pending Midtrans order
+// (POST /orders/{order_number}/payment)
+func (_ Unimplemented) PayAgain(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1573,6 +1582,32 @@ func (siw *ServerInterfaceWrapper) GetGuestOrder(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// PayAgain operation middleware
+func (siw *ServerInterfaceWrapper) PayAgain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "order_number" -------------
+	var orderNumber OrderNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_number", chi.URLParam(r, "order_number"), &orderNumber, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PayAgain(w, r, orderNumber)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
 
@@ -1872,6 +1907,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders/{order_number}", wrapper.GetGuestOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{order_number}/payment", wrapper.PayAgain)
 	})
 
 	return r
