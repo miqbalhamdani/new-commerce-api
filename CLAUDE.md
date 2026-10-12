@@ -239,7 +239,9 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
   the one bare array.
 - **Rate limits** (BR-014): admin is 100 req/min per user on a Redis sliding window, per-process
   when Redis errors. `RateLimit-*` headers on every response; over the limit is
-  `429 rate_limited` with `Retry-After`. Storefront limits are P1-209.
+  `429 rate_limited` with `Retry-After`. Storefront limits (browser per IP and key, server per
+  key and IP, checkout per IP) and the login limits (per email and IP, staff and customer) run
+  on the same `internal/ratelimit`.
 - **Every admin write records exactly one `audit_log` row** with `db.Audit`, inside the same
   `InTenantTx`, so a rollback leaves none (BR-018). A guard test fails on a mutating route with
   neither an audit case nor a stated exemption (`internal/http/audit_test.go`).

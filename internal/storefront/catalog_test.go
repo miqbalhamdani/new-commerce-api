@@ -43,7 +43,11 @@ type shop struct {
 	pay    *fakeMidtrans
 	orders *orders.Service
 	cust   *customers.Service
+	files  *storage.Store
+	store  *db.Store
 }
+
+func (s shop) catalog() *catalog.Service { return catalog.NewService(s.store, s.files, nil) }
 
 // fakeRates stands in for Biteship: every courier asked for offers one
 // Reguler service at price, until down is set.
@@ -155,8 +159,8 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Carts: carts.NewService(store, files), Orders: ordersSvc,
 		Customers: cust, Team: team.NewService(store, nil, testBox(t)),
-		OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust}
+		OrderTokens: tokens}), NewKeys(store), signer, nil),
+		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust, files: files, store: store}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.

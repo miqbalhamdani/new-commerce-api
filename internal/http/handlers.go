@@ -29,6 +29,7 @@ type Server struct {
 	team    *team.Service
 	orders  *orders.Service
 	invites *auth.InviteSigner
+	limits  *RateLimiter
 
 	// secureCookies is false only for local development over plain HTTP, where
 	// a Secure cookie would be dropped by the browser and nothing would work.
@@ -44,11 +45,13 @@ type Services struct {
 	Team    *team.Service
 	Orders  *orders.Service
 	Invites *auth.InviteSigner
+	// Limits counts sign-ins (BR-014); nil counts nothing.
+	Limits *RateLimiter
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
 	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
-		secureCookies: secureCookies}
+		limits: svc.Limits, secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.
@@ -60,6 +63,11 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if body.Email == "" || len(body.Password) < 8 {
 		writeError(w, r, apperrors.ValidationFailed(
 			"email and password are required; password is at least 8 characters."))
+		return
+	}
+	// Counted before the password is checked, so guessing costs attempts
+	// whether or not a guess is right (BR-014, BR-021).
+	if s.limits != nil && !s.limits.checkLogin(w, r, string(body.Email)) {
 		return
 	}
 

@@ -27,6 +27,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/ratelimit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storefront"
@@ -137,13 +138,16 @@ func run() error {
 	ordersSvc.Rates = biteship.Cached{Quoter: quoter, Cache: redis}
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
 	ordersSvc.Mail = enqueueMail
+	storefrontLimits := ratelimit.New(redis)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
-			OrderTokens: orderTokens}),
+			OrderTokens: orderTokens, Limits: storefrontLimits}),
 		storefront.NewKeys(pool),
 		signer,
+		storefrontLimits,
 	))
+	adminLimits := httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow)
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
 			Auth:    auth.NewService(pool, signer),
@@ -152,9 +156,10 @@ func run() error {
 			Team:    teamSvc,
 			Orders:  ordersSvc,
 			Invites: invites,
+			Limits:  adminLimits,
 		}, !config.IsDevelopment()),
 		signer,
-		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow),
+		adminLimits,
 	))
 
 	addr := ":" + config.Getenv("PORT", config.DefaultPort)

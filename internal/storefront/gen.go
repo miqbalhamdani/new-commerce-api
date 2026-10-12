@@ -828,6 +828,10 @@ type NotFound = Problem
 // OpenTelemetry trace id; quote it when reporting a problem.
 type OriginNotAllowed = Problem
 
+// TooManyRequests RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
+// OpenTelemetry trace id; quote it when reporting a problem.
+type TooManyRequests = Problem
+
 // UnprocessableEntity RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
 type UnprocessableEntity = Problem
