@@ -30,6 +30,8 @@ func TestOrdersSchema(t *testing.T) {
 			{"email_verified_at", "timestamp with time zone", true},
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
+			// P1-215 adds it, so it lands last rather than where the ERD lists it.
+			{"purged_at", "timestamp with time zone", true},
 		}},
 		{"order_sequences", []column{
 			{"tenant_id", "uuid", false},
