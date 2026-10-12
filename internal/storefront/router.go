@@ -21,6 +21,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/ratelimit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
@@ -30,7 +31,7 @@ const BaseURL = "/v1/storefront"
 // NewRouter mounts the generated storefront routes behind the key middleware.
 // As on the admin side, no route is registered by hand: a route exists
 // because storefront.yaml says so.
-func NewRouter(srv ServerInterface, keys *Keys, signer *auth.Signer) http.Handler {
+func NewRouter(srv ServerInterface, keys *Keys, signer *auth.Signer, limiter *ratelimit.Limiter) http.Handler {
 	r := chi.NewRouter()
 	// problem+json for the routes that do not exist too, never chi's text.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -45,8 +46,9 @@ func NewRouter(srv ServerInterface, keys *Keys, signer *auth.Signer) http.Handle
 	// Around the router rather than r.Use: chi runs Use middleware only once a
 	// route exists, and the key check must hold for every request, routed or
 	// not. Tracing outermost, so a refused key still has a trace id; the
-	// customer token after the key, which it is checked against.
-	return httpkit.Tracing(keys.Middleware(customerAuth(signer)(routes)))
+	// docs before the key, which they do not need; the customer token after
+	// the key, which it is checked against.
+	return httpkit.Tracing(docs(keys.Middleware(limits(limiter)(customerAuth(signer)(routes)))))
 }
 
 // paramError answers a path or query parameter the generated binder could not
@@ -92,6 +94,7 @@ type Server struct {
 	customers   *customers.Service
 	team        *team.Service
 	orderTokens *auth.OrderTokens
+	limits      *ratelimit.Limiter
 }
 
 // Services are the domain use cases the storefront composes, one field per
@@ -103,9 +106,11 @@ type Services struct {
 	Customers   *customers.Service
 	Team        *team.Service
 	OrderTokens *auth.OrderTokens
+	// Limits counts sign-ins (BR-014); the router counts everything else.
+	Limits *ratelimit.Limiter
 }
 
 func NewServer(svc Services) *Server {
 	return &Server{catalog: svc.Catalog, carts: svc.Carts, orders: svc.Orders, customers: svc.Customers,
-		team: svc.Team, orderTokens: svc.OrderTokens}
+		team: svc.Team, orderTokens: svc.OrderTokens, limits: svc.Limits}
 }

@@ -56,3 +56,8 @@ ORDER BY ci.variant_id, (m.variant_id = ci.variant_id) IS TRUE DESC, m.position,
 -- never taken from another customer (BR-095).
 UPDATE carts SET customer_id = sqlc.arg(customer_id)
 WHERE id = sqlc.arg(id) AND customer_id IS NULL AND status = 'open';
+
+-- name: DeleteExpiredCarts :execrows
+-- Retention (BR-096): open carts past their expiry, items by cascade.
+-- Checked-out carts stay, since orders.cart_id is the checkout guarantee (BR-088).
+DELETE FROM carts WHERE status = 'open' AND expires_at < now();

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,4 +73,15 @@ func (s *Store) ServerVersion(ctx context.Context) (string, error) {
 		return token, nil
 	}
 	return v, nil
+}
+
+// TenantIDs is every shop, for the work that runs once per shop and then
+// inside that shop's InTenantTx, like retention (BR-003, BR-096). tenants has
+// no RLS, and ids are all this returns.
+func (s *Store) TenantIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx, "SELECT id FROM tenants ORDER BY id")
+	if err != nil {
+		return nil, fmt.Errorf("list tenants: %w", err)
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }

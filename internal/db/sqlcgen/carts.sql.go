@@ -162,6 +162,20 @@ func (q *Queries) DeleteCartItem(ctx context.Context, arg DeleteCartItemParams) 
 	return err
 }
 
+const deleteExpiredCarts = `-- name: DeleteExpiredCarts :execrows
+DELETE FROM carts WHERE status = 'open' AND expires_at < now()
+`
+
+// Retention (BR-096): open carts past their expiry, items by cascade.
+// Checked-out carts stay, since orders.cart_id is the checkout guarantee (BR-088).
+func (q *Queries) DeleteExpiredCarts(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredCarts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCart = `-- name: GetCart :one
 SELECT id, tenant_id, customer_id, status, expires_at, created_at, updated_at FROM carts WHERE id = $1
 `

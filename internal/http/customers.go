@@ -8,7 +8,8 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 )
 
-// Customers: 04-api-spec.md §5.5 (P1-106). Read-only (BR-092).
+// Customers: 04-api-spec.md §5.5 (P1-106). Read-only (BR-092), but for the
+// owner's purge (P1-215, BR-097).
 
 func (s *Server) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
 	requirePermission(auth.PermCustomersRead, func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +45,7 @@ func (s *Server) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
 			return
 		}
 		out := CustomerDetail{Id: c.ID, Name: c.Name, Email: c.Email, Phone: c.Phone,
-			OrderCount: int(c.OrderCount), CreatedAt: c.CreatedAt,
+			OrderCount: int(c.OrderCount), CreatedAt: c.CreatedAt, PurgedAt: c.PurgedAt,
 			Orders: make([]OrderListRow, 0, len(rows))}
 		for _, o := range rows {
 			out.Orders = append(out.Orders, orderRowOut(o))
@@ -53,7 +54,20 @@ func (s *Server) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
 	})(w, r)
 }
 
+// PurgeCustomer erases a shopper's personal data in a job (§5.5, BR-097),
+// answered 202 with the job to poll.
+func (s *Server) PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	requirePermission(auth.PermCustomersPurge, func(w http.ResponseWriter, r *http.Request) {
+		jobID, err := s.orders.StartPurge(r.Context(), id)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, JobAccepted{JobId: jobID})
+	})(w, r)
+}
+
 func customerOut(c sqlcgen.ListCustomersRow) Customer {
 	return Customer{Id: c.ID, Name: c.Name, Email: c.Email, Phone: c.Phone,
-		OrderCount: int(c.OrderCount), CreatedAt: c.CreatedAt}
+		OrderCount: int(c.OrderCount), CreatedAt: c.CreatedAt, PurgedAt: c.PurgedAt}
 }

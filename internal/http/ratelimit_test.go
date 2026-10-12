@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
@@ -92,4 +93,47 @@ type brokenCounter struct{}
 
 func (brokenCounter) SlidingWindow(context.Context, string, int, time.Duration) (bool, int, time.Duration, error) {
 	return false, 0, 0, errors.New("redis is down")
+}
+
+// countingOnly never slides: it only counts, so the test reaches a limit
+// without waiting or sharing Redis.
+type countingOnly struct{ n map[string]int }
+
+func (c countingOnly) SlidingWindow(_ context.Context, key string, limit int, window time.Duration) (bool, int, time.Duration, error) {
+	if c.n[key] >= limit {
+		return false, c.n[key], window, nil
+	}
+	c.n[key]++
+	return true, c.n[key], window, nil
+}
+
+// TestStaffLoginLimit is BR-014's login row for staff (P1-209): ten tries per
+// email in 15 minutes, counted before the password is checked, so the right
+// password does not get an eleventh.
+func TestStaffLoginLimit(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	s := seedAuthUser(ctx, t, store, uuid.Must(uuid.NewV7()))
+	signer, err := auth.NewSigner(isoSigningKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := httpapi.NewRateLimiter(countingOnly{n: map[string]int{}}, httpapi.AdminRateLimit, httpapi.AdminRateWindow)
+	h := httpapi.NewRouter(httpapi.NewServer(httpapi.Services{Auth: auth.NewService(store, signer), Limits: limits}, false), signer, limits)
+	login := func(password string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/v1/auth/login",
+			strings.NewReader(`{"email":"`+strings.ToUpper(s.email)+`","password":"`+password+`"}`))
+		r.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+	for i := 1; i <= 10; i++ {
+		if rec := login("wrong-password"); rec.Code != http.StatusUnauthorized || rec.Header().Get("RateLimit-Limit") != "10" {
+			t.Fatalf("try %d: %d %v", i, rec.Code, rec.Header())
+		}
+	}
+	if rec := login(s.password); rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Errorf("try 11 with the right password: %d, want 429", rec.Code)
+	}
 }

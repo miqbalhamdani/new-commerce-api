@@ -294,6 +294,7 @@ func (e JobState) Valid() bool {
 // Defines values for JobKind.
 const (
 	JobKindChannelImport    JobKind = "channel_import"
+	JobKindCustomerPurge    JobKind = "customer_purge"
 	JobKindImageDerivatives JobKind = "image_derivatives"
 	JobKindOrderExport      JobKind = "order_export"
 	JobKindProductImport    JobKind = "product_import"
@@ -303,6 +304,8 @@ const (
 func (e JobKind) Valid() bool {
 	switch e {
 	case JobKindChannelImport:
+		return true
+	case JobKindCustomerPurge:
 		return true
 	case JobKindImageDerivatives:
 		return true
@@ -1047,6 +1050,9 @@ type Customer struct {
 	Name       string             `json:"name"`
 	OrderCount int                `json:"order_count"`
 	Phone      *string            `json:"phone"`
+
+	// PurgedAt When the customer's personal data was erased (BR-097); `null` until then.
+	PurgedAt *time.Time `json:"purged_at"`
 }
 
 // CustomerDetail defines model for CustomerDetail.
@@ -1060,6 +1066,9 @@ type CustomerDetail struct {
 	// Orders The customer's orders, newest first, up to 50.
 	Orders []OrderListRow `json:"orders"`
 	Phone  *string        `json:"phone"`
+
+	// PurgedAt When the customer's personal data was erased (BR-097); `null` until then.
+	PurgedAt *time.Time `json:"purged_at"`
 }
 
 // CustomerPage defines model for CustomerPage.
@@ -1113,7 +1122,7 @@ type Job struct {
 
 	// Result `null` until `done`. Per kind: `product_import` carries `created`, `updated` and
 	// `error_report_url` (+ `expires_in`), `null` when nothing failed; `order_export` carries
-	// `download_url`.
+	// `download_url`; `customer_purge` carries `orders`.
 	Result *map[string]interface{} `json:"result"`
 	State  JobState                `json:"state"`
 	Total  *int                    `json:"total"`
@@ -2525,6 +2534,9 @@ type ServerInterface interface {
 	// GetCustomer One customer and their latest orders
 	// (GET /customers/{id})
 	GetCustomer(w http.ResponseWriter, r *http.Request, id Id)
+	// PurgeCustomer Erase a customer's personal data as a background job
+	// (POST /customers/{id}/purge)
+	PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(w http.ResponseWriter, r *http.Request, id Id)
@@ -2777,6 +2789,12 @@ func (_ Unimplemented) ListCustomers(w http.ResponseWriter, r *http.Request, par
 // GetCustomer One customer and their latest orders
 // (GET /customers/{id})
 func (_ Unimplemented) GetCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PurgeCustomer Erase a customer's personal data as a background job
+// (POST /customers/{id}/purge)
+func (_ Unimplemented) PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3673,6 +3691,32 @@ func (siw *ServerInterfaceWrapper) GetCustomer(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCustomer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PurgeCustomer operation middleware
+func (siw *ServerInterfaceWrapper) PurgeCustomer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeCustomer(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5260,6 +5304,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/customers/{id}/purge", wrapper.PurgeCustomer)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers/{id}", wrapper.GetCustomer)
 	})
 
@@ -6729,6 +6776,76 @@ type GetCustomer404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetCustomer404ApplicationProblemPlusJSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeCustomerRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type PurgeCustomerResponseObject interface {
+	VisitPurgeCustomerResponse(w http.ResponseWriter) error
+}
+
+type PurgeCustomer202JSONResponse JobAccepted
+
+func (response PurgeCustomer202JSONResponse) VisitPurgeCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeCustomer401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response PurgeCustomer401ApplicationProblemPlusJSONResponse) VisitPurgeCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeCustomer403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response PurgeCustomer403ApplicationProblemPlusJSONResponse) VisitPurgeCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PurgeCustomer404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PurgeCustomer404ApplicationProblemPlusJSONResponse) VisitPurgeCustomerResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -9987,6 +10104,9 @@ type StrictServerInterface interface {
 	// GetCustomer One customer and their latest orders
 	// (GET /customers/{id})
 	GetCustomer(ctx context.Context, request GetCustomerRequestObject) (GetCustomerResponseObject, error)
+	// PurgeCustomer Erase a customer's personal data as a background job
+	// (POST /customers/{id}/purge)
+	PurgeCustomer(ctx context.Context, request PurgeCustomerRequestObject) (PurgeCustomerResponseObject, error)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
@@ -10730,6 +10850,32 @@ func (sh *strictHandler) GetCustomer(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCustomerResponseObject); ok {
 		if err := validResponse.VisitGetCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PurgeCustomer operation middleware
+func (sh *strictHandler) PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	var request PurgeCustomerRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PurgeCustomer(ctx, request.(PurgeCustomerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PurgeCustomer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PurgeCustomerResponseObject); ok {
+		if err := validResponse.VisitPurgeCustomerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

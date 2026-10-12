@@ -104,6 +104,8 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
+			// So the page can read its limits (BR-014).
+			w.Header().Set("Access-Control-Expose-Headers", "RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After")
 		}
 
 		ctx := tenant.NewContext(r.Context(), key.TenantID)

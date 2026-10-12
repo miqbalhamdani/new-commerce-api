@@ -111,7 +111,7 @@ func TestKeyMiddleware(t *testing.T) {
 func TestRouterAnswersProblems(t *testing.T) {
 	store := openStore(t)
 	_, key := seedKey(t, store, "https://tokoabc.com")
-	h := NewRouter(NewServer(Services{}), NewKeys(store), testSigner(t))
+	h := NewRouter(NewServer(Services{}), NewKeys(store), testSigner(t), nil)
 
 	r := httptest.NewRequest("GET", "/v1/storefront/nothing-here", nil)
 	rec := httptest.NewRecorder()

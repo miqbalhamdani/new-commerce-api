@@ -20,7 +20,7 @@ func (s *Server) RegisterCustomer(w http.ResponseWriter, r *http.Request) {
 		Name     string  `json:"name"`
 		Phone    *string `json:"phone"`
 	}
-	if !httpkit.DecodeJSON(w, r, &body) {
+	if !httpkit.DecodeJSON(w, r, &body) || !s.signInAllowed(w, r, body.Email) {
 		return
 	}
 	t, err := s.customers.Register(r.Context(), body.Email, body.Password, body.Name, body.Phone)
@@ -36,7 +36,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	if !httpkit.DecodeJSON(w, r, &body) {
+	if !httpkit.DecodeJSON(w, r, &body) || !s.signInAllowed(w, r, body.Email) {
 		return
 	}
 	t, err := s.customers.Login(r.Context(), body.Email, body.Password)
@@ -85,7 +85,7 @@ func profileOut(c customers.Customer) CustomerProfile {
 
 func (s *Server) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var body PasswordResetRequest
-	if !httpkit.DecodeJSON(w, r, &body) {
+	if !httpkit.DecodeJSON(w, r, &body) || !s.signInAllowed(w, r, body.Email) {
 		return
 	}
 	if err := s.customers.RequestReset(r.Context(), body.Email, body.ResetUrl, KeyFromContext(r.Context()).AllowedOrigin); err != nil {
@@ -98,7 +98,7 @@ func (s *Server) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 	var body PasswordResetConfirm
-	if !httpkit.DecodeJSON(w, r, &body) {
+	if !httpkit.DecodeJSON(w, r, &body) || !s.signInAllowed(w, r, "") {
 		return
 	}
 	if err := s.customers.ConfirmReset(r.Context(), body.Token, body.Password); err != nil {
@@ -111,7 +111,7 @@ func (s *Server) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 // GoogleSignIn is P1-223: 200 for a returning customer, 201 for one made now.
 func (s *Server) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
 	var body GoogleSignIn
-	if !httpkit.DecodeJSON(w, r, &body) {
+	if !httpkit.DecodeJSON(w, r, &body) || !s.signInAllowed(w, r, "") {
 		return
 	}
 	t, created, err := s.customers.GoogleSignIn(r.Context(), body.IdToken)

@@ -58,7 +58,8 @@ cmd/api/          HTTP API: /v1 admin, /v1/storefront from Phase 3. Stateless; 2
 cmd/migrate/      Runs migrations to completion, exits.
 cmd/lint-rls/     RLS policy guard (make lint-rls).
 cmd/worker/       Redis Streams consumer (P1-060). Phase 1: image derivatives, product CSV
-                  import, invitation email. Later: order export, channel import, retention.
+                  import, invitation email; order export, order email, nightly retention
+                  (P1-214). Later: channel import.
 internal/
   platform/       config, errors, logging, telemetry — imported by everything
   db/             pool, InTenantTx, audit recorder, sqlc output. THE ONLY package that imports pgx
@@ -122,8 +123,10 @@ conversation.
 owns nothing else. On a developer's machine the schema owner is a superuser and it would appear to
 work without that role; in production it would not.
 
-**Cross-tenant admin work** (retention, purge) uses a separate `BYPASSRLS` role and pool, is
-audit-logged, and is never reachable from a request (BR-003).
+**Work that spans shops** (the nightly retention sweep, `internal/retention`) has no role of its
+own: `Store.TenantIDs` lists shop ids (`tenants` has no RLS), then each shop's work runs in that
+shop's own `InTenantTx` as `app_user`, audit-logged, never reachable from a request (BR-003). Do
+not add a `BYPASSRLS` pool for it.
 
 **Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
 `cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the
@@ -209,7 +212,9 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
 - The generated server interfaces come from `contracts/openapi.yaml` (admin, `internal/http`) and
   `contracts/storefront.yaml` (`internal/storefront`) via `oapi-codegen`. Do not hand-write route
   registration for a documented endpoint. A path appears in either file when its backlog item is
-  done; P1-213 publishes the storefront one.
+  done. The storefront spec is embedded at generate time and served, with no key, at
+  `/v1/storefront/openapi.json` and as a Redoc page at `/v1/storefront/docs` (P1-213); bumping
+  Redoc means a new `integrity` hash in `internal/storefront/docs.go`.
 - **Errors are RFC 9457** `application/problem+json` with a `trace_id`. Use `platform/errors`;
   never `http.Error` in a handler, and never `200` with an error body.
 - **A permission check goes at the handler boundary**, as `requirePermission("resource:action", …)`
@@ -239,7 +244,9 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
   the one bare array.
 - **Rate limits** (BR-014): admin is 100 req/min per user on a Redis sliding window, per-process
   when Redis errors. `RateLimit-*` headers on every response; over the limit is
-  `429 rate_limited` with `Retry-After`. Storefront limits are P1-209.
+  `429 rate_limited` with `Retry-After`. Storefront limits (browser per IP and key, server per
+  key and IP, checkout per IP) and the login limits (per email and IP, staff and customer) run
+  on the same `internal/ratelimit`.
 - **Every admin write records exactly one `audit_log` row** with `db.Audit`, inside the same
   `InTenantTx`, so a rollback leaves none (BR-018). A guard test fails on a mutating route with
   neither an audit case nor a stated exemption (`internal/http/audit_test.go`).

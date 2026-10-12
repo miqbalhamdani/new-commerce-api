@@ -14,6 +14,7 @@ var jobPermission = map[string]string{
 	"order_export":      auth.PermExportsRead,
 	"channel_import":    auth.PermChannelsRead,
 	"image_derivatives": auth.PermMediaRead,
+	"customer_purge":    auth.PermCustomersPurge,
 }
 
 // GetJob reports a job's progress. The permission depends on the job's kind,
