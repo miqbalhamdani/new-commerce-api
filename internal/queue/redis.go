@@ -7,6 +7,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -82,4 +83,18 @@ func (c *Client) ServerVersion(ctx context.Context) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("redis INFO server: no redis_version field in response")
+}
+
+// Get is a cached value, or nil when there is none.
+func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
+	v, err := c.rdb.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	}
+	return v, err
+}
+
+// Set caches a value for ttl.
+func (c *Client) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	return c.rdb.Set(ctx, key, value, ttl).Err()
 }

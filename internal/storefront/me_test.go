@@ -16,6 +16,7 @@ func TestMeAndOrderHistory(t *testing.T) {
 	tenantA, keyA := seedKey(t, store, "https://a.example")
 	tenantB, keyB := seedKey(t, store, "https://b.example")
 	seedCatalog(t, store, tenantA)
+	shipsFrom(t, store, tenantA)
 	t.Cleanup(func() { cleanCatalog(t, store, tenantB) })
 	a, b := newShop(t, store, keyA), newShop(t, store, keyB)
 	full := variantBySKU(t, store, tenantA, "TS-BLK-M")

@@ -34,9 +34,11 @@ import (
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
@@ -349,14 +351,19 @@ var newServer = func(t *testing.T) http.Handler {
 	}
 	redis := testRedis(t)
 	jobsSvc := jobs.NewService(store, redis)
+	ordersSvc := orders.NewService(store, testFiles(t), jobsSvc)
+	// Development's fixed rates: every offered courier, Reguler, Rp 10.000.
+	ordersSvc.Rates = biteship.Cached{Quoter: biteship.Fixed{}, Cache: redis}
+	// The real client: the webhook tests here never get past the signature.
+	ordersSvc.Midtrans, ordersSvc.Box = midtrans.NewClient(), testBox(t)
 
 	// secureCookies false: httptest speaks plain HTTP.
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
 		Auth:    auth.NewService(store, signer),
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Jobs:    jobsSvc,
-		Team:    team.NewService(store, redis),
-		Orders:  orders.NewService(store, testFiles(t), jobsSvc),
+		Team:    team.NewService(store, redis, testBox(t)),
+		Orders:  ordersSvc,
 		Invites: testInvites(t),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))

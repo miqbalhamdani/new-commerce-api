@@ -102,6 +102,54 @@ func (e CategoryKind) Valid() bool {
 	}
 }
 
+// Defines values for CourierCode.
+const (
+	Anteraja  CourierCode = "anteraja"
+	Idexpress CourierCode = "idexpress"
+	Jne       CourierCode = "jne"
+	Jnt       CourierCode = "jnt"
+	Lion      CourierCode = "lion"
+	Ninja     CourierCode = "ninja"
+	Pos       CourierCode = "pos"
+	Rpx       CourierCode = "rpx"
+	Sap       CourierCode = "sap"
+	Sicepat   CourierCode = "sicepat"
+	Tiki      CourierCode = "tiki"
+	Wahana    CourierCode = "wahana"
+)
+
+// Valid indicates whether the value is a known member of the CourierCode enum.
+func (e CourierCode) Valid() bool {
+	switch e {
+	case Anteraja:
+		return true
+	case Idexpress:
+		return true
+	case Jne:
+		return true
+	case Jnt:
+		return true
+	case Lion:
+		return true
+	case Ninja:
+		return true
+	case Pos:
+		return true
+	case Rpx:
+		return true
+	case Sap:
+		return true
+	case Sicepat:
+		return true
+	case Tiki:
+		return true
+	case Wahana:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeCategoryInUse            ErrorCode = "category_in_use"
@@ -492,6 +540,42 @@ func (e SettingsStatus) Valid() bool {
 	case SettingsStatusClosed:
 		return true
 	case SettingsStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontSettingsMidtransEnvironment.
+const (
+	StorefrontSettingsMidtransEnvironmentProduction StorefrontSettingsMidtransEnvironment = "production"
+	StorefrontSettingsMidtransEnvironmentSandbox    StorefrontSettingsMidtransEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontSettingsMidtransEnvironment enum.
+func (e StorefrontSettingsMidtransEnvironment) Valid() bool {
+	switch e {
+	case StorefrontSettingsMidtransEnvironmentProduction:
+		return true
+	case StorefrontSettingsMidtransEnvironmentSandbox:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontSettingsUpdateMidtransEnvironment.
+const (
+	StorefrontSettingsUpdateMidtransEnvironmentProduction StorefrontSettingsUpdateMidtransEnvironment = "production"
+	StorefrontSettingsUpdateMidtransEnvironmentSandbox    StorefrontSettingsUpdateMidtransEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontSettingsUpdateMidtransEnvironment enum.
+func (e StorefrontSettingsUpdateMidtransEnvironment) Valid() bool {
+	switch e {
+	case StorefrontSettingsUpdateMidtransEnvironmentProduction:
+		return true
+	case StorefrontSettingsUpdateMidtransEnvironmentSandbox:
 		return true
 	default:
 		return false
@@ -952,6 +1036,9 @@ type ConfirmMedia struct {
 	VariantId *openapi_types.UUID `json:"variant_id,omitempty"`
 }
 
+// CourierCode A Biteship courier code (BR-120).
+type CourierCode string
+
 // Customer Never a password hash, session or token (BR-092).
 type Customer struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -1082,6 +1169,26 @@ type MediaUpdate struct {
 	VariantId *openapi_types.UUID `json:"variant_id"`
 }
 
+// MidtransNotification Midtrans' HTTP notification. Only the fields the API reads are listed; Midtrans sends more,
+// and they are kept, not refused — this body is Midtrans', not a client's.
+type MidtransNotification struct {
+	FraudStatus *string `json:"fraud_status,omitempty"`
+
+	// GrossAmount Examples: 409000.00
+	GrossAmount string `json:"gross_amount"`
+
+	// OrderId Examples: ERG-000123
+	OrderId      string `json:"order_id"`
+	SignatureKey string `json:"signature_key"`
+
+	// StatusCode Examples: 200
+	StatusCode string `json:"status_code"`
+
+	// TransactionStatus Examples: settlement
+	TransactionStatus    *string                `json:"transaction_status,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
 // Money An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 // a float, a decimal string or an object; there is no currency field because there is only
 // one currency (BR-006, BR-029). Clients divide by 100 to display.
@@ -1179,10 +1286,13 @@ type OrderCreateRequest struct {
 	} `json:"lines"`
 	Note *string `json:"note,omitempty"`
 
-	// Shipping A typed shipping amount; `shipping_option` arrives with `P1-218` (BR-121).
-	Shipping        *Money                   `json:"shipping,omitempty"`
-	ShippingAddress ShippingAddressWrite     `json:"shipping_address"`
-	Source          OrderCreateRequestSource `json:"source"`
+	// Shipping A typed shipping amount. Send this or `shipping_option`, not both.
+	Shipping        *Money               `json:"shipping,omitempty"`
+	ShippingAddress ShippingAddressWrite `json:"shipping_address"`
+
+	// ShippingOption A courier service picked from a quote; the server quotes again and charges that (BR-121).
+	ShippingOption *ShippingChoice          `json:"shipping_option,omitempty"`
+	Source         OrderCreateRequestSource `json:"source"`
 }
 
 // OrderCreateRequestSource defines model for OrderCreateRequest.Source.
@@ -1276,8 +1386,8 @@ type OrderPage struct {
 	NextCursor *string        `json:"next_cursor"`
 }
 
-// OrderPayment One Midtrans Snap attempt, newest first (BR-123). Always `[]` until `P1-220` builds
-// Midtrans at checkout; bank transfers never have a row.
+// OrderPayment One Midtrans Snap attempt, newest first (BR-123): `ERG-000123`, then `ERG-000123-2`, ….
+// Bank transfers never have a row.
 type OrderPayment struct {
 	// Amount An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only
@@ -1565,6 +1675,93 @@ type ShippingAddressWrite struct {
 	Province   string  `json:"province"`
 }
 
+// ShippingChoice A courier service picked from a quote; the server quotes again and charges that (BR-121).
+type ShippingChoice struct {
+	CourierCode        string `json:"courier_code"`
+	CourierServiceCode string `json:"courier_service_code"`
+}
+
+// ShippingOption defines model for ShippingOption.
+type ShippingOption struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+	CourierName string `json:"courier_name"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
+	Duration           string `json:"duration"`
+
+	// Price An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Price       Money  `json:"price"`
+	ServiceName string `json:"service_name"`
+}
+
+// ShippingQuote defines model for ShippingQuote.
+type ShippingQuote struct {
+	Options     []ShippingOption `json:"options"`
+	WeightGrams int              `json:"weight_grams"`
+}
+
+// ShippingRatesRequest defines model for ShippingRatesRequest.
+type ShippingRatesRequest struct {
+	DestinationPostalCode string `json:"destination_postal_code"`
+	Lines                 []struct {
+		Qty       int                `json:"qty"`
+		VariantId openapi_types.UUID `json:"variant_id"`
+	} `json:"lines"`
+}
+
+// StorefrontSettings defines model for StorefrontSettings.
+type StorefrontSettings struct {
+	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
+	BankTransferInstructions *string `json:"bank_transfer_instructions"`
+
+	// ContactEmail Reply-To on every email the shop sends (BR-128).
+	ContactEmail *openapi_types.Email `json:"contact_email"`
+
+	// GoogleClientId The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
+	GoogleClientId      *string                                `json:"google_client_id"`
+	MidtransClientKey   *string                                `json:"midtrans_client_key"`
+	MidtransEnabled     bool                                   `json:"midtrans_enabled"`
+	MidtransEnvironment *StorefrontSettingsMidtransEnvironment `json:"midtrans_environment"`
+
+	// MidtransNotificationUrl Where Midtrans tells the API about payments; sent with every Snap transaction (BR-124).
+	MidtransNotificationUrl string `json:"midtrans_notification_url"`
+	MidtransServerKeySet    bool   `json:"midtrans_server_key_set"`
+
+	// OriginPostalCode Examples: 40115
+	OriginPostalCode *string       `json:"origin_postal_code"`
+	ShippingCouriers []CourierCode `json:"shipping_couriers"`
+	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+// StorefrontSettingsMidtransEnvironment defines model for StorefrontSettings.MidtransEnvironment.
+type StorefrontSettingsMidtransEnvironment string
+
+// StorefrontSettingsUpdate defines model for StorefrontSettingsUpdate.
+type StorefrontSettingsUpdate struct {
+	BankTransferEnabled      *bool                                        `json:"bank_transfer_enabled,omitempty"`
+	BankTransferInstructions *string                                      `json:"bank_transfer_instructions,omitempty"`
+	ContactEmail             *openapi_types.Email                         `json:"contact_email,omitempty"`
+	GoogleClientId           *string                                      `json:"google_client_id,omitempty"`
+	MidtransClientKey        *string                                      `json:"midtrans_client_key,omitempty"`
+	MidtransEnabled          *bool                                        `json:"midtrans_enabled,omitempty"`
+	MidtransEnvironment      *StorefrontSettingsUpdateMidtransEnvironment `json:"midtrans_environment,omitempty"`
+
+	// MidtransServerKey Write-only; `null` removes it (and so needs Midtrans off).
+	MidtransServerKey *string        `json:"midtrans_server_key,omitempty"`
+	OriginPostalCode  *string        `json:"origin_postal_code,omitempty"`
+	ShippingCouriers  *[]CourierCode `json:"shipping_couriers,omitempty"`
+}
+
+// StorefrontSettingsUpdateMidtransEnvironment defines model for StorefrontSettingsUpdate.MidtransEnvironment.
+type StorefrontSettingsUpdateMidtransEnvironment string
+
 // User defines model for User.
 type User struct {
 	CreatedAt   time.Time           `json:"created_at"`
@@ -1752,6 +1949,12 @@ type IfMatch = int
 
 // Limit defines model for Limit.
 type Limit = int
+
+// BadGateway RFC 9457 `application/problem+json`. Every error response in this API uses it.
+//
+// `trace_id` is the OpenTelemetry trace id — a support ticket quoting it goes straight to
+// the span. There is no separate `code` field: the code is the last segment of `type`.
+type BadGateway = Problem
 
 // BadRequest RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
@@ -2023,6 +2226,12 @@ type CreateVariantJSONRequestBody = VariantCreate
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = SettingsUpdate
 
+// ShippingRatesJSONRequestBody defines body for ShippingRates for application/json ContentType.
+type ShippingRatesJSONRequestBody = ShippingRatesRequest
+
+// UpdateStorefrontSettingsJSONRequestBody defines body for UpdateStorefrontSettings for application/json ContentType.
+type UpdateStorefrontSettingsJSONRequestBody = StorefrontSettingsUpdate
+
 // InviteUserJSONRequestBody defines body for InviteUser for application/json ContentType.
 type InviteUserJSONRequestBody = InviteUser
 
@@ -2031,6 +2240,144 @@ type UpdateUserJSONRequestBody = UserUpdate
 
 // UpdateVariantJSONRequestBody defines body for UpdateVariant for application/json ContentType.
 type UpdateVariantJSONRequestBody = VariantUpdate
+
+// MidtransNotificationJSONRequestBody defines body for MidtransNotification for application/json ContentType.
+type MidtransNotificationJSONRequestBody = MidtransNotification
+
+// Getter for additional properties for MidtransNotification. Returns the specified
+// element and whether it was found
+func (a MidtransNotification) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for MidtransNotification
+func (a *MidtransNotification) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for MidtransNotification to handle AdditionalProperties
+func (a *MidtransNotification) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["fraud_status"]; found {
+		err = json.Unmarshal(raw, &a.FraudStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'fraud_status': %w", err)
+		}
+		delete(object, "fraud_status")
+	}
+
+	if raw, found := object["gross_amount"]; found {
+		err = json.Unmarshal(raw, &a.GrossAmount)
+		if err != nil {
+			return fmt.Errorf("error reading 'gross_amount': %w", err)
+		}
+		delete(object, "gross_amount")
+	}
+
+	if raw, found := object["order_id"]; found {
+		err = json.Unmarshal(raw, &a.OrderId)
+		if err != nil {
+			return fmt.Errorf("error reading 'order_id': %w", err)
+		}
+		delete(object, "order_id")
+	}
+
+	if raw, found := object["signature_key"]; found {
+		err = json.Unmarshal(raw, &a.SignatureKey)
+		if err != nil {
+			return fmt.Errorf("error reading 'signature_key': %w", err)
+		}
+		delete(object, "signature_key")
+	}
+
+	if raw, found := object["status_code"]; found {
+		err = json.Unmarshal(raw, &a.StatusCode)
+		if err != nil {
+			return fmt.Errorf("error reading 'status_code': %w", err)
+		}
+		delete(object, "status_code")
+	}
+
+	if raw, found := object["transaction_status"]; found {
+		err = json.Unmarshal(raw, &a.TransactionStatus)
+		if err != nil {
+			return fmt.Errorf("error reading 'transaction_status': %w", err)
+		}
+		delete(object, "transaction_status")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for MidtransNotification to handle AdditionalProperties
+func (a MidtransNotification) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.FraudStatus != nil {
+		object["fraud_status"], err = json.Marshal(a.FraudStatus)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'fraud_status': %w", err)
+		}
+	}
+
+	object["gross_amount"], err = json.Marshal(a.GrossAmount)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'gross_amount': %w", err)
+	}
+
+	object["order_id"], err = json.Marshal(a.OrderId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'order_id': %w", err)
+	}
+
+	object["signature_key"], err = json.Marshal(a.SignatureKey)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'signature_key': %w", err)
+	}
+
+	object["status_code"], err = json.Marshal(a.StatusCode)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'status_code': %w", err)
+	}
+
+	if a.TransactionStatus != nil {
+		object["transaction_status"], err = json.Marshal(a.TransactionStatus)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'transaction_status': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // Getter for additional properties for ProblemError. Returns the specified
 // element and whether it was found
@@ -2268,6 +2615,15 @@ type ServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request)
+	// ShippingRates Quote shipping for a manual order
+	// (POST /shipping/rates)
+	ShippingRates(w http.ResponseWriter, r *http.Request)
+	// GetStorefrontSettings How the shop's website sells
+	// (GET /storefront-settings)
+	GetStorefrontSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateStorefrontSettings Change how the shop's website sells
+	// (PATCH /storefront-settings)
+	UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request)
 	// ListUsers The shop's staff
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -2289,6 +2645,9 @@ type ServerInterface interface {
 	// UpdateVariant Edit one variant
 	// (PATCH /variants/{id})
 	UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams)
+	// MidtransNotification Midtrans reports a payment
+	// (POST /webhooks/midtrans/{webhook_id})
+	MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -2601,6 +2960,24 @@ func (_ Unimplemented) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// ShippingRates Quote shipping for a manual order
+// (POST /shipping/rates)
+func (_ Unimplemented) ShippingRates(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetStorefrontSettings How the shop's website sells
+// (GET /storefront-settings)
+func (_ Unimplemented) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateStorefrontSettings Change how the shop's website sells
+// (PATCH /storefront-settings)
+func (_ Unimplemented) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListUsers The shop's staff
 // (GET /users)
 func (_ Unimplemented) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
@@ -2640,6 +3017,12 @@ func (_ Unimplemented) ArchiveVariant(w http.ResponseWriter, r *http.Request, id
 // UpdateVariant Edit one variant
 // (PATCH /variants/{id})
 func (_ Unimplemented) UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, params UpdateVariantParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// MidtransNotification Midtrans reports a payment
+// (POST /webhooks/midtrans/{webhook_id})
+func (_ Unimplemented) MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4268,6 +4651,48 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ShippingRates operation middleware
+func (siw *ServerInterfaceWrapper) ShippingRates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShippingRates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetStorefrontSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStorefrontSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStorefrontSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStorefrontSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUsers operation middleware
 func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
 
@@ -4512,6 +4937,32 @@ func (siw *ServerInterfaceWrapper) UpdateVariant(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// MidtransNotification operation middleware
+func (siw *ServerInterfaceWrapper) MidtransNotification(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "webhook_id" -------------
+	var webhookId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "webhook_id", chi.URLParam(r, "webhook_id"), &webhookId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "webhook_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MidtransNotification(w, r, webhookId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -4746,6 +5197,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/settings", wrapper.UpdateSettings)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/storefront-settings", wrapper.GetStorefrontSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/storefront-settings", wrapper.UpdateStorefrontSettings)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api-keys", wrapper.ListApiKeys)
 	})
 	r.Group(func(r chi.Router) {
@@ -4759,6 +5216,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit-log", wrapper.ListAuditLog)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/shipping/rates", wrapper.ShippingRates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/webhooks/midtrans/{webhook_id}", wrapper.MidtransNotification)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders", wrapper.ListOrders)
@@ -4802,6 +5265,8 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 	return r
 }
+
+type BadGatewayApplicationProblemPlusJSONResponse Problem
 
 type BadRequestApplicationProblemPlusJSONResponse Problem
 
@@ -8630,6 +9095,215 @@ func (response UpdateSettings422ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type ShippingRatesRequestObject struct {
+	Body *ShippingRatesJSONRequestBody
+}
+
+type ShippingRatesResponseObject interface {
+	VisitShippingRatesResponse(w http.ResponseWriter) error
+}
+
+type ShippingRates200JSONResponse ShippingQuote
+
+func (response ShippingRates200JSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates401ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates403ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates422ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ShippingRates502ApplicationProblemPlusJSONResponse struct {
+	BadGatewayApplicationProblemPlusJSONResponse
+}
+
+func (response ShippingRates502ApplicationProblemPlusJSONResponse) VisitShippingRatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontSettingsRequestObject struct {
+}
+
+type GetStorefrontSettingsResponseObject interface {
+	VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetStorefrontSettings200JSONResponse StorefrontSettings
+
+func (response GetStorefrontSettings200JSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetStorefrontSettings401ApplicationProblemPlusJSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetStorefrontSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetStorefrontSettings403ApplicationProblemPlusJSONResponse) VisitGetStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettingsRequestObject struct {
+	Body *UpdateStorefrontSettingsJSONRequestBody
+}
+
+type UpdateStorefrontSettingsResponseObject interface {
+	VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateStorefrontSettings200JSONResponse StorefrontSettings
+
+func (response UpdateStorefrontSettings200JSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings401ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings403ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateStorefrontSettings422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateStorefrontSettings422ApplicationProblemPlusJSONResponse) VisitUpdateStorefrontSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -9185,6 +9859,69 @@ func (response UpdateVariant422ApplicationProblemPlusJSONResponse) VisitUpdateVa
 	return err
 }
 
+type MidtransNotificationRequestObject struct {
+	WebhookId openapi_types.UUID `json:"webhook_id"`
+	Body      *MidtransNotificationJSONRequestBody
+}
+
+type MidtransNotificationResponseObject interface {
+	VisitMidtransNotificationResponse(w http.ResponseWriter) error
+}
+
+type MidtransNotification200Response struct {
+}
+
+func (response MidtransNotification200Response) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type MidtransNotification401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response MidtransNotification401ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MidtransNotification404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response MidtransNotification404ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MidtransNotification503ApplicationProblemPlusJSONResponse Problem
+
+func (response MidtransNotification503ApplicationProblemPlusJSONResponse) VisitMidtransNotificationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListApiKeys The shop's storefront API keys
@@ -9340,6 +10077,15 @@ type StrictServerInterface interface {
 	// UpdateSettings Change the shop's name, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
+	// ShippingRates Quote shipping for a manual order
+	// (POST /shipping/rates)
+	ShippingRates(ctx context.Context, request ShippingRatesRequestObject) (ShippingRatesResponseObject, error)
+	// GetStorefrontSettings How the shop's website sells
+	// (GET /storefront-settings)
+	GetStorefrontSettings(ctx context.Context, request GetStorefrontSettingsRequestObject) (GetStorefrontSettingsResponseObject, error)
+	// UpdateStorefrontSettings Change how the shop's website sells
+	// (PATCH /storefront-settings)
+	UpdateStorefrontSettings(ctx context.Context, request UpdateStorefrontSettingsRequestObject) (UpdateStorefrontSettingsResponseObject, error)
 	// ListUsers The shop's staff
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -9361,6 +10107,9 @@ type StrictServerInterface interface {
 	// UpdateVariant Edit one variant
 	// (PATCH /variants/{id})
 	UpdateVariant(ctx context.Context, request UpdateVariantRequestObject) (UpdateVariantResponseObject, error)
+	// MidtransNotification Midtrans reports a payment
+	// (POST /webhooks/midtrans/{webhook_id})
+	MidtransNotification(ctx context.Context, request MidtransNotificationRequestObject) (MidtransNotificationResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -10877,6 +11626,92 @@ func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// ShippingRates operation middleware
+func (sh *strictHandler) ShippingRates(w http.ResponseWriter, r *http.Request) {
+	var request ShippingRatesRequestObject
+
+	var body ShippingRatesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ShippingRates(ctx, request.(ShippingRatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ShippingRates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ShippingRatesResponseObject); ok {
+		if err := validResponse.VisitShippingRatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetStorefrontSettings operation middleware
+func (sh *strictHandler) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetStorefrontSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetStorefrontSettings(ctx, request.(GetStorefrontSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetStorefrontSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetStorefrontSettingsResponseObject); ok {
+		if err := validResponse.VisitGetStorefrontSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateStorefrontSettings operation middleware
+func (sh *strictHandler) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request) {
+	var request UpdateStorefrontSettingsRequestObject
+
+	var body UpdateStorefrontSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateStorefrontSettings(ctx, request.(UpdateStorefrontSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateStorefrontSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateStorefrontSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateStorefrontSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListUsers operation middleware
 func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams) {
 	var request ListUsersRequestObject
@@ -11072,6 +11907,39 @@ func (sh *strictHandler) UpdateVariant(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateVariantResponseObject); ok {
 		if err := validResponse.VisitUpdateVariantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MidtransNotification operation middleware
+func (sh *strictHandler) MidtransNotification(w http.ResponseWriter, r *http.Request, webhookId openapi_types.UUID) {
+	var request MidtransNotificationRequestObject
+
+	request.WebhookId = webhookId
+
+	var body MidtransNotificationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MidtransNotification(ctx, request.(MidtransNotificationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MidtransNotification")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MidtransNotificationResponseObject); ok {
+		if err := validResponse.VisitMidtransNotificationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

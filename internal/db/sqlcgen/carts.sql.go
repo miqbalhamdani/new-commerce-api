@@ -49,7 +49,7 @@ func (q *Queries) CartImages(ctx context.Context, cartID uuid.UUID) ([]CartImage
 
 const cartLines = `-- name: CartLines :many
 SELECT ci.variant_id, ci.qty, l.sku, l.option_values, l.product_title, l.product_slug, l.available,
-       sv.price_amount
+       sv.price_amount, sv.weight_grams
 FROM cart_items ci
 JOIN storefront_variant_labels l ON l.id = ci.variant_id
 LEFT JOIN storefront_variants sv ON sv.id = ci.variant_id
@@ -66,6 +66,7 @@ type CartLinesRow struct {
 	ProductSlug  string
 	Available    *bool
 	PriceAmount  *int64
+	WeightGrams  *int32
 }
 
 // Each item named through the labels view, so one that has gone out of view
@@ -89,6 +90,7 @@ func (q *Queries) CartLines(ctx context.Context, cartID uuid.UUID) ([]CartLinesR
 			&i.ProductSlug,
 			&i.Available,
 			&i.PriceAmount,
+			&i.WeightGrams,
 		); err != nil {
 			return nil, err
 		}

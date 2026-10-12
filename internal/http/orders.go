@@ -37,6 +37,7 @@ type orderCreateBody struct {
 	ShippingAddress optional[ShippingAddressWrite] `json:"shipping_address"`
 	Lines           optional[[]orderLineBody]      `json:"lines"`
 	Shipping        optional[int64]                `json:"shipping"`
+	ShippingOption  optional[ShippingChoice]       `json:"shipping_option"`
 	Note            optional[string]               `json:"note"`
 }
 
@@ -46,15 +47,17 @@ type orderCreateBody struct {
 func (s *Server) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	requirePermission(auth.PermOrdersWrite, func(w http.ResponseWriter, r *http.Request) {
 		var body orderCreateBody
-		// shipping_option arrives with P1-218; until then it is refused like
-		// status: a known concept this endpoint does not accept yet.
-		if !decodeJSON(w, r, &body, "status", "shipping_option") {
+		if !decodeJSON(w, r, &body, "status") {
 			return
 		}
 		if err := rejectNull(map[string]bool{"source": body.Source.Null, "customer": body.Customer.Null,
 			"shipping_address": body.ShippingAddress.Null, "lines": body.Lines.Null,
-			"shipping": body.Shipping.Null, "note": body.Note.Null}); err != nil {
+			"shipping": body.Shipping.Null, "shipping_option": body.ShippingOption.Null, "note": body.Note.Null}); err != nil {
 			writeError(w, r, err)
+			return
+		}
+		if body.Shipping.Set && body.ShippingOption.Set {
+			writeError(w, r, fieldErr("shipping_option", "Send a shipping amount or a shipping_option, not both."))
 			return
 		}
 		if body.Source.Value != "manual" {
@@ -78,7 +81,14 @@ func (s *Server) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		in := orders.CreateInput{Shipping: body.Shipping.Value}
+		in := orders.CreateInput{Shipping: body.Shipping.Value, Destination: body.ShippingAddress.Value.PostalCode}
+		if c := body.ShippingOption.Value; body.ShippingOption.Set {
+			if c.CourierCode == "" || c.CourierServiceCode == "" {
+				writeError(w, r, fieldErr("shipping_option", "shipping_option needs courier_code and courier_service_code."))
+				return
+			}
+			in.ShippingOption = &orders.ShippingChoice{Courier: c.CourierCode, Service: c.CourierServiceCode}
+		}
 		cust := map[string]any{"name": body.Customer.Value.Name.Value, "email": nil, "phone": nil}
 		if c := body.Customer.Value; c.Email.Set && !c.Email.Null {
 			cust["email"] = c.Email.Value

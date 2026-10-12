@@ -21,11 +21,13 @@ type HistoryEntry struct {
 	CreatedAt time.Time
 }
 
-// Detail is the §5.2 order: the row, its lines and its trail.
+// Detail is the §5.2 order: the row, its lines, its Midtrans attempts
+// (newest first) and its trail.
 type Detail struct {
-	Order   sqlcgen.Order
-	Lines   []sqlcgen.OrderLine
-	History []HistoryEntry
+	Order    sqlcgen.Order
+	Lines    []sqlcgen.OrderLine
+	Payments []sqlcgen.Payment
+	History  []HistoryEntry
 }
 
 // Get reads one order with its lines and its embedded audit trail, newest
@@ -40,6 +42,9 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Detail, error) {
 		}
 		d.Order = o
 		if d.Lines, err = q.GetOrderLines(ctx, id); err != nil {
+			return err
+		}
+		if d.Payments, err = q.OrderPayments(ctx, id); err != nil {
 			return err
 		}
 		rows, err := q.OrderAuditTrail(ctx, id.String())

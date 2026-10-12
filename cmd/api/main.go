@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -20,11 +21,13 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storefront"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
@@ -117,12 +120,27 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	box, err := secrets.FromEnv()
+	if err != nil {
+		return err
+	}
 	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
+	customersSvc := customers.NewService(pool, signer, resets, enqueueMail)
+	customersSvc.Google = auth.NewGoogleVerifier()
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
+	quoter, err := shippingQuoter()
+	if err != nil {
+		return err
+	}
+	ordersSvc.Rates = biteship.Cached{Quoter: quoter, Cache: redis}
+	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
+	ordersSvc.Mail = enqueueMail
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
-			Orders: ordersSvc, Customers: customers.NewService(pool, signer, resets, enqueueMail), OrderTokens: orderTokens}),
+			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
+			OrderTokens: orderTokens}),
 		storefront.NewKeys(pool),
 		signer,
 	))
@@ -131,7 +149,7 @@ func run() error {
 			Auth:    auth.NewService(pool, signer),
 			Catalog: catalogSvc,
 			Jobs:    jobsSvc,
-			Team:    team.NewService(pool, redis),
+			Team:    teamSvc,
 			Orders:  ordersSvc,
 			Invites: invites,
 		}, !config.IsDevelopment()),
@@ -168,4 +186,18 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// shippingQuoter is Biteship with the platform key (BR-120). Development
+// without one quotes fixed rates so checkout still works locally; anywhere
+// else a missing key is a startup failure, not a checkout that cannot ship.
+func shippingQuoter() (biteship.Quoter, error) {
+	if key := config.BiteshipAPIKey(); key != "" {
+		return biteship.NewClient(key, config.BiteshipURL()), nil
+	}
+	if config.IsDevelopment() {
+		slog.Warn("development mode: no BITESHIP_API_KEY, quoting fixed shipping rates")
+		return biteship.Fixed{}, nil
+	}
+	return nil, errors.New("BITESHIP_API_KEY is required when ENVIRONMENT is not \"development\"")
 }

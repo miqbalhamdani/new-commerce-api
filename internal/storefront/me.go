@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -90,9 +89,9 @@ func (s *Server) ListMyOrders(w http.ResponseWriter, r *http.Request, params Lis
 
 func (s *Server) GetMyOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
 	requireCustomer(func(w http.ResponseWriter, r *http.Request, customerID uuid.UUID) {
-		o, lines, err := s.orders.ByNumber(r.Context(), orderNumber)
+		v, err := s.orders.ByNumber(r.Context(), orderNumber)
 		// Another customer's order is the same 404 as none at all (BR-011).
-		if errors.Is(err, orders.ErrNoSuchOrder) || err == nil && (o.CustomerID == nil || *o.CustomerID != customerID) {
+		if errors.Is(err, orders.ErrNoSuchOrder) || err == nil && (v.Order.CustomerID == nil || *v.Order.CustomerID != customerID) {
 			httpkit.WriteError(w, r, apperrors.NotFound("No such order."))
 			return
 		}
@@ -100,7 +99,7 @@ func (s *Server) GetMyOrder(w http.ResponseWriter, r *http.Request, orderNumber 
 			httpkit.WriteError(w, r, err)
 			return
 		}
-		httpkit.WriteJSON(w, http.StatusOK, customerOrderOut(o, lines))
+		httpkit.WriteJSON(w, http.StatusOK, customerOrderOut(v))
 	})(w, r)
 }
 
@@ -109,19 +108,20 @@ func (s *Server) GetMyOrder(w http.ResponseWriter, r *http.Request, orderNumber 
 // order numbers are sequential, and a 404 would let anyone list them.
 func (s *Server) GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
 	token := r.Header.Get("X-Order-Token")
-	o, lines, err := s.orders.ByNumber(r.Context(), orderNumber)
+	v, err := s.orders.ByNumber(r.Context(), orderNumber)
 	if err != nil && !errors.Is(err, orders.ErrNoSuchOrder) {
 		httpkit.WriteError(w, r, err)
 		return
 	}
-	if err != nil || token == "" || !s.orderTokens.Valid(o.TenantID, o.ID, token) {
+	if err != nil || token == "" || !s.orderTokens.Valid(v.Order.TenantID, v.Order.ID, token) {
 		httpkit.WriteError(w, r, apperrors.CustomerAuthRequired("Send this order's X-Order-Token, from its checkout."))
 		return
 	}
-	httpkit.WriteJSON(w, http.StatusOK, customerOrderOut(o, lines))
+	httpkit.WriteJSON(w, http.StatusOK, customerOrderOut(v))
 }
 
-func customerOrderOut(o sqlcgen.Order, lines []sqlcgen.OrderLine) CustomerOrder {
+func customerOrderOut(v orders.View) CustomerOrder {
+	o, lines := v.Order, v.Lines
 	out := CustomerOrder{OrderNumber: o.OrderNumber, Status: OrderStatus(o.Status), Lines: make([]OrderLine, 0, len(lines)),
 		Subtotal: o.SubtotalAmount, Shipping: o.ShippingAmount, Discount: o.DiscountAmount, Total: o.TotalAmount,
 		PaymentMethod: CustomerOrderPaymentMethod(o.PaymentMethod), Courier: o.Courier, TrackingNumber: o.TrackingNumber,
@@ -132,6 +132,10 @@ func customerOrderOut(o sqlcgen.Order, lines []sqlcgen.OrderLine) CustomerOrder 
 			line.Sku = &l.SkuSnapshot
 		}
 		out.Lines = append(out.Lines, line)
+	}
+	if st := orders.PaymentStatus(v); st != nil {
+		ps := PaymentStatus(*st)
+		out.PaymentStatus = &ps
 	}
 	_ = json.Unmarshal(o.ShippingAddress, &out.ShippingAddress)
 	return out

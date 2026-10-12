@@ -42,6 +42,21 @@ func (e CategoryKind) Valid() bool {
 	}
 }
 
+// Defines values for CheckoutOrderPaymentError.
+const (
+	CheckoutOrderPaymentErrorPaymentUnavailable CheckoutOrderPaymentError = "payment_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the CheckoutOrderPaymentError enum.
+func (e CheckoutOrderPaymentError) Valid() bool {
+	switch e {
+	case CheckoutOrderPaymentErrorPaymentUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CheckoutOrderPaymentMethod.
 const (
 	CheckoutOrderPaymentMethodBankTransfer CheckoutOrderPaymentMethod = "bank_transfer"
@@ -150,6 +165,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for MidtransConfigEnvironment.
+const (
+	Production MidtransConfigEnvironment = "production"
+	Sandbox    MidtransConfigEnvironment = "sandbox"
+)
+
+// Valid indicates whether the value is a known member of the MidtransConfigEnvironment enum.
+func (e MidtransConfigEnvironment) Valid() bool {
+	switch e {
+	case Production:
+		return true
+	case Sandbox:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrderStatus.
 const (
 	OrderStatusCancelled  OrderStatus = "cancelled"
@@ -195,6 +228,24 @@ func (e PaymentStatus) Valid() bool {
 	case PaymentStatusPaid:
 		return true
 	case PaymentStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StorefrontConfigPaymentMethods.
+const (
+	StorefrontConfigPaymentMethodsBankTransfer StorefrontConfigPaymentMethods = "bank_transfer"
+	StorefrontConfigPaymentMethodsMidtrans     StorefrontConfigPaymentMethods = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontConfigPaymentMethods enum.
+func (e StorefrontConfigPaymentMethods) Valid() bool {
+	switch e {
+	case StorefrontConfigPaymentMethodsBankTransfer:
+		return true
+	case StorefrontConfigPaymentMethodsMidtrans:
 		return true
 	default:
 		return false
@@ -306,8 +357,12 @@ type CheckoutOrder struct {
 	// order (BR-091).
 	OrderToken *string `json:"order_token"`
 
-	// Payment The Midtrans link to pay; `null` for bank transfer.
-	Payment       *Payment                   `json:"payment"`
+	// Payment The Midtrans link to pay; `null` for bank transfer, or when there is no live link.
+	Payment *Payment `json:"payment"`
+
+	// PaymentError `payment_unavailable` when a Midtrans order has no live payment link, because Midtrans
+	// did not answer or the link has expired; `null` otherwise.
+	PaymentError  *CheckoutOrderPaymentError `json:"payment_error"`
 	PaymentMethod CheckoutOrderPaymentMethod `json:"payment_method"`
 	PlacedAt      time.Time                  `json:"placed_at"`
 
@@ -332,6 +387,9 @@ type CheckoutOrder struct {
 	Total Money `json:"total"`
 }
 
+// CheckoutOrderPaymentError defines model for CheckoutOrder.PaymentError.
+type CheckoutOrderPaymentError string
+
 // CheckoutOrderPaymentMethod defines model for CheckoutOrder.PaymentMethod.
 type CheckoutOrderPaymentMethod string
 
@@ -343,6 +401,9 @@ type CheckoutRequest struct {
 	Note            *string                      `json:"note,omitempty"`
 	PaymentMethod   CheckoutRequestPaymentMethod `json:"payment_method"`
 	ShippingAddress ShippingAddress              `json:"shipping_address"`
+
+	// ShippingOption A courier service picked from `/shipping-rates`; nothing in it is a price (BR-089).
+	ShippingOption ShippingChoice `json:"shipping_option"`
 }
 
 // CheckoutRequestPaymentMethod defines model for CheckoutRequest.PaymentMethod.
@@ -418,6 +479,11 @@ type CustomerRegister struct {
 // segment of a `Problem.type` URI.
 type ErrorCode string
 
+// GoogleSignIn defines model for GoogleSignIn.
+type GoogleSignIn struct {
+	IdToken string `json:"id_token"`
+}
+
 // Image `url` is the 800 px rendition in a list and the 1600 px one on a product, or the original
 // until those exist. `sizes` has a URL per width (`1600`, `800`, `200`) once the image
 // has been processed, a few seconds after upload; until then it is empty.
@@ -446,6 +512,18 @@ type MeUpdate struct {
 	Name  *string `json:"name,omitempty"`
 	Phone *string `json:"phone,omitempty"`
 }
+
+// MidtransConfig defines model for MidtransConfig.
+type MidtransConfig struct {
+	ClientKey   string                    `json:"client_key"`
+	Environment MidtransConfigEnvironment `json:"environment"`
+
+	// SnapJsUrl Examples: https://app.midtrans.com/snap/snap.js
+	SnapJsUrl string `json:"snap_js_url"`
+}
+
+// MidtransConfigEnvironment defines model for MidtransConfig.Environment.
+type MidtransConfigEnvironment string
 
 // Money Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 //
@@ -645,6 +723,63 @@ type ShippingAddress struct {
 	Province   string  `json:"province"`
 }
 
+// ShippingChoice A courier service picked from `/shipping-rates`; nothing in it is a price (BR-089).
+type ShippingChoice struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
+}
+
+// ShippingOption defines model for ShippingOption.
+type ShippingOption struct {
+	// CourierCode Examples: jne
+	CourierCode string `json:"courier_code"`
+
+	// CourierName Examples: JNE
+	CourierName string `json:"courier_name"`
+
+	// CourierServiceCode Examples: reg
+	CourierServiceCode string `json:"courier_service_code"`
+
+	// Duration Examples: 2 - 3 days
+	Duration string `json:"duration"`
+
+	// Price Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	Price Money `json:"price"`
+
+	// ServiceName Examples: Reguler
+	ServiceName string `json:"service_name"`
+}
+
+// ShippingQuote defines model for ShippingQuote.
+type ShippingQuote struct {
+	Options     []ShippingOption `json:"options"`
+	WeightGrams int              `json:"weight_grams"`
+}
+
+// ShippingRatesRequest defines model for ShippingRatesRequest.
+type ShippingRatesRequest struct {
+	DestinationPostalCode string `json:"destination_postal_code"`
+}
+
+// StorefrontConfig defines model for StorefrontConfig.
+type StorefrontConfig struct {
+	BankTransferInstructions *string                          `json:"bank_transfer_instructions"`
+	GoogleClientId           *string                          `json:"google_client_id"`
+	Midtrans                 *MidtransConfig                  `json:"midtrans"`
+	PaymentMethods           []StorefrontConfigPaymentMethods `json:"payment_methods"`
+
+	// ShopName Examples: Toko ABC
+	ShopName string `json:"shop_name"`
+}
+
+// StorefrontConfigPaymentMethods defines model for StorefrontConfig.PaymentMethods.
+type StorefrontConfigPaymentMethods string
+
 // Tokens `access_token` is a 15-minute JWT to send as `Authorization: Bearer`. `refresh_token` is
 // the long-lived credential: keep it out of reach of other scripts, and swap it at
 // `/auth/refresh` before the access token runs out (BR-093).
@@ -672,6 +807,10 @@ type Limit = int
 
 // OrderNumber Examples: ERG-000123
 type OrderNumber = string
+
+// BadGateway RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
+// OpenTelemetry trace id; quote it when reporting a problem.
+type BadGateway = Problem
 
 // Conflict RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
 // OpenTelemetry trace id; quote it when reporting a problem.
@@ -724,6 +863,9 @@ type ListProductsParams struct {
 // ListProductsParamsSort defines parameters for ListProducts.
 type ListProductsParamsSort string
 
+// GoogleSignInJSONRequestBody defines body for GoogleSignIn for application/json ContentType.
+type GoogleSignInJSONRequestBody = GoogleSignIn
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -744,6 +886,9 @@ type CheckoutJSONRequestBody = CheckoutRequest
 
 // SetCartItemJSONRequestBody defines body for SetCartItem for application/json ContentType.
 type SetCartItemJSONRequestBody = CartItemWrite
+
+// CartShippingRatesJSONRequestBody defines body for CartShippingRates for application/json ContentType.
+type CartShippingRatesJSONRequestBody = ShippingRatesRequest
 
 // RegisterCustomerJSONRequestBody defines body for RegisterCustomer for application/json ContentType.
 type RegisterCustomerJSONRequestBody = CustomerRegister
@@ -834,6 +979,9 @@ func (a ProblemError) MarshalJSON() ([]byte, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GoogleSignIn Sign in with Google
+	// (POST /auth/google)
+	GoogleSignIn(w http.ResponseWriter, r *http.Request)
 	// Login Sign in with email and password
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -864,9 +1012,15 @@ type ServerInterface interface {
 	// SetCartItem Set a variant's quantity in the cart
 	// (PUT /carts/{cart_id}/items/{variant_id})
 	SetCartItem(w http.ResponseWriter, r *http.Request, cartId CartId, variantId openapi_types.UUID)
+	// CartShippingRates What shipping the cart to a postal code costs
+	// (POST /carts/{cart_id}/shipping-rates)
+	CartShippingRates(w http.ResponseWriter, r *http.Request, cartId CartId)
 	// ListCategories The shop's categories, every tree or one kind
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
+	// GetConfig What the website needs to render sign-in and payment
+	// (GET /config)
+	GetConfig(w http.ResponseWriter, r *http.Request)
 	// RegisterCustomer Create a customer account and sign in
 	// (POST /customers)
 	RegisterCustomer(w http.ResponseWriter, r *http.Request)
@@ -885,6 +1039,9 @@ type ServerInterface interface {
 	// GetGuestOrder A guest's order, with its order token
 	// (GET /orders/{order_number})
 	GetGuestOrder(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
+	// PayAgain A link to pay a pending Midtrans order
+	// (POST /orders/{order_number}/payment)
+	PayAgain(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber)
 	// ListProducts The shop's visible products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -896,6 +1053,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GoogleSignIn Sign in with Google
+// (POST /auth/google)
+func (_ Unimplemented) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Login Sign in with email and password
 // (POST /auth/login)
@@ -957,9 +1120,21 @@ func (_ Unimplemented) SetCartItem(w http.ResponseWriter, r *http.Request, cartI
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// CartShippingRates What shipping the cart to a postal code costs
+// (POST /carts/{cart_id}/shipping-rates)
+func (_ Unimplemented) CartShippingRates(w http.ResponseWriter, r *http.Request, cartId CartId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListCategories The shop's categories, every tree or one kind
 // (GET /categories)
 func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetConfig What the website needs to render sign-in and payment
+// (GET /config)
+func (_ Unimplemented) GetConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -999,6 +1174,12 @@ func (_ Unimplemented) GetGuestOrder(w http.ResponseWriter, r *http.Request, ord
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// PayAgain A link to pay a pending Midtrans order
+// (POST /orders/{order_number}/payment)
+func (_ Unimplemented) PayAgain(w http.ResponseWriter, r *http.Request, orderNumber OrderNumber) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ListProducts The shop's visible products
 // (GET /products)
 func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
@@ -1019,6 +1200,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GoogleSignIn operation middleware
+func (siw *ServerInterfaceWrapper) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GoogleSignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -1205,6 +1400,32 @@ func (siw *ServerInterfaceWrapper) SetCartItem(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// CartShippingRates operation middleware
+func (siw *ServerInterfaceWrapper) CartShippingRates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cart_id" -------------
+	var cartId CartId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cart_id", chi.URLParam(r, "cart_id"), &cartId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cart_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CartShippingRates(w, r, cartId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCategories operation middleware
 func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http.Request) {
 
@@ -1229,6 +1450,20 @@ func (siw *ServerInterfaceWrapper) ListCategories(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCategories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetConfig(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConfig(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1369,6 +1604,32 @@ func (siw *ServerInterfaceWrapper) GetGuestOrder(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetGuestOrder(w, r, orderNumber)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PayAgain operation middleware
+func (siw *ServerInterfaceWrapper) PayAgain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "order_number" -------------
+	var orderNumber OrderNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "order_number", chi.URLParam(r, "order_number"), &orderNumber, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order_number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PayAgain(w, r, orderNumber)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1628,6 +1889,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/brands", wrapper.ListBrands)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/config", wrapper.GetConfig)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/carts", wrapper.CreateCart)
 	})
 	r.Group(func(r chi.Router) {
@@ -1637,6 +1901,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/carts/{cart_id}/items/{variant_id}", wrapper.SetCartItem)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/carts/{cart_id}/shipping-rates", wrapper.CartShippingRates)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/carts/{cart_id}/checkout", wrapper.Checkout)
 	})
 	r.Group(func(r chi.Router) {
@@ -1644,6 +1911,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/login", wrapper.Login)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/google", wrapper.GoogleSignIn)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/refresh", wrapper.Refresh)
@@ -1671,6 +1941,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/orders/{order_number}", wrapper.GetGuestOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{order_number}/payment", wrapper.PayAgain)
 	})
 
 	return r

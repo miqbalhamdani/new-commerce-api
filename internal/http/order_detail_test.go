@@ -2,11 +2,14 @@ package httpapi_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 func init() {
@@ -111,4 +114,35 @@ func TestOrderDetail(t *testing.T) {
 		code, p := patch(paidID, "1", map[string]any{"note": "too late"})
 		assertProblem(t, code, p, 422, "validation_failed", "")
 	})
+}
+
+// TestOrderDetailPayments is P1-220's admin half: an order's Midtrans
+// attempts, newest first (§5.2, BR-123).
+func TestOrderDetailPayments(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	tenantID := uuid.Must(uuid.NewV7())
+	admin := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleAdmin)
+	id, _ := insertOrder(ctx, t, store, tenantID, "pending", "Pay")
+	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO payments (id, tenant_id, order_id, provider_order_id, attempt, status, gross_amount, expires_at, transaction_status)
+			SELECT gen_random_uuid(), tenant_id, id, order_number, 1, 'failed', total_amount, now(), 'expire' FROM orders WHERE id = $1`, id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO payments (id, tenant_id, order_id, provider_order_id, attempt, gross_amount, expires_at)
+			SELECT gen_random_uuid(), tenant_id, id, order_number || '-2', 2, total_amount, now() + interval '1 day' FROM orders WHERE id = $1`, id)
+		return err
+	}); err != nil {
+		t.Fatalf("seed payments: %v", err)
+	}
+	code, o := apiClient(t, admin)("GET", "/v1/orders/"+id, nil)
+	pays, _ := o["payments"].([]any)
+	if code != 200 || len(pays) != 2 {
+		t.Fatalf("detail: %d %v", code, o)
+	}
+	first, second := pays[0].(map[string]any), pays[1].(map[string]any)
+	if !strings.HasSuffix(first["provider_order_id"].(string), "-2") || first["status"] != "pending" ||
+		second["status"] != "failed" || second["transaction_status"] != "expire" {
+		t.Errorf("payments %v, want the -2 attempt first", pays)
+	}
 }

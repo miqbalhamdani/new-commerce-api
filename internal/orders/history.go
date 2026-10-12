@@ -38,24 +38,54 @@ func (s *Service) CustomerOrders(ctx context.Context, customerID uuid.UUID, afte
 	return rows, &HistoryCursor{At: last.PlacedAt, ID: last.ID}, nil
 }
 
-// ByNumber is an order and its lines by order number, for the storefront to
-// check against a customer or an order token. Not found is ErrNoSuchOrder,
-// which each route answers in its own way.
-func (s *Service) ByNumber(ctx context.Context, number string) (sqlcgen.Order, []sqlcgen.OrderLine, error) {
-	var (
-		o     sqlcgen.Order
-		lines []sqlcgen.OrderLine
-	)
+// View is an order as a shopper sees it: the row, its lines and its newest
+// Midtrans attempt, if any.
+type View struct {
+	Order  sqlcgen.Order
+	Lines  []sqlcgen.OrderLine
+	Latest *sqlcgen.Payment
+}
+
+// ByNumber is an order by order number, for the storefront to check against a
+// customer or an order token. Not found is ErrNoSuchOrder, which each route
+// answers in its own way.
+func (s *Service) ByNumber(ctx context.Context, number string) (View, error) {
+	var v View
 	err := s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) (err error) {
-		if o, err = q.OrderByNumber(ctx, number); errors.Is(err, pgx.ErrNoRows) {
+		if v.Order, err = q.OrderByNumber(ctx, number); errors.Is(err, pgx.ErrNoRows) {
 			return ErrNoSuchOrder
 		} else if err != nil {
 			return err
 		}
-		lines, err = q.GetOrderLines(ctx, o.ID)
-		return err
+		if v.Lines, err = q.GetOrderLines(ctx, v.Order.ID); err != nil {
+			return err
+		}
+		if p, err := q.LatestPayment(ctx, v.Order.ID); err == nil {
+			v.Latest = &p
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		return nil
 	})
-	return o, lines, err
+	return v, err
+}
+
+// PaymentStatus is a Midtrans order's state for its shopper (§11.9): paid
+// once the order is, whoever marked it; else the newest attempt's, with an
+// amount mismatch still pending -- an operator decides; pending with no
+// attempt. Bank transfer has none: the shop confirms it by hand.
+func PaymentStatus(v View) *string {
+	if v.Order.PaymentMethod != "midtrans" {
+		return nil
+	}
+	st := "pending"
+	switch {
+	case v.Order.PaidAt != nil:
+		st = "paid"
+	case v.Latest != nil && (v.Latest.Status == "paid" || v.Latest.Status == "failed"):
+		st = v.Latest.Status
+	}
+	return &st
 }
 
 // ErrNoSuchOrder is an order number with no order in this shop. Each route

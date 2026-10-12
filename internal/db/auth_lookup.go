@@ -10,13 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The three reads in this file are the only ones in the system that cross a
+// The four reads in this file are the only ones in the system that cross a
 // tenant boundary (BR-003), and they are hand-written rather than generated so
 // that they are visible as such -- generated queries all look alike, and these
 // must not blend in.
 //
 // Each goes through a SECURITY DEFINER function owned by a role with BYPASSRLS
-// (migrations 000003 and 000006). The function fixes the returned columns at
+// (migrations 000003, 000006 and 000022). The function fixes the returned columns at
 // definition time; widening one is a schema change, a contract change, and a
 // security review. Nothing else may read across tenants from a request path.
 //
@@ -111,4 +111,30 @@ func (s *Store) ResolveAPIKey(ctx context.Context, keyHash string) (APIKey, erro
 		return APIKey{}, fmt.Errorf("resolve api key: %w", err)
 	}
 	return k, nil
+}
+
+// MidtransWebhook is what a notification URL says before the notification is
+// trusted: whose it is, which Midtrans, and the sealed key that proves it.
+type MidtransWebhook struct {
+	TenantID    uuid.UUID
+	Environment *string
+	ServerKey   []byte // sealed (P1-227); open it with the tenant id
+}
+
+// ResolveMidtransWebhook resolves a notification URL's webhook id (BR-003).
+// The caller sets the tenant only after the signature verifies with the key
+// (BR-124).
+func (s *Store) ResolveMidtransWebhook(ctx context.Context, webhookID uuid.UUID) (MidtransWebhook, error) {
+	var w MidtransWebhook
+	err := s.pool.QueryRow(ctx,
+		`SELECT tenant_id, midtrans_environment, midtrans_server_key FROM resolve_midtrans_webhook($1)`,
+		webhookID,
+	).Scan(&w.TenantID, &w.Environment, &w.ServerKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return MidtransWebhook{}, ErrNotFound
+	}
+	if err != nil {
+		return MidtransWebhook{}, fmt.Errorf("resolve midtrans webhook: %w", err)
+	}
+	return w, nil
 }

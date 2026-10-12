@@ -89,6 +89,15 @@ type Customer struct {
 	UpdatedAt       time.Time
 }
 
+type CustomerIdentity struct {
+	TenantID   uuid.UUID
+	CustomerID uuid.UUID
+	Provider   string
+	Subject    string
+	Email      *string
+	CreatedAt  time.Time
+}
+
 type CustomerSession struct {
 	ID                uuid.UUID
 	TenantID          uuid.UUID
@@ -165,6 +174,25 @@ type OrderSequence struct {
 	LastValue int64
 }
 
+type Payment struct {
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	OrderID           uuid.UUID
+	Provider          string
+	ProviderOrderID   string
+	Attempt           int32
+	Status            string
+	GrossAmount       int64
+	SnapToken         *string
+	RedirectUrl       *string
+	ExpiresAt         time.Time
+	TransactionStatus *string
+	LastNotification  []byte
+	PaidAt            *time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type Product struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -224,6 +252,22 @@ type StorefrontProduct struct {
 	Attributes  []byte
 	OptionNames []string
 	UpdatedAt   time.Time
+}
+
+type StorefrontSetting struct {
+	TenantID                 uuid.UUID
+	ContactEmail             *string
+	GoogleClientID           *string
+	OriginPostalCode         *string
+	ShippingCouriers         []string
+	BankTransferEnabled      bool
+	BankTransferInstructions *string
+	MidtransEnabled          bool
+	MidtransEnvironment      *string
+	MidtransClientKey        *string
+	MidtransServerKey        []byte
+	MidtransWebhookID        uuid.UUID
+	UpdatedAt                time.Time
 }
 
 type StorefrontVariant struct {

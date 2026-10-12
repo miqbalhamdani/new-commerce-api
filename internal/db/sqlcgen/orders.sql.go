@@ -23,11 +23,12 @@ func (q *Queries) CheckOutCart(ctx context.Context, id uuid.UUID) error {
 
 const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (id, tenant_id, source, customer_id, cart_id, order_number, customer, shipping_address,
-                    note, payment_method, subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
+                    note, payment_method, shipping_courier, shipping_service,
+                    subtotal_amount, shipping_amount, discount_amount, total_amount, placed_at)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
         $4, $5, $6, $7,
-        $8, $9,
-        $10, $11, $12, $13, now())
+        $8, $9, $10, $11,
+        $12, $13, $14, $15, now())
 RETURNING id, tenant_id, source, customer_id, order_number, status, customer, shipping_address, note, subtotal_amount, shipping_amount, discount_amount, total_amount, currency, payment_method, shipping_courier, shipping_service, courier, tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at, refunded_at, version, created_at, updated_at, cart_id
 `
 
@@ -41,6 +42,8 @@ type CreateOrderParams struct {
 	ShippingAddress []byte
 	Note            *string
 	PaymentMethod   string
+	ShippingCourier *string
+	ShippingService *string
 	Subtotal        int64
 	Shipping        int64
 	Discount        int64
@@ -58,6 +61,8 @@ func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order
 		arg.ShippingAddress,
 		arg.Note,
 		arg.PaymentMethod,
+		arg.ShippingCourier,
+		arg.ShippingService,
 		arg.Subtotal,
 		arg.Shipping,
 		arg.Discount,
@@ -601,7 +606,7 @@ func (q *Queries) UpdatePendingOrder(ctx context.Context, arg UpdatePendingOrder
 }
 
 const variantForOrder = `-- name: VariantForOrder :one
-SELECT v.id, v.sku, v.option_values, v.archived_at, variant_price(v)::bigint AS price, p.title
+SELECT v.id, v.sku, v.option_values, v.archived_at, variant_price(v)::bigint AS price, v.weight_grams, p.title
 FROM variants v JOIN products p ON p.id = v.product_id
 WHERE v.id = $1
 `
@@ -612,6 +617,7 @@ type VariantForOrderRow struct {
 	OptionValues []string
 	ArchivedAt   *time.Time
 	Price        int64
+	WeightGrams  int32
 	Title        string
 }
 
@@ -626,6 +632,7 @@ func (q *Queries) VariantForOrder(ctx context.Context, id uuid.UUID) (VariantFor
 		&i.OptionValues,
 		&i.ArchivedAt,
 		&i.Price,
+		&i.WeightGrams,
 		&i.Title,
 	)
 	return i, err

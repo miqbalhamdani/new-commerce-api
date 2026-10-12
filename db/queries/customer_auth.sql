@@ -62,3 +62,12 @@ SET name = coalesce(sqlc.narg(name), name),
     updated_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+-- name: CustomerByIdentity :one
+-- The customer an external login signed in as before (BR-127).
+SELECT c.* FROM customer_identities i JOIN customers c ON c.id = i.customer_id
+WHERE i.provider = sqlc.arg(provider) AND i.subject = sqlc.arg(subject);
+
+-- name: CreateIdentity :exec
+INSERT INTO customer_identities (tenant_id, customer_id, provider, subject, email)
+VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(customer_id), sqlc.arg(provider), sqlc.arg(subject), sqlc.narg(email));

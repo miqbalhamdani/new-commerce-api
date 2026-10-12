@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -25,7 +26,9 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -36,6 +39,54 @@ type shop struct {
 	signer *auth.Signer
 	resets *auth.ResetTokens
 	mail   *mailbox
+	rates  *fakeRates
+	pay    *fakeMidtrans
+	orders *orders.Service
+	cust   *customers.Service
+}
+
+// fakeRates stands in for Biteship: every courier asked for offers one
+// Reguler service at price, until down is set.
+type fakeRates struct {
+	mu    sync.Mutex
+	price int64
+	down  bool
+	asks  int
+	cache map[string][]byte
+}
+
+func (f *fakeRates) Rates(_ context.Context, r biteship.Request) ([]biteship.Option, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asks++
+	if f.down {
+		return nil, biteship.ErrUnavailable
+	}
+	opts := []biteship.Option{}
+	for _, c := range r.Couriers {
+		opts = append(opts, biteship.Option{CourierCode: c, ServiceCode: "reg", CourierName: strings.ToUpper(c),
+			ServiceName: "Reguler", Price: f.price, Duration: "2 - 3 days"})
+	}
+	return opts, nil
+}
+
+func (f *fakeRates) set(price int64, down bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.price, f.down = price, down
+}
+
+func (f *fakeRates) Get(_ context.Context, k string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cache[k], nil
+}
+
+func (f *fakeRates) Set(_ context.Context, k string, v []byte, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cache[k] = v
+	return nil
 }
 
 // mailbox catches the envelopes a service would queue for the worker, so a
@@ -56,6 +107,16 @@ func (m *mailbox) all() []email.Envelope {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]email.Envelope(nil), m.sent...)
+}
+
+// testBox seals with a fixed test key, as cmd/api does with ENCRYPTION_KEY.
+func testBox(t *testing.T) *secrets.Box {
+	t.Helper()
+	box, err := secrets.New(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return box
 }
 
 // testSigner signs tokens the way cmd/api's signer does, with a test key.
@@ -84,10 +145,18 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 		t.Fatal(err)
 	}
 	mail := &mailbox{}
+	cust := customers.NewService(store, signer, resets, mail.queue)
+	rates := &fakeRates{price: 1100000, cache: map[string][]byte{}}
+	ordersSvc := orders.NewService(store, files, nil)
+	ordersSvc.Rates = biteship.Cached{Quoter: rates, Cache: rates}
+	pay := newFakeMidtrans(t)
+	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = pay.client(), testBox(t), "http://api.test"
+	ordersSvc.Mail = mail.queue
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
-		Carts: carts.NewService(store, files), Orders: orders.NewService(store, files, nil),
-		Customers: customers.NewService(store, signer, resets, mail.queue), OrderTokens: tokens}), NewKeys(store), signer),
-		key: key, signer: signer, resets: resets, mail: mail}
+		Carts: carts.NewService(store, files), Orders: ordersSvc,
+		Customers: cust, Team: team.NewService(store, nil, testBox(t)),
+		OrderTokens: tokens}), NewKeys(store), signer),
+		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust}
 }
 
 // get sends a GET with the shop's key and decodes the JSON answer.
@@ -194,7 +263,7 @@ func cleanCatalog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	// Cleanups run after t.Context() is cancelled.
 	ctx := context.WithoutCancel(t.Context())
 	_ = store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
+		_, err := tx.Exec(ctx, `DELETE FROM storefront_settings; DELETE FROM customer_identities; DELETE FROM payments; DELETE FROM order_lines; DELETE FROM orders; DELETE FROM order_sequences;
 			DELETE FROM cart_items; DELETE FROM carts; DELETE FROM customer_sessions; DELETE FROM customers;
 			DELETE FROM product_media; DELETE FROM product_categories; DELETE FROM variants;
 			DELETE FROM products; DELETE FROM categories; DELETE FROM brands`)

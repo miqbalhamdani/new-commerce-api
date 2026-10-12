@@ -21,6 +21,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
 // BaseURL is where the storefront is mounted.
@@ -89,6 +90,7 @@ type Server struct {
 	carts       *carts.Service
 	orders      *orders.Service
 	customers   *customers.Service
+	team        *team.Service
 	orderTokens *auth.OrderTokens
 }
 
@@ -99,10 +101,11 @@ type Services struct {
 	Carts       *carts.Service
 	Orders      *orders.Service
 	Customers   *customers.Service
+	Team        *team.Service
 	OrderTokens *auth.OrderTokens
 }
 
 func NewServer(svc Services) *Server {
 	return &Server{catalog: svc.Catalog, carts: svc.Carts, orders: svc.Orders, customers: svc.Customers,
-		orderTokens: svc.OrderTokens}
+		team: svc.Team, orderTokens: svc.OrderTokens}
 }

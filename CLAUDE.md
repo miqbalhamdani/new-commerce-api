@@ -111,7 +111,7 @@ returned columns are fixed at definition time:
 | Staff login | `auth_lookup_user` | P1-011 |
 | Staff token refresh | `auth_lookup_refresh_token` | P1-011 |
 | API key resolution | `resolve_api_key` | P1-019 |
-| Midtrans notification | — | P1-221 |
+| Midtrans notification | `resolve_midtrans_webhook` | P1-216 (used by P1-221) |
 
 They are hand-written in `internal/db/auth_lookup.go` rather than generated, so they do not blend
 in with code that all looks alike. Adding a fifth is a schema change, a contract change, and a

@@ -70,6 +70,28 @@ func (q *Queries) CreateCustomerSession(ctx context.Context, arg CreateCustomerS
 	return err
 }
 
+const createIdentity = `-- name: CreateIdentity :exec
+INSERT INTO customer_identities (tenant_id, customer_id, provider, subject, email)
+VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)
+`
+
+type CreateIdentityParams struct {
+	CustomerID uuid.UUID
+	Provider   string
+	Subject    string
+	Email      *string
+}
+
+func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) error {
+	_, err := q.db.Exec(ctx, createIdentity,
+		arg.CustomerID,
+		arg.Provider,
+		arg.Subject,
+		arg.Email,
+	)
+	return err
+}
+
 const customerByEmail = `-- name: CustomerByEmail :one
 SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE email = $1
 `
@@ -97,6 +119,34 @@ SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, crea
 
 func (q *Queries) CustomerByID(ctx context.Context, id uuid.UUID) (Customer, error) {
 	row := q.db.QueryRow(ctx, customerByID, id)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Phone,
+		&i.EmailVerifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const customerByIdentity = `-- name: CustomerByIdentity :one
+SELECT c.id, c.tenant_id, c.email, c.password_hash, c.name, c.phone, c.email_verified_at, c.created_at, c.updated_at FROM customer_identities i JOIN customers c ON c.id = i.customer_id
+WHERE i.provider = $1 AND i.subject = $2
+`
+
+type CustomerByIdentityParams struct {
+	Provider string
+	Subject  string
+}
+
+// The customer an external login signed in as before (BR-127).
+func (q *Queries) CustomerByIdentity(ctx context.Context, arg CustomerByIdentityParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, customerByIdentity, arg.Provider, arg.Subject)
 	var i Customer
 	err := row.Scan(
 		&i.ID,

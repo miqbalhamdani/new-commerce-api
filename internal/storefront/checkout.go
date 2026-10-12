@@ -48,19 +48,29 @@ func (s *Server) Checkout(w http.ResponseWriter, r *http.Request, cartID CartId)
 		"city": body.ShippingAddress.City, "province": body.ShippingAddress.Province,
 		"postal_code": body.ShippingAddress.PostalCode})
 
-	o, lines, created, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
+	res, err := s.orders.Checkout(r.Context(), orders.CheckoutInput{
 		CartID: cartID, CustomerID: customerID, Customer: customer, ShippingAddress: address,
 		PaymentMethod: string(body.PaymentMethod), Note: body.Note,
+		Shipping:    orders.ShippingChoice{Courier: body.ShippingOption.CourierCode, Service: body.ShippingOption.CourierServiceCode},
+		Destination: body.ShippingAddress.PostalCode,
 	})
 	if err != nil {
 		httpkit.WriteError(w, r, err)
 		return
 	}
 	status := http.StatusOK // a replay: the order this cart already made (BR-088)
-	if created {
+	if res.Created {
 		status = http.StatusCreated
 	}
-	httpkit.WriteJSON(w, status, s.checkoutOut(o, lines))
+	out := s.checkoutOut(res.Order, res.Lines)
+	if res.Payment != nil {
+		out.Payment = &Payment{SnapToken: res.Payment.Token, RedirectUrl: res.Payment.RedirectURL, ExpiresAt: res.Payment.ExpiresAt}
+	}
+	if res.PaymentError {
+		e := CheckoutOrderPaymentErrorPaymentUnavailable
+		out.PaymentError = &e
+	}
+	httpkit.WriteJSON(w, status, out)
 }
 
 func validCheckout(b CheckoutRequest) error {
@@ -80,6 +90,9 @@ func validCheckout(b CheckoutRequest) error {
 	need("shipping_address.province", b.ShippingAddress.Province)
 	if !postalCode.MatchString(b.ShippingAddress.PostalCode) {
 		bad = append(bad, apperrors.Field{Name: "shipping_address.postal_code", Detail: "postal_code is 5 digits"})
+	}
+	if b.ShippingOption.CourierCode == "" || b.ShippingOption.CourierServiceCode == "" {
+		bad = append(bad, apperrors.Field{Name: "shipping_option", Detail: "shipping_option is required: a courier service from the shipping rates"})
 	}
 	if b.PaymentMethod == "" {
 		bad = append(bad, apperrors.Field{Name: "payment_method", Detail: "payment_method is required"})

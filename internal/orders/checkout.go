@@ -21,26 +21,35 @@ type CheckoutInput struct {
 	Customer, ShippingAddress []byte
 	PaymentMethod             string
 	Note                      *string
+	// Shipping is the courier service picked from /shipping-rates, quoted
+	// again here for Destination (BR-121).
+	Shipping    ShippingChoice
+	Destination string
 }
 
-// Checkout turns a cart into an order, once (BR-088). It returns the order,
-// its lines, and whether this call made it: false is a replay.
+// CheckoutResult is what a checkout answers: the order and its lines,
+// whether this call made it (false is a replay), and for Midtrans its live
+// link -- nil, with PaymentError, when Midtrans did not give one (BR-123).
+type CheckoutResult struct {
+	Order        sqlcgen.Order
+	Lines        []sqlcgen.OrderLine
+	Created      bool
+	Payment      *PayLink
+	PaymentError bool
+}
+
+// Checkout turns a cart into an order, once (BR-088).
 //
 // The cart's row lock is what makes it once. Twenty taps of "pay" queue on
 // the lock; the first makes the order and marks the cart checked out; each of
 // the others, unblocked, reads the cart again, finds it checked out, and
 // returns that order. orders.cart_id is UNIQUE behind it in case anything
 // ever bypasses the lock.
-func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (sqlcgen.Order, []sqlcgen.OrderLine, bool, error) {
-	// ponytail: no storefront_settings until P1-216, so every shop takes bank
-	// transfer and nothing else (BR-122's default).
-	if in.PaymentMethod != "bank_transfer" {
-		return sqlcgen.Order{}, nil, false, fieldError("payment_method", "This shop does not take "+in.PaymentMethod+".")
-	}
+func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (CheckoutResult, error) {
 	var (
-		o       sqlcgen.Order
-		lines   []sqlcgen.OrderLine
-		created bool
+		res     CheckoutResult
+		st      sqlcgen.StorefrontSetting
+		attempt *sqlcgen.Payment
 	)
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
 		// By id alone: a status filter would be re-checked against the
@@ -55,11 +64,18 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (sqlcgen.Order
 		if cart.Status == "checked_out" {
 			// A fresh statement, so a fresh snapshot: it sees the order the
 			// lock holder committed.
-			if o, err = q.OrderByCart(ctx, &in.CartID); err != nil {
+			if res.Order, err = q.OrderByCart(ctx, &in.CartID); err != nil {
 				return err
 			}
-			lines, err = q.GetOrderLines(ctx, o.ID)
-			return err
+			if res.Lines, err = q.GetOrderLines(ctx, res.Order.ID); err != nil {
+				return err
+			}
+			if p, err := q.LatestPayment(ctx, res.Order.ID); err == nil {
+				attempt = &p
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			return nil
 		}
 		if !cart.ExpiresAt.After(time.Now()) {
 			return apperrors.NotFound("No such cart.")
@@ -92,11 +108,42 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (sqlcgen.Order
 			return apperrors.ItemUnavailable(unavailable...)
 		}
 
-		o, err = insert(ctx, q, newOrder{Source: "storefront", PaymentMethod: in.PaymentMethod,
-			CustomerID: in.CustomerID, CartID: &in.CartID, Customer: in.Customer,
-			ShippingAddress: in.ShippingAddress, Note: in.Note, Lines: newLines})
+		if st, err = settingsOf(ctx, q); err != nil {
+			return err
+		}
+		if !takes(st, in.PaymentMethod) {
+			return fieldError("payment_method", "This shop does not take "+in.PaymentMethod+".")
+		}
+
+		// Quoted again, after the replay branch above so a replay never
+		// waits on Biteship, and through q so the lock holder takes no second
+		// connection. Within the quote's window this is the price shown
+		// (BR-121); a failure here makes no order.
+		opts, err := s.quote(ctx, q, cartParcel(items, in.Destination))
 		if err != nil {
 			return err
+		}
+		ship, err := chosen(opts, in.Shipping)
+		if err != nil {
+			return err
+		}
+
+		o, err := insert(ctx, q, newOrder{Source: "storefront", PaymentMethod: in.PaymentMethod,
+			CustomerID: in.CustomerID, CartID: &in.CartID, Customer: in.Customer,
+			ShippingAddress: in.ShippingAddress, Note: in.Note, Lines: newLines,
+			Shipping: ship.Price, ShippingCourier: &ship.CourierCode, ShippingService: &ship.ServiceCode})
+		if err != nil {
+			return err
+		}
+		if in.PaymentMethod == "midtrans" {
+			if err := wholeRupiah(o.TotalAmount); err != nil {
+				return err
+			}
+			p, err := newAttempt(ctx, q, o, 1)
+			if err != nil {
+				return err
+			}
+			attempt = &p
 		}
 		if err := q.CheckOutCart(ctx, in.CartID); err != nil {
 			return err
@@ -104,12 +151,29 @@ func (s *Service) Checkout(ctx context.Context, in CheckoutInput) (sqlcgen.Order
 		if err := auditCreate(ctx, tx, o); err != nil {
 			return err
 		}
-		created = true
-		lines, err = q.GetOrderLines(ctx, o.ID)
+		res.Order, res.Created = o, true
+		res.Lines, err = q.GetOrderLines(ctx, o.ID)
 		return err
 	})
 	if err != nil {
-		return sqlcgen.Order{}, nil, false, err
+		return CheckoutResult{}, err
 	}
-	return o, lines, created, nil
+	if res.Created {
+		s.queueMail(ctx, "order_placed", res.Order.TenantID, res.Order.ID)
+	}
+	if res.Order.PaymentMethod != "midtrans" {
+		return res, nil
+	}
+	// The order has committed; only now is Midtrans asked for a link, so a
+	// slow or failing Midtrans never undoes the order (BR-123).
+	switch {
+	case res.Created && attempt != nil:
+		res.Payment, err = s.openSnap(ctx, st, res.Order, *attempt)
+		res.PaymentError = err != nil
+	case live(attempt, res.Order):
+		res.Payment = linkOf(attempt)
+	default:
+		res.PaymentError = true
+	}
+	return res, nil
 }

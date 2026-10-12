@@ -19,8 +19,9 @@ func checkoutBody() map[string]any {
 		"contact": map[string]any{"name": "Rina", "email": "Rina@Example.com", "phone": "+6281234567890"},
 		"shipping_address": map[string]any{"line1": "Jl. Melati 12", "line2": nil, "city": "Bandung",
 			"province": "Jawa Barat", "postal_code": "40115"},
-		"payment_method": "bank_transfer",
-		"note":           "Tolong dibungkus kado",
+		"shipping_option": map[string]any{"courier_code": "jne", "courier_service_code": "reg"},
+		"payment_method":  "bank_transfer",
+		"note":            "Tolong dibungkus kado",
 	}
 }
 
@@ -47,6 +48,7 @@ func TestCheckout(t *testing.T) {
 	tenantA, keyA := seedKey(t, store, "https://a.example")
 	_, keyB := seedKey(t, store, "https://b.example")
 	seedCatalog(t, store, tenantA)
+	shipsFrom(t, store, tenantA)
 	a, b := newShop(t, store, keyA), newShop(t, store, keyB)
 	sale := variantBySKU(t, store, tenantA, "TS-BLK-S")
 	full := variantBySKU(t, store, tenantA, "TS-BLK-M")
@@ -56,8 +58,9 @@ func TestCheckout(t *testing.T) {
 		path := "/v1/storefront/carts/" + cart + "/checkout"
 		code, o, raw := a.do(t, "POST", path, checkoutBody())
 		if code != 201 || o["status"] != "pending" || !strings.HasPrefix(o["order_number"].(string), "SF-") ||
-			o["subtotal"] != float64(29800000) || o["shipping"] != float64(0) || o["total"] != float64(29800000) ||
-			o["payment_method"] != "bank_transfer" || o["payment"] != nil || o["shipping_courier"] != nil {
+			o["subtotal"] != float64(29800000) || o["shipping"] != float64(1100000) || o["total"] != float64(30900000) ||
+			o["payment_method"] != "bank_transfer" || o["payment"] != nil || o["shipping_courier"] != "jne" ||
+			o["shipping_service"] != "reg" {
 			t.Fatalf("checkout: %d %s", code, raw)
 		}
 		line := o["lines"].([]any)[0].(map[string]any)
@@ -169,8 +172,38 @@ func TestCheckout(t *testing.T) {
 		cart := cartWith(t, a, map[string]int{sale: 1})
 		execTenant(t, store, tenantA, `UPDATE variants SET sale_ends_at = now() WHERE sku = 'TS-BLK-S'`)
 		code, o, raw := a.do(t, "POST", "/v1/storefront/carts/"+cart+"/checkout", checkoutBody())
-		if code != 201 || o["total"] != float64(19900000) {
+		if code != 201 || o["total"] != float64(19900000+1100000) {
 			t.Errorf("after the sale: %d %s", code, raw)
+		}
+	})
+
+	t.Run("shipping is quoted again and charged as shown (BR-121)", func(t *testing.T) {
+		cart := cartWith(t, a, map[string]int{full: 1})
+		_, q, _ := a.do(t, "POST", "/v1/storefront/carts/"+cart+"/shipping-rates", map[string]any{"destination_postal_code": "40115"})
+		shown := q["options"].([]any)[0].(map[string]any)["price"]
+		// Biteship's price moves inside the window: the shopper pays what they saw.
+		a.rates.set(1500000, false)
+		defer a.rates.set(1100000, false)
+		code, o, raw := a.do(t, "POST", "/v1/storefront/carts/"+cart+"/checkout", checkoutBody())
+		if code != 201 || o["shipping"] != shown {
+			t.Errorf("charged %v, shown %v: %d %s", o["shipping"], shown, code, raw)
+		}
+
+		gone := cartWith(t, a, map[string]int{full: 1})
+		body := checkoutBody()
+		body["shipping_option"] = map[string]any{"courier_code": "tiki", "courier_service_code": "reg"}
+		code, p, _ := a.do(t, "POST", "/v1/storefront/carts/"+gone+"/checkout", body)
+		assertProblem(t, "a service not offered", code, p, 409, "shipping_unavailable", "shipping_option")
+
+		// Biteship down, on an address not quoted yet: no order, cart as it was.
+		a.rates.set(1100000, true)
+		body = checkoutBody()
+		body["shipping_address"].(map[string]any)["postal_code"] = "10110"
+		code, p, _ = a.do(t, "POST", "/v1/storefront/carts/"+gone+"/checkout", body)
+		assertProblem(t, "Biteship down", code, p, 502, "shipping_rates_unavailable", "")
+		a.rates.set(1100000, false)
+		if code, c, _ := a.get(t, "/v1/storefront/carts/"+gone); code != 200 || len(c["items"].([]any)) != 1 {
+			t.Errorf("the cart after a 502: %d %v", code, c)
 		}
 	})
 
@@ -198,6 +231,8 @@ func TestCheckout(t *testing.T) {
 			"a total (BR-089)": {bad(func(b map[string]any) { b["total"] = 1 }), "unknown_field", "total"},
 			"a nested price":   {bad(func(b map[string]any) { b["contact"].(map[string]any)["price"] = 1 }), "unknown_field", "price"},
 			"a shipping price": {bad(func(b map[string]any) { b["shipping"] = 0 }), "unknown_field", "shipping"},
+			"no courier":       {bad(func(b map[string]any) { delete(b, "shipping_option") }), "validation_failed", "shipping_option"},
+			"a courier price":  {bad(func(b map[string]any) { b["shipping_option"].(map[string]any)["price"] = 1 }), "unknown_field", "price"},
 		} {
 			code, body, _ := a.do(t, "POST", path, req.body)
 			assertProblem(t, what, code, body, 422, req.code, req.field)

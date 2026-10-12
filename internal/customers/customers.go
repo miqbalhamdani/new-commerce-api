@@ -42,6 +42,9 @@ type Service struct {
 	signer *auth.Signer
 	resets *auth.ResetTokens
 	mail   Mailer
+
+	// Google verifies Google ID tokens (P1-223); nil turns Google sign-in off.
+	Google *auth.GoogleVerifier
 }
 
 // Mailer queues an email for the worker, after the change that caused it

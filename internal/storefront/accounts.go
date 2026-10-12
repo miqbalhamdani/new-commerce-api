@@ -107,3 +107,21 @@ func (s *Server) ConfirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// GoogleSignIn is P1-223: 200 for a returning customer, 201 for one made now.
+func (s *Server) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	var body GoogleSignIn
+	if !httpkit.DecodeJSON(w, r, &body) {
+		return
+	}
+	t, created, err := s.customers.GoogleSignIn(r.Context(), body.IdToken)
+	if err != nil {
+		httpkit.WriteError(w, r, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	httpkit.WriteJSON(w, status, tokensOut(t))
+}

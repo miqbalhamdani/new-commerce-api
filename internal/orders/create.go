@@ -11,6 +11,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // CreateLine is one requested line; the price is never in it (BR-078).
@@ -28,6 +29,10 @@ type CreateInput struct {
 	Lines           []CreateLine
 	Shipping        int64
 	Note            *string
+	// ShippingOption, when set, is quoted again for Destination and charged
+	// instead of Shipping (BR-121).
+	ShippingOption *ShippingChoice
+	Destination    string
 }
 
 // Create enters a manual order: pending, bank_transfer, numbered from the
@@ -37,27 +42,41 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (uuid.UUID, error)
 	var id uuid.UUID
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
 		lines := make([]newLine, len(in.Lines))
+		parcel := Parcel{Destination: in.Destination}
 		for i, l := range in.Lines {
-			field := func(name string) string { return fmt.Sprintf("lines.%d.%s", i, name) }
 			v, err := q.VariantForOrder(ctx, l.VariantID)
 			if errors.Is(err, pgx.ErrNoRows) {
-				return fieldError(field("variant_id"), "No such variant.")
+				return fieldError(lineField(i, "variant_id"), "No such variant.")
 			}
 			if err != nil {
 				return err
 			}
 			if v.ArchivedAt != nil {
-				return fieldError(field("variant_id"), "This variant is archived and cannot be ordered (BR-045).")
+				return fieldError(lineField(i, "variant_id"), "This variant is archived and cannot be ordered (BR-045).")
 			}
 			if l.Discount > v.Price*int64(l.Qty) {
-				return fieldError(field("discount"), "A discount cannot exceed the line's total.")
+				return fieldError(lineField(i, "discount"), "A discount cannot exceed the line's total.")
 			}
 			lines[i] = newLine{VariantID: l.VariantID, Qty: l.Qty, Discount: l.Discount,
 				SKU: deref(v.Sku), Title: titleSnapshot(v.Title, v.OptionValues), UnitPrice: v.Price}
+			parcel.WeightGrams += int64(v.WeightGrams) * int64(l.Qty)
+			parcel.Value += v.Price * int64(l.Qty)
 		}
-		o, err := insert(ctx, q, newOrder{Source: "manual", PaymentMethod: "bank_transfer",
+		order := newOrder{Source: "manual", PaymentMethod: "bank_transfer",
 			Customer: in.Customer, ShippingAddress: in.ShippingAddress, Note: in.Note,
-			Shipping: in.Shipping, Lines: lines})
+			Shipping: in.Shipping, Lines: lines}
+		if in.ShippingOption != nil {
+			opts, err := s.quote(ctx, q, parcel)
+			if err != nil {
+				return err
+			}
+			opt, err := chosen(opts, *in.ShippingOption)
+			if err != nil {
+				return err
+			}
+			order.Shipping, order.ShippingCourier, order.ShippingService = opt.Price, &opt.CourierCode, &opt.ServiceCode
+		}
+		o, err := insert(ctx, q, order)
 		if err != nil {
 			return err
 		}
@@ -67,6 +86,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (uuid.UUID, error)
 	if err != nil {
 		return uuid.Nil, err
 	}
+	tenantID, _ := tenant.FromContext(ctx)
+	s.queueMail(ctx, "order_placed", tenantID, id)
 	return id, nil
 }
 
@@ -83,12 +104,13 @@ type newLine struct {
 // newOrder is what insert writes. Manual entry and checkout differ in where
 // the lines come from, not in how an order is numbered and stored.
 type newOrder struct {
-	Source, PaymentMethod     string
-	CustomerID, CartID        *uuid.UUID
-	Customer, ShippingAddress []byte
-	Note                      *string
-	Shipping                  int64
-	Lines                     []newLine
+	Source, PaymentMethod            string
+	CustomerID, CartID               *uuid.UUID
+	Customer, ShippingAddress        []byte
+	Note                             *string
+	Shipping                         int64
+	ShippingCourier, ShippingService *string
+	Lines                            []newLine
 }
 
 // insert numbers an order from the tenant sequence (BR-077) and writes it and
@@ -113,6 +135,7 @@ func insert(ctx context.Context, q *sqlcgen.Queries, in newOrder) (sqlcgen.Order
 		ID: uuid.Must(uuid.NewV7()), Source: in.Source, CustomerID: in.CustomerID, CartID: in.CartID,
 		OrderNumber: fmt.Sprintf("%s-%06d", prefix, n), Customer: in.Customer,
 		ShippingAddress: in.ShippingAddress, Note: in.Note, PaymentMethod: in.PaymentMethod,
+		ShippingCourier: in.ShippingCourier, ShippingService: in.ShippingService,
 		Subtotal: subtotal, Shipping: in.Shipping, Discount: discount, Total: subtotal + in.Shipping - discount,
 	})
 	if err != nil {
@@ -137,6 +160,9 @@ func auditCreate(ctx context.Context, tx pgx.Tx, o sqlcgen.Order) error {
 		After: map[string]any{"order_number": o.OrderNumber, "source": o.Source, "total": o.TotalAmount},
 	})
 }
+
+// lineField names a field of one request line: lines.2.variant_id.
+func lineField(i int, name string) string { return fmt.Sprintf("lines.%d.%s", i, name) }
 
 // titleSnapshot is the ERD's 'Erigo Basic Tee — Black / M' (BR-076).
 func titleSnapshot(title string, optionValues []string) string {

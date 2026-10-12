@@ -12,10 +12,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
+	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
+	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
@@ -25,6 +29,26 @@ type Service struct {
 	store *db.Store
 	files *storage.Store
 	jobs  *jobs.Service
+
+	// Rates quotes shipping (BR-120, BR-121); nil quotes nothing, which only
+	// tests that never quote rely on.
+	Rates Rates
+
+	// Midtrans, Box and APIURL take Midtrans payments (BR-122..BR-126): the
+	// client, the box that opens a shop's sealed server key, and the API's
+	// public base for the notification URL. Nil Midtrans opens no links.
+	Midtrans *midtrans.Client
+	Box      *secrets.Box
+	APIURL   string
+
+	// Mail queues an order email for the worker (P1-228): email.Enqueue in
+	// production; nil sends none.
+	Mail func(ctx context.Context, e email.Envelope) error
+}
+
+// Rates is the cached Biteship quote (biteship.Cached).
+type Rates interface {
+	Quote(ctx context.Context, tenantID uuid.UUID, r biteship.Request) ([]biteship.Option, error)
 }
 
 func NewService(store *db.Store, files *storage.Store, j *jobs.Service) *Service {

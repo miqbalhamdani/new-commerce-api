@@ -31,3 +31,31 @@ func PasswordResetSecret() (string, error) {
 	}
 	return "", errors.New("PASSWORD_RESET_SECRET is required when ENVIRONMENT is not \"development\"")
 }
+
+// devEncryptionKey is 32 bytes of zeroes, base64: obviously not a secret.
+const devEncryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+// EncryptionKey is the key encryption key that seals shop secrets (BR-101,
+// BR-129): 32 random bytes, base64. A managed KMS replaces it later; until
+// then a deployed environment has no default. Changing it makes every sealed
+// value unreadable, so it is rotated by re-sealing, never by swapping.
+func EncryptionKey() (string, error) {
+	if v := Getenv("ENCRYPTION_KEY", ""); v != "" {
+		return v, nil
+	}
+	if IsDevelopment() {
+		return devEncryptionKey, nil
+	}
+	return "", errors.New("ENCRYPTION_KEY is required when ENVIRONMENT is not \"development\"")
+}
+
+// APIURL is the API's own public base, for URLs other systems call back on:
+// the Midtrans notification URL (BR-124). The domain arrives with P1-001.
+func APIURL() string { return Getenv("API_URL", "http://localhost:8080") }
+
+// BiteshipAPIKey is the platform's one Biteship key (BR-120); shops never
+// hold their own. Empty is development only, which then quotes fixed rates.
+func BiteshipAPIKey() string { return Getenv("BITESHIP_API_KEY", "") }
+
+// BiteshipURL is Biteship's API base.
+func BiteshipURL() string { return Getenv("BITESHIP_URL", "https://api.biteship.com") }

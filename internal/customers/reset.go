@@ -91,12 +91,18 @@ func ResetMail(store *db.Store, resets *auth.ResetTokens) email.Render {
 	return func(ctx context.Context, e email.Envelope) (*email.Message, error) {
 		tctx := tenant.NewContext(ctx, e.TenantID)
 		var (
-			c    Customer
-			shop sqlcgen.Tenant
+			c       Customer
+			shop    sqlcgen.Tenant
+			replyTo *string
 		)
 		err := store.InTenantTx(tctx, func(tx pgx.Tx) (err error) {
 			q := sqlcgen.New(tx)
 			if c, err = q.CustomerByID(tctx, e.CustomerID); err != nil {
+				return err
+			}
+			if st, err := q.GetStorefrontSettings(tctx); err == nil {
+				replyTo = st.ContactEmail
+			} else if !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
 			shop, err = q.GetTenant(tctx, e.TenantID)
@@ -116,8 +122,10 @@ func ResetMail(store *db.Store, resets *auth.ResetTokens) email.Render {
 		query.Set("token", resets.Mint(c.ID, e.TenantID, c.PasswordHash, time.Now()))
 		link.RawQuery = query.Encode()
 		subject, text, html := email.PasswordReset(shop.Name, c.Name, link.String())
-		// ponytail: no Reply-To until storefront_settings has the shop's
-		// contact email (P1-216).
-		return &email.Message{FromName: shop.Name, To: c.Email, Subject: subject, Text: text, HTML: html}, nil
+		msg := &email.Message{FromName: shop.Name, To: c.Email, Subject: subject, Text: text, HTML: html}
+		if replyTo != nil {
+			msg.ReplyTo = *replyTo // the shop's contact email (BR-128)
+		}
+		return msg, nil
 	}
 }
