@@ -46,8 +46,9 @@ func NewRouter(srv ServerInterface, keys *Keys, signer *auth.Signer, limiter *ra
 	// Around the router rather than r.Use: chi runs Use middleware only once a
 	// route exists, and the key check must hold for every request, routed or
 	// not. Tracing outermost, so a refused key still has a trace id; the
-	// customer token after the key, which it is checked against.
-	return httpkit.Tracing(keys.Middleware(limits(limiter)(customerAuth(signer)(routes))))
+	// docs before the key, which they do not need; the customer token after
+	// the key, which it is checked against.
+	return httpkit.Tracing(docs(keys.Middleware(limits(limiter)(customerAuth(signer)(routes)))))
 }
 
 // paramError answers a path or query parameter the generated binder could not
