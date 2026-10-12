@@ -11,10 +11,10 @@ import (
 // restating it, which would only prove the file was copied twice, but by
 // asserting the properties the contract gives reasons for.
 func TestRolePermissions(t *testing.T) {
-	// 04-api-spec.md 3: "owner is admin plus settings:write, nothing more."
-	// That sentence is the entire difference between the two roles, so if
-	// this ever grows past one permission, the contract moved.
-	t.Run("owner is admin plus settings:write", func(t *testing.T) {
+	// 04-api-spec.md 3: "owner is admin plus settings:write and
+	// customers:purge, nothing more." That sentence is the entire difference
+	// between the two roles, so if this ever grows, the contract moved.
+	t.Run("owner is admin plus settings:write and customers:purge", func(t *testing.T) {
 		owner := PermissionsFor(RoleOwner)
 		admin := PermissionsFor(RoleAdmin)
 
@@ -24,8 +24,8 @@ func TestRolePermissions(t *testing.T) {
 				extra = append(extra, p)
 			}
 		}
-		if !slices.Equal(extra, []string{PermSettingsWrite}) {
-			t.Errorf("owner has %v beyond admin, want exactly [%s]", extra, PermSettingsWrite)
+		if want := []string{PermCustomersPurge, PermSettingsWrite}; !slices.Equal(extra, want) {
+			t.Errorf("owner has %v beyond admin, want exactly %v", extra, want)
 		}
 		for _, p := range admin {
 			if !slices.Contains(owner, p) {

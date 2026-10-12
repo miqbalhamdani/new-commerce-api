@@ -201,6 +201,7 @@ func waitForJob(t *testing.T, s seeded, id string) map[string]any {
 	runner := &jobs.Runner{Store: store, Queue: redis, Consumer: "test-" + id, ClaimIdle: 2 * time.Second,
 		MaxDeliveries: 2, Handlers: map[string]jobs.Handler{"product_import": svc.ImportHandler(),
 			"order_export":      ordersSvc.ExportHandler(),
+			"customer_purge":    ordersSvc.PurgeHandler(),
 			"image_derivatives": images.Handler(store, testFiles(t))}}
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()

@@ -78,6 +78,7 @@ func run() error {
 			"product_import":    catalogSvc.ImportHandler(),
 			"order_export":      ordersSvc.ExportHandler(),
 			"image_derivatives": images.Handler(pool, files),
+			"customer_purge":    ordersSvc.PurgeHandler(),
 		},
 		Consumer:      fmt.Sprintf("%s-%d", host, os.Getpid()),
 		ClaimIdle:     60 * time.Second,

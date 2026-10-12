@@ -12,9 +12,36 @@ import (
 	"github.com/google/uuid"
 )
 
+const deleteCustomerIdentities = `-- name: DeleteCustomerIdentities :exec
+DELETE FROM customer_identities WHERE customer_id = $1
+`
+
+func (q *Queries) DeleteCustomerIdentities(ctx context.Context, customerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCustomerIdentities, customerID)
+	return err
+}
+
+const deleteCustomerSessions = `-- name: DeleteCustomerSessions :exec
+DELETE FROM customer_sessions WHERE customer_id = $1
+`
+
+func (q *Queries) DeleteCustomerSessions(ctx context.Context, customerID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCustomerSessions, customerID)
+	return err
+}
+
+const dropOrderNotifications = `-- name: DropOrderNotifications :exec
+UPDATE payments SET last_notification = NULL WHERE order_id = ANY($1::uuid[])
+`
+
+func (q *Queries) DropOrderNotifications(ctx context.Context, orderIds []uuid.UUID) error {
+	_, err := q.db.Exec(ctx, dropOrderNotifications, orderIds)
+	return err
+}
+
 const getCustomer = `-- name: GetCustomer :one
 
-SELECT c.id, c.name, c.email, c.phone, c.created_at,
+SELECT c.id, c.name, c.email, c.phone, c.created_at, c.purged_at,
        (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS order_count
 FROM customers c WHERE c.id = $1
 `
@@ -25,6 +52,7 @@ type GetCustomerRow struct {
 	Email      string
 	Phone      *string
 	CreatedAt  time.Time
+	PurgedAt   *time.Time
 	OrderCount int32
 }
 
@@ -40,13 +68,14 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (GetCustomerRow
 		&i.Email,
 		&i.Phone,
 		&i.CreatedAt,
+		&i.PurgedAt,
 		&i.OrderCount,
 	)
 	return i, err
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT c.id, c.name, c.email, c.phone, c.created_at,
+SELECT c.id, c.name, c.email, c.phone, c.created_at, c.purged_at,
        (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS order_count
 FROM customers c
 WHERE ($1::text IS NULL
@@ -70,6 +99,7 @@ type ListCustomersRow struct {
 	Email      string
 	Phone      *string
 	CreatedAt  time.Time
+	PurgedAt   *time.Time
 	OrderCount int32
 }
 
@@ -89,6 +119,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.Email,
 			&i.Phone,
 			&i.CreatedAt,
+			&i.PurgedAt,
 			&i.OrderCount,
 		); err != nil {
 			return nil, err
@@ -99,4 +130,82 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const purgeCustomer = `-- name: PurgeCustomer :one
+
+UPDATE customers c
+SET email = 'purged+' || c.id || '@invalid', name = 'Deleted customer', phone = NULL,
+    password_hash = NULL, email_verified_at = NULL,
+    purged_at = coalesce(c.purged_at, now()), updated_at = now()
+FROM (SELECT p.id, p.email FROM customers p WHERE p.id = $1 FOR UPDATE) old
+WHERE c.id = old.id
+RETURNING old.email
+`
+
+// Purge (P1-215, BR-097): one customer's personal data, in one transaction.
+// Every statement is safe to run again.
+// Returns the email it erased, which finds the guest and manual orders placed
+// with it. The address is freed to sign up again.
+func (q *Queries) PurgeCustomer(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, purgeCustomer, id)
+	var email string
+	err := row.Scan(&email)
+	return email, err
+}
+
+const redactCustomerOrders = `-- name: RedactCustomerOrders :many
+UPDATE orders
+SET customer = '{"name": "Deleted customer", "email": null, "phone": null}',
+    shipping_address = jsonb_build_object('line1', '', 'line2', NULL,
+        'city', shipping_address->'city', 'province', shipping_address->'province',
+        'postal_code', shipping_address->'postal_code'),
+    note = NULL, version = version + 1, updated_at = now()
+WHERE customer_id = $1
+   OR (customer_id IS NULL AND lower(customer->>'email') = $2::text)
+RETURNING id
+`
+
+type RedactCustomerOrdersParams struct {
+	CustomerID *uuid.UUID
+	Email      string
+}
+
+// Their own orders, and guest or manual ones placed with their email. The
+// address keeps its region for sales reports. version moves on, so an edit
+// made against the old copy is a 409 rather than a write of the old address.
+func (q *Queries) RedactCustomerOrders(ctx context.Context, arg RedactCustomerOrdersParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, redactCustomerOrders, arg.CustomerID, arg.Email)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const redactOrderAudit = `-- name: RedactOrderAudit :exec
+UPDATE audit_log
+SET before = CASE WHEN before ?| ARRAY['shipping_address','note']
+                  THEN (before - ARRAY['shipping_address','note']) || '{"redacted": true}' ELSE before END,
+    after  = CASE WHEN after ?| ARRAY['shipping_address','note']
+                  THEN (after - ARRAY['shipping_address','note']) || '{"redacted": true}' ELSE after END
+WHERE subject_type = 'order' AND subject_id = ANY($1::text[])
+  AND (before ?| ARRAY['shipping_address','note'] OR after ?| ARRAY['shipping_address','note'])
+`
+
+// order.update rows record the address and note they changed.
+func (q *Queries) RedactOrderAudit(ctx context.Context, orderIds []string) error {
+	_, err := q.db.Exec(ctx, redactOrderAudit, orderIds)
+	return err
 }

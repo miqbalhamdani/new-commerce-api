@@ -32,6 +32,7 @@ const (
 	PermOrdersRead      = "orders:read"
 	PermOrdersWrite     = "orders:write"
 	PermCustomersRead   = "customers:read"
+	PermCustomersPurge  = "customers:purge"
 	PermExportsRead     = "exports:read"
 	PermChannelsRead    = "channels:read"
 	PermChannelsWrite   = "channels:write"
@@ -56,9 +57,9 @@ var readAll = []string{
 // the handler check, the login response and GET /roles all read from here, so
 // they cannot disagree.
 var rolePermissions = map[string][]string{
-	// Everything an admin can do, plus the tenant's own settings, and nothing
-	// more (04-api-spec.md 3).
-	RoleOwner: concat(adminPermissions, []string{PermSettingsWrite}),
+	// Everything an admin can do, plus the tenant's own settings and erasing a
+	// shopper's personal data (BR-097), and nothing more (04-api-spec.md 3).
+	RoleOwner: concat(adminPermissions, []string{PermSettingsWrite, PermCustomersPurge}),
 
 	RoleAdmin: adminPermissions,
 

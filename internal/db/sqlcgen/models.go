@@ -87,6 +87,7 @@ type Customer struct {
 	EmailVerifiedAt *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	PurgedAt        *time.Time
 }
 
 type CustomerIdentity struct {

@@ -16,7 +16,7 @@ const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (id, tenant_id, email, password_hash, name, phone)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
         $4, $5)
-RETURNING id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at
+RETURNING id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at, purged_at
 `
 
 type CreateCustomerParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -93,7 +94,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 }
 
 const customerByEmail = `-- name: CustomerByEmail :one
-SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE email = $1
+SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at, purged_at FROM customers WHERE email = $1
 `
 
 func (q *Queries) CustomerByEmail(ctx context.Context, email string) (Customer, error) {
@@ -109,12 +110,13 @@ func (q *Queries) CustomerByEmail(ctx context.Context, email string) (Customer, 
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const customerByID = `-- name: CustomerByID :one
-SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE id = $1
+SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at, purged_at FROM customers WHERE id = $1
 `
 
 func (q *Queries) CustomerByID(ctx context.Context, id uuid.UUID) (Customer, error) {
@@ -130,12 +132,13 @@ func (q *Queries) CustomerByID(ctx context.Context, id uuid.UUID) (Customer, err
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const customerByIdentity = `-- name: CustomerByIdentity :one
-SELECT c.id, c.tenant_id, c.email, c.password_hash, c.name, c.phone, c.email_verified_at, c.created_at, c.updated_at FROM customer_identities i JOIN customers c ON c.id = i.customer_id
+SELECT c.id, c.tenant_id, c.email, c.password_hash, c.name, c.phone, c.email_verified_at, c.created_at, c.updated_at, c.purged_at FROM customer_identities i JOIN customers c ON c.id = i.customer_id
 WHERE i.provider = $1 AND i.subject = $2
 `
 
@@ -158,6 +161,7 @@ func (q *Queries) CustomerByIdentity(ctx context.Context, arg CustomerByIdentity
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -176,7 +180,7 @@ func (q *Queries) DeleteEndedSessions(ctx context.Context) (int64, error) {
 }
 
 const lockCustomer = `-- name: LockCustomer :one
-SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE id = $1 FOR UPDATE
+SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at, purged_at FROM customers WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
@@ -192,6 +196,7 @@ func (q *Queries) LockCustomer(ctx context.Context, id uuid.UUID) (Customer, err
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -299,7 +304,7 @@ SET name = coalesce($1, name),
     phone = CASE WHEN $2::bool THEN $3 ELSE phone END,
     updated_at = now()
 WHERE id = $4
-RETURNING id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at
+RETURNING id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at, purged_at
 `
 
 type UpdateCustomerProfileParams struct {
@@ -329,6 +334,7 @@ func (q *Queries) UpdateCustomerProfile(ctx context.Context, arg UpdateCustomerP
 		&i.EmailVerifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
