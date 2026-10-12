@@ -58,7 +58,8 @@ cmd/api/          HTTP API: /v1 admin, /v1/storefront from Phase 3. Stateless; 2
 cmd/migrate/      Runs migrations to completion, exits.
 cmd/lint-rls/     RLS policy guard (make lint-rls).
 cmd/worker/       Redis Streams consumer (P1-060). Phase 1: image derivatives, product CSV
-                  import, invitation email. Later: order export, channel import, retention.
+                  import, invitation email; order export, order email, nightly retention
+                  (P1-214). Later: channel import.
 internal/
   platform/       config, errors, logging, telemetry — imported by everything
   db/             pool, InTenantTx, audit recorder, sqlc output. THE ONLY package that imports pgx
@@ -122,8 +123,10 @@ conversation.
 owns nothing else. On a developer's machine the schema owner is a superuser and it would appear to
 work without that role; in production it would not.
 
-**Cross-tenant admin work** (retention, purge) uses a separate `BYPASSRLS` role and pool, is
-audit-logged, and is never reachable from a request (BR-003).
+**Work that spans shops** (the nightly retention sweep, `internal/retention`) has no role of its
+own: `Store.TenantIDs` lists shop ids (`tenants` has no RLS), then each shop's work runs in that
+shop's own `InTenantTx` as `app_user`, audit-logged, never reachable from a request (BR-003). Do
+not add a `BYPASSRLS` pool for it.
 
 **Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
 `cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the

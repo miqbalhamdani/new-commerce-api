@@ -162,6 +162,19 @@ func (q *Queries) CustomerByIdentity(ctx context.Context, arg CustomerByIdentity
 	return i, err
 }
 
+const deleteEndedSessions = `-- name: DeleteEndedSessions :execrows
+DELETE FROM customer_sessions WHERE expires_at < now() OR revoked_at IS NOT NULL
+`
+
+// Retention (BR-096): sessions that can never refresh again.
+func (q *Queries) DeleteEndedSessions(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEndedSessions)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const lockCustomer = `-- name: LockCustomer :one
 SELECT id, tenant_id, email, password_hash, name, phone, email_verified_at, created_at, updated_at FROM customers WHERE id = $1 FOR UPDATE
 `

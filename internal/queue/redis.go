@@ -98,3 +98,9 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 func (c *Client) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	return c.rdb.Set(ctx, key, value, ttl).Err()
 }
+
+// Claim is whether this caller is the first to claim key within ttl. It is
+// never released, so of every replica running a scheduled task, one does.
+func (c *Client) Claim(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return c.rdb.SetNX(ctx, key, "1", ttl).Result()
+}

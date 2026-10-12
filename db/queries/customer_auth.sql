@@ -71,3 +71,7 @@ WHERE i.provider = sqlc.arg(provider) AND i.subject = sqlc.arg(subject);
 -- name: CreateIdentity :exec
 INSERT INTO customer_identities (tenant_id, customer_id, provider, subject, email)
 VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(customer_id), sqlc.arg(provider), sqlc.arg(subject), sqlc.narg(email));
+
+-- name: DeleteEndedSessions :execrows
+-- Retention (BR-096): sessions that can never refresh again.
+DELETE FROM customer_sessions WHERE expires_at < now() OR revoked_at IS NOT NULL;

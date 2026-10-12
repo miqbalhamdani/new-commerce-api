@@ -1,6 +1,6 @@
 // Command worker runs background jobs from the Redis stream (BR-060): image
 // derivatives (P1-044), product CSV import (P1-073), and email (P1-226) from
-// its own stream.
+// its own stream; and the nightly retention sweep (P1-214).
 package main
 
 import (
@@ -25,6 +25,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
+	"github.com/miqbalhamdani/new-commerce-api/internal/retention"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
@@ -115,6 +116,9 @@ func run() error {
 			slog.Error("email consumer stopped", "error", err)
 		}
 	}()
+
+	// BR-096, nightly; one replica a night.
+	go retention.Nightly(ctx, pool, redis)
 
 	slog.Info("worker consuming", "addr", jobs.Stream)
 	return runner.Run(ctx)
