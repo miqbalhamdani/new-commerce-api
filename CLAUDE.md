@@ -39,7 +39,9 @@ make lint-rls     # fail if a tenant table has no RLS policy
 make check        # generate, generated-diff, fmt-check, vet, lint, lint-rls, test
 ```
 
-`make check` green is the bar for a PR. There is no CI yet (P1-004, Phase 6); run it locally.
+`make check` green is the bar for a PR. CI (`.github/workflows/ci.yml`, P1-004) runs it on every
+PR against PostgreSQL 18, Redis 8 and a source-built MinIO, plus the PR's migrations over main's
+seeded schema and the contract drift check; run it locally first all the same.
 Tests need PostgreSQL, Redis and MinIO running on the host
 (`brew services start postgresql@18 redis minio`, then `make storage-init` once), and libvips
 for the worker's image derivatives (`brew install vips pkg-config`). Local mail goes to Mailpit
@@ -261,7 +263,7 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
 | Integration | Real PostgreSQL and Redis on the host. **Do not mock the database** — RLS, triggers, row locks and `security_invoker` views cannot be mocked meaningfully |
 | Isolation | `make test-iso` (P1-008): two seeded tenants, every registered admin route, zero leakage. Storefront routes also need P1-211 (two tenants × two customers) and P1-210 (origin × token matrix) |
 | Concurrency | `go test -race`; checkout proven with 20 parallel requests on one cart (P1-205) |
-| Migration | (P1-004) every migration applied to a restored snapshot in CI |
+| Migration | CI's `migrate-snapshot`: the PR's migrations over main's schema with `dev-seed` data, then `lint-rls` (P1-004). A restored production backup replaces the seed once production exists |
 
 **A route added to `openapi.yaml` needs its isolation case in the same PR.** A new route without
 an isolation test is an incomplete route, and `make test-iso` says so rather than leaving it to a
