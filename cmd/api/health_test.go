@@ -84,3 +84,15 @@ func TestHealthzReportsBothServices(t *testing.T) {
 		t.Logf("%s %s", want.service, svc.Version)
 	}
 }
+
+// TestHealthzWhileDraining: once shutdown starts, /healthz is 503 before any
+// backing service is asked, so the proxy routes around the replica (P1-001).
+func TestHealthzWhileDraining(t *testing.T) {
+	draining.Store(true)
+	t.Cleanup(func() { draining.Store(false) })
+	rec := httptest.NewRecorder()
+	newHealthHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `"draining"`) {
+		t.Errorf("GET /healthz while draining = %d %s", rec.Code, rec.Body)
+	}
+}

@@ -1,0 +1,6 @@
+# A stand-in for POST https://api.biteship.com/v1/rates/couriers on a
+# developer machine: one fixed quote per courier the shop ships with.
+:80 {
+	header Content-Type application/json
+	respond /v1/rates/couriers `{"success":true,"pricing":[{"courier_code":"jne","courier_name":"JNE","courier_service_code":"reg","courier_service_name":"Reguler","duration":"2 - 3 days","price":10000},{"courier_code":"sicepat","courier_name":"SiCepat","courier_service_code":"reg","courier_service_name":"Reguler","duration":"1 - 2 days","price":12000}]}` 200
+}

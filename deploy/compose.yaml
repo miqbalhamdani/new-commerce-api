@@ -1,0 +1,138 @@
+# The production stack on one VPS (P1-001; 01-product-requirements.md,
+# "Deployment"). Images come from CI (ghcr.io); deploy.sh rolls a release.
+# compose.local.yaml adds what a developer machine lacks (README.md).
+#
+# Each service is given only the settings it uses: the API and the worker
+# never see the database superuser's password, Postgres never sees an app
+# secret. Required values are `:?` -- Compose refuses to start without them.
+name: new-commerce
+
+x-app-env: &app-env
+  ENVIRONMENT: production
+  APP_DATABASE_URL: postgres://app_user:${APP_DB_PASSWORD:?}@postgres:5432/new_commerce?sslmode=disable
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT: ${S3_ENDPOINT:?}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?}
+  S3_BUCKET: ${S3_BUCKET:?}
+  S3_USE_SSL: ${S3_USE_SSL:-true}
+  IMAGE_BASE_URL: ${IMAGE_BASE_URL:?}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  INVITE_SECRET: ${INVITE_SECRET:?}
+  PASSWORD_RESET_SECRET: ${PASSWORD_RESET_SECRET:?}
+
+x-app-deps: &app-deps
+  postgres: { condition: service_healthy }
+  redis: { condition: service_healthy }
+  migrate: { condition: service_completed_successfully }
+
+x-api: &api
+  image: ${API_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-api:main}
+  command: ["api"]
+  restart: unless-stopped
+  environment:
+    <<: *app-env
+    JWT_SECRET: ${JWT_SECRET:?}
+    ORDER_TOKEN_SECRET: ${ORDER_TOKEN_SECRET:?}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?}
+    BITESHIP_API_KEY: ${BITESHIP_API_KEY:?}
+    BITESHIP_URL: ${BITESHIP_URL:-https://api.biteship.com}
+    API_URL: https://${API_HOST:?}
+    # Caddy, and only Caddy, is believed for X-Real-IP (04-api-spec.md §1).
+    TRUSTED_PROXIES: 172.30.0.2/32
+  depends_on: *app-deps
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/healthz"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+  # api drains 3 s, then gives in-flight requests 10 s (cmd/api).
+  stop_grace_period: 20s
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      ADMIN_HOST: ${ADMIN_HOST:?}
+      API_HOST: ${API_HOST:?}
+      TLS: ${TLS:?}
+      CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default:
+        ipv4_address: 172.30.0.2
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-web:main}
+    restart: unless-stopped
+
+  api-1: *api
+  api-2: *api
+
+  worker:
+    image: ${API_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-api:main}
+    command: ["worker"]
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      RESEND_API_KEY: ${RESEND_API_KEY:?}
+      EMAIL_DOMAIN: ${EMAIL_DOMAIN:?}
+      ADMIN_URL: https://${ADMIN_HOST:?}
+    depends_on: *app-deps
+    # A stream read blocks up to 30 s before it sees the signal (internal/jobs).
+    stop_grace_period: 40s
+
+  # One-shot, before every release: the schema owner applies migrations.
+  migrate:
+    image: ${API_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-api:main}
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:?}@postgres:5432/new_commerce?sslmode=disable
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: new_commerce
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/app-user.sh:/docker-entrypoint-initdb.d/app-user.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "new_commerce"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    stop_grace_period: 60s
+
+  redis:
+    image: redis:8
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

@@ -20,6 +20,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
+	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -93,6 +94,10 @@ func run() error {
 	}
 	invites, err := auth.NewInviteSigner(inviteSecret)
 	if err != nil {
+		return err
+	}
+
+	if httpkit.TrustedProxies, err = config.TrustedProxies(); err != nil {
 		return err
 	}
 
@@ -187,6 +192,14 @@ func run() error {
 	case <-ctx.Done():
 	}
 
+	// Drain first: /healthz turns 503, Caddy's checks (every second) stop
+	// sending requests here, and only then does the listener close -- so a
+	// deploy restarting one replica drops nothing (P1-001).
+	if !config.IsDevelopment() {
+		slog.Info("draining")
+		draining.Store(true)
+		time.Sleep(drainFor)
+	}
 	slog.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

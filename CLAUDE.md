@@ -78,6 +78,8 @@ internal/
   team/           users, invitations, settings, audit-log reads
   storefront/     storefront routes from contracts/storefront.yaml, behind the API-key middleware;
                   never imports the admin http package, nor it this (a test enforces it)
+deploy/           the production stack: Compose, Caddyfile, deploy.sh, and the same stack on a
+                  developer machine (deploy/README.md). Dockerfile: one image, every binary
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries
 contracts/        submodule, pinned to a tag — READ ONLY from here
