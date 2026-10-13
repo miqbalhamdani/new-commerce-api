@@ -1,2 +1,4 @@
 .env
 bin/
+deploy/certs/*
+!deploy/certs/.gitkeep

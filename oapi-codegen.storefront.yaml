@@ -4,15 +4,12 @@
 # A package of its own, from a document of its own: the storefront never
 # imports the admin API, nor it this (P1-202). Non-strict, like the admin
 # server, and nothing else generated -- no StrictServerInterface nobody uses.
-# The spec itself is embedded too: the API serves it (P1-213), so the document
-# published is always the one these routes were generated from.
 package: storefront
 output: internal/storefront/gen.go
 
 generate:
   models: true
   chi-server: true
-  embedded-spec: true
 
 output-options:
   # The skeleton has no paths yet, and oapi-codegen prunes components that no

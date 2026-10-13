@@ -1,0 +1,68 @@
+# admin.{domain} and api.{domain} (04-api-spec.md §1, P1-001).
+{
+	servers {
+		# Cloudflare's ranges in production: only they may say who the
+		# shopper is, in CF-Connecting-IP. Everyone else's header is ignored.
+		trusted_proxies static {$CADDY_TRUSTED_PROXIES}
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+(tls) {
+	# "internal" on a developer machine; the Cloudflare Origin certificate
+	# ("/certs/origin.pem /certs/origin.key") in production.
+	tls {$TLS} {
+		protocols tls1.3
+	}
+}
+
+(api) {
+	# Two replicas; a deploy restarts one at a time. A draining replica
+	# answers /healthz 503, so it leaves the pool before it stops listening,
+	# and a request that cannot reach one is retried on the other.
+	reverse_proxy api-1:8080 api-2:8080 {
+		lb_try_duration 10s
+		health_uri /healthz
+		health_interval 1s
+		health_timeout 2s
+		header_up X-Real-IP {client_ip}
+	}
+}
+
+(headers) {
+	header {
+		Strict-Transport-Security "max-age=63072000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+{$ADMIN_HOST} {
+	import tls
+	import headers
+	header Content-Security-Policy "frame-ancestors 'none'"
+	encode zstd gzip
+	# /healthz names software versions; only Caddy's own checks reach it.
+	handle /healthz {
+		respond 404
+	}
+	# The admin's API is on its own origin: no CORS, a host-only cookie.
+	handle /v1/* {
+		import api
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+{$API_HOST} {
+	import tls
+	import headers
+	handle /healthz {
+		respond 404
+	}
+	handle {
+		import api
+	}
+}

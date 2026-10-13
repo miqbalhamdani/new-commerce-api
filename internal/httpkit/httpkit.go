@@ -241,18 +241,30 @@ func BearerToken(r *http.Request) (string, bool) {
 	return token, token != ""
 }
 
-// ClientIP is the peer address of the connection.
-//
-// ponytail: RemoteAddr only. Behind Caddy (P1-001) that is the proxy's address;
-// once the proxy is fixed, trust its X-Forwarded-For hop and nothing further
-// left -- trusting the header from anyone lets a client write its own IP into
-// the audit log.
+// TrustedProxies are the peers whose X-Real-IP is believed: Caddy, which
+// sets it from Cloudflare's CF-Connecting-IP (04-api-spec.md §1). Set once at
+// startup from TRUSTED_PROXIES; empty trusts no one.
+var TrustedProxies []netip.Prefix
+
+// ClientIP is the address rate limits and the audit log use (BR-014,
+// BR-018): the peer, or the X-Real-IP a trusted proxy reports for it.
+// Believing the header from anyone else would let a client write its own IP
+// into the audit log, and reset its rate limit with every request.
 func ClientIP(r *http.Request) netip.Addr {
 	ap, err := netip.ParseAddrPort(r.RemoteAddr)
 	if err != nil {
 		return netip.Addr{}
 	}
-	return ap.Addr().Unmap()
+	peer := ap.Addr().Unmap()
+	for _, p := range TrustedProxies {
+		if p.Contains(peer) {
+			if real, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get("X-Real-IP"))); err == nil {
+				return real.Unmap()
+			}
+			break
+		}
+	}
+	return peer
 }
 
 // Tracing starts a span per request and names it after the matched route

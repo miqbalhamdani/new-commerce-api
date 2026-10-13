@@ -35,7 +35,7 @@ migrate:
 migrate-down:
 	@$(LOAD_ENV) go run ./cmd/migrate -down $(or $(N),1)
 
-GENERATED = internal/http/gen.go internal/storefront/gen.go internal/db/sqlcgen
+GENERATED = internal/http/gen.go internal/storefront/gen.go internal/storefront/storefront.yaml internal/db/sqlcgen
 
 ## generate: contracts/openapi.yaml -> internal/http, contracts/storefront.yaml ->
 ##           internal/storefront, db/ -> internal/db/sqlcgen
@@ -44,6 +44,7 @@ generate:
 		|| { echo "contracts/ is empty. Run: git submodule update --init"; exit 1; }
 	@go tool oapi-codegen -config oapi-codegen.yaml contracts/openapi.yaml
 	@go tool oapi-codegen -config oapi-codegen.storefront.yaml contracts/storefront.yaml
+	@cp contracts/storefront.yaml internal/storefront/storefront.yaml
 	@sqlc generate
 
 ## generated-diff: fail if the tree does not match what the generators produce

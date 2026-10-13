@@ -8,7 +8,10 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"net/netip"
 	"os"
+	"strings"
 )
 
 // Defaults target a host install -- Homebrew's postgresql@18 and redis on their
@@ -66,6 +69,24 @@ func Environment() string { return Getenv("ENVIRONMENT", "development") }
 
 // IsDevelopment reports whether this is a developer's machine.
 func IsDevelopment() bool { return Environment() == "development" }
+
+// TrustedProxies is TRUSTED_PROXIES: the comma-separated CIDRs of the proxy in
+// front, whose X-Real-IP is believed (04-api-spec.md §1). Unset trusts no one,
+// which is right for a developer's machine and wrong behind Caddy.
+func TrustedProxies() ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, s := range strings.Split(Getenv("TRUSTED_PROXIES", ""), ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(s)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: %w", err)
+		}
+		out = append(out, p.Masked())
+	}
+	return out, nil
+}
 
 // JWTSecret returns the access-token signing key.
 //

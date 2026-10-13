@@ -1,0 +1,155 @@
+# P1-004: a PR is red when lint, the tests, a migration over seeded data, or
+# the contract drift check fails (05-backlog.md, Phase 6).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/new_commerce_dev?sslmode=disable
+  APP_DATABASE_URL: postgres://app_user:app_user@localhost:5432/new_commerce_dev?sslmode=disable
+  # The community MinIO is published as source only now; built once, cached.
+  MINIO_VERSION: RELEASE.2025-10-15T17-29-55Z
+  SQLC_VERSION: 1.31.1
+  GOLANGCI_LINT_VERSION: v2.13.2
+
+jobs:
+  # make check: generate, generated-diff (the contract half of drift), fmt,
+  # vet, lint, lint-rls and the tests, against real PostgreSQL, Redis and S3.
+  check:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: new_commerce_dev
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30
+      redis:
+        image: redis:8
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-retries 30
+    env:
+      # Packages one at a time: the stream tests share Redis's `jobs` stream,
+      # and a runner in one package takes another package's jobs.
+      # ponytail: serial packages; per-package streams if CI gets slow.
+      GOFLAGS: -p=1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install libvips, sqlc, golangci-lint
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev pkg-config
+          curl -sSfL "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin sqlc
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "$GOLANGCI_LINT_VERSION"
+      - name: Cache MinIO
+        id: minio
+        uses: actions/cache@v4
+        with:
+          path: ~/minio-bin
+          key: minio-${{ env.MINIO_VERSION }}
+      - name: Build MinIO
+        if: steps.minio.outputs.cache-hit != 'true'
+        run: GOBIN=$HOME/minio-bin CGO_ENABLED=0 go install "github.com/minio/minio@${MINIO_VERSION}"
+      - name: Start MinIO
+        run: |
+          MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin nohup ~/minio-bin/minio server /tmp/minio --address :9000 >/tmp/minio.log 2>&1 &
+          for i in $(seq 30); do curl -sf localhost:9000/minio/health/ready && exit 0; sleep 1; done; cat /tmp/minio.log; exit 1
+      - name: Migrate, then give app_user a password and the bucket its rules
+        run: |
+          go run ./cmd/migrate
+          psql "$DATABASE_URL" -c "ALTER ROLE app_user PASSWORD 'app_user'"
+          go run ./cmd/storage-init
+      - run: make check
+
+  # Every migration in the PR applied over main's schema with seeded data
+  # (01-product-requirements.md §8.6), until a restored production backup
+  # takes the seed's place.
+  migrate-snapshot:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: new_commerce_dev
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+      - uses: actions/checkout@v4
+        with:
+          path: pr
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pr/go.mod
+          cache-dependency-path: pr/go.sum
+      - name: main's schema, seeded
+        working-directory: base
+        run: |
+          go run ./cmd/migrate
+          psql "$DATABASE_URL" -c "ALTER ROLE app_user PASSWORD 'app_user'"
+          go run ./cmd/dev-seed
+      - name: The PR's migrations over it
+        working-directory: pr
+        run: |
+          go run ./cmd/migrate
+          go run ./cmd/lint-rls
+
+  # The other half of drift: the pinned contracts commit must be on contracts
+  # main, so a PR is green only once its contracts PR has merged.
+  drift:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned contracts are on contracts main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned=$(git ls-tree HEAD contracts | awk '{print $3}')
+          status=$(gh api "repos/miqbalhamdani/new-commerce-contracts/compare/main...${pinned}" --jq .status)
+          echo "contracts ${pinned}: ${status} relative to main"
+          case "$status" in identical|behind) ;; *) echo "::error::pin a contracts commit that is on main"; exit 1;; esac
+
+  # P1-001: the image the box runs. Built on every PR so a broken Dockerfile
+  # is red; pushed to ghcr.io only from main, as sha-<commit> and main.
+  image:
+    needs: [check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          build-args: VERSION=${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:main
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
