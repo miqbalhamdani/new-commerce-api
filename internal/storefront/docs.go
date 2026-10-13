@@ -1,10 +1,13 @@
 package storefront
 
 import (
+	_ "embed"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sync"
+
+	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/httpkit"
 )
@@ -13,8 +16,16 @@ import (
 // the spec this package was generated from, and a page that renders it.
 // Neither needs a key -- the document is the same for every shop.
 
+// specYAML is contracts/storefront.yaml, copied here by `make generate` with
+// the routes generated from it, so the document served is always theirs. A
+// plain copy rather than oapi-codegen's embedded spec, which gzips it: gzip's
+// bytes differ between Go versions, and generated-diff would too.
+//
+//go:embed storefront.yaml
+var specYAML []byte
+
 var specJSON = sync.OnceValues(func() ([]byte, error) {
-	spec, err := GetSwagger()
+	spec, err := openapi3.NewLoader().LoadFromData(specYAML)
 	if err != nil {
 		return nil, err
 	}
