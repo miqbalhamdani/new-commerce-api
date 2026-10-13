@@ -8,6 +8,7 @@ The production stack: one VPS, Docker Compose, Caddy in front (P1-001, P1-002;
 | `compose.yaml` | Caddy, web, api ×2, worker, migrate (one-shot), PostgreSQL 18, Redis 8 |
 | `Caddyfile` | `admin.{domain}` (the admin, and `/v1/*` to the API) and `api.{domain}` |
 | `deploy.sh <tag>` | Migrate, then roll api-1, api-2, web and the worker without dropping a request |
+| `check.sh` | What the running stack is tuned to: Postgres and Redis settings, each container's limits (P1-002) |
 | `.env.example` | Every setting; copy to `.env` on the box |
 | `compose.local.yaml`, `local.env`, `local/` | The same stack on a developer machine |
 

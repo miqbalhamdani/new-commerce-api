@@ -5,6 +5,10 @@
 # Each service is given only the settings it uses: the API and the worker
 # never see the database superuser's password, Postgres never sees an app
 # secret. Required values are `:?` -- Compose refuses to start without them.
+#
+# Sized for the box: 4 vCPU, 8 GB (P1-002). The limits add up to less than
+# that on purpose; the rest is the page cache Postgres counts on
+# (effective_cache_size) and the OS.
 name: new-commerce
 
 x-app-env: &app-env
@@ -48,6 +52,8 @@ x-api: &api
     retries: 30
   # api drains 3 s, then gives in-flight requests 10 s (cmd/api).
   stop_grace_period: 20s
+  cpus: 1
+  mem_limit: 512m
 
 services:
   caddy:
@@ -67,10 +73,14 @@ services:
     networks:
       default:
         ipv4_address: 172.30.0.2
+    cpus: 0.5
+    mem_limit: 256m
 
   web:
     image: ${WEB_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-web:main}
     restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
 
   api-1: *api
   api-2: *api
@@ -87,6 +97,9 @@ services:
     depends_on: *app-deps
     # A stream read blocks up to 30 s before it sees the signal (internal/jobs).
     stop_grace_period: 40s
+    # libvips holds a decoded image in memory while it makes derivatives.
+    cpus: 1
+    mem_limit: 1g
 
   # One-shot, before every release: the schema owner applies migrations.
   migrate:
@@ -100,6 +113,28 @@ services:
   postgres:
     image: postgres:18
     restart: unless-stopped
+    # Tuned for a shared box (P1-002): a quarter of RAM for shared buffers,
+    # the planner told about the page cache, 100 connections -- two API
+    # pools and the worker's use a few dozen at most.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=2GB
+      - -c
+      - effective_cache_size=5GB
+      - -c
+      - max_connections=100
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - wal_level=replica
+    shm_size: 512m
+    cpus: 2
+    mem_limit: 3g
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: new_commerce
@@ -117,6 +152,13 @@ services:
   redis:
     image: redis:8
     restart: unless-stopped
+    # Jobs and emails live in its streams: append-only, fsynced each second,
+    # and never evicted -- a full Redis refuses writes rather than silently
+    # dropping a queued job (P1-002).
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec",
+              "--maxmemory", "400mb", "--maxmemory-policy", "noeviction"]
+    cpus: 0.5
+    mem_limit: 512m
     volumes:
       - redisdata:/data
     healthcheck:
