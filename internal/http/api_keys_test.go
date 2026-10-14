@@ -80,7 +80,7 @@ func insertAPIKey(ctx context.Context, t *testing.T, store *db.Store, tenantID u
 }
 
 // TestAPIKeys is P1-200's acceptance: the plaintext comes back once, only its
-// SHA-256 is stored and resolves to the shop, a bad origin is 422 (BR-028,
+// SHA-256 and last four are stored and resolves to the shop, a bad origin is 422 (BR-028,
 // BR-083), and a revoked key is gone from the list and from editing.
 func TestAPIKeys(t *testing.T) {
 	ctx := t.Context()
@@ -92,7 +92,8 @@ func TestAPIKeys(t *testing.T) {
 	code, k := do("POST", "/v1/api-keys", map[string]any{"name": " Main website ", "allowed_origin": "https://tokoabc.com"})
 	key, _ := k["key"].(string)
 	if code != 201 || !strings.HasPrefix(key, "sf_live_") || len(key) < 40 || k["name"] != "Main website" ||
-		k["allowed_origin"] != "https://tokoabc.com" || k["revoked_at"] != nil || k["last_used_at"] != nil {
+		k["allowed_origin"] != "https://tokoabc.com" || k["revoked_at"] != nil || k["last_used_at"] != nil ||
+		k["key_last4"] != key[len(key)-4:] {
 		t.Fatalf("create: %d %v", code, k)
 	}
 	if by, _ := k["created_by"].(map[string]any); by == nil || by["name"] == "" {
@@ -113,6 +114,10 @@ func TestAPIKeys(t *testing.T) {
 	}
 	if _, has := data[0].(map[string]any)["key"]; has {
 		t.Error("the list returns the key; it is shown once, at creation")
+	}
+	// The last four stay, so the list can show sf_live_••••42ab (BR-028).
+	if got := data[0].(map[string]any)["key_last4"]; got != key[len(key)-4:] {
+		t.Errorf("list key_last4 %v, want %q", got, key[len(key)-4:])
 	}
 
 	code, k = do("PATCH", "/v1/api-keys/"+id, map[string]any{"name": "Shop", "allowed_origin": "http://localhost:3001"})

@@ -34,8 +34,8 @@ func (s *Service) APIKeys(ctx context.Context) ([]APIKey, error) {
 }
 
 // CreateAPIKey mints a key and returns it with its plaintext, the only time
-// the plaintext exists outside the caller's hands: only its SHA-256 is stored
-// (BR-028).
+// the plaintext exists outside the caller's hands: only its SHA-256 and its
+// last four characters are stored (BR-028).
 func (s *Service) CreateAPIKey(ctx context.Context, name, origin string) (APIKey, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -51,6 +51,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, name, origin string) (APIKey
 		return APIKey{}, "", err
 	}
 	key := apiKeyPrefix + random
+	last4 := key[len(key)-4:]
 	id := uuid.Must(uuid.NewV7())
 	var createdBy *uuid.UUID
 	if a, ok := tenant.ActorFromContext(ctx); ok {
@@ -59,7 +60,8 @@ func (s *Service) CreateAPIKey(ctx context.Context, name, origin string) (APIKey
 	var k APIKey
 	err = s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
 		if err := q.CreateApiKey(ctx, sqlcgen.CreateApiKeyParams{ID: id, Name: name,
-			KeyHash: auth.HashRefreshToken(key), AllowedOrigin: origin, CreatedBy: createdBy}); err != nil {
+			KeyHash: auth.HashRefreshToken(key), KeyLast4: &last4, AllowedOrigin: origin,
+			CreatedBy: createdBy}); err != nil {
 			return err
 		}
 		var err error
