@@ -21,6 +21,7 @@ type ApiKey struct {
 	RevokedAt     *time.Time
 	CreatedBy     *uuid.UUID
 	CreatedAt     time.Time
+	KeyLast4      *string
 }
 
 type AuditLog struct {

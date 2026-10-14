@@ -798,7 +798,14 @@ type ApiKey struct {
 	CreatedAt     time.Time          `json:"created_at"`
 	CreatedBy     *Ref               `json:"created_by"`
 	Id            openapi_types.UUID `json:"id"`
-	LastUsedAt    *time.Time         `json:"last_used_at"`
+
+	// KeyLast4 The key's last four characters, so a list can show `sf_live_••••42ab` (BR-028). `null`
+	// for a key created before v2.12.0.
+	//
+	//
+	// Examples: 42ab
+	KeyLast4   *string    `json:"key_last4"`
+	LastUsedAt *time.Time `json:"last_used_at"`
 
 	// Name Examples: Main website
 	Name      string     `json:"name"`
@@ -820,7 +827,14 @@ type ApiKeyCreated struct {
 	Id            openapi_types.UUID `json:"id"`
 
 	// Key Examples: sf_live_3f9a91c2e8…
-	Key        string     `json:"key"`
+	Key string `json:"key"`
+
+	// KeyLast4 The key's last four characters, so a list can show `sf_live_••••42ab` (BR-028). `null`
+	// for a key created before v2.12.0.
+	//
+	//
+	// Examples: 42ab
+	KeyLast4   *string    `json:"key_last4"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 
 	// Name Examples: Main website

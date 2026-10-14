@@ -13,15 +13,16 @@ import (
 )
 
 const createApiKey = `-- name: CreateApiKey :exec
-INSERT INTO api_keys (id, tenant_id, name, key_hash, allowed_origin, created_by)
+INSERT INTO api_keys (id, tenant_id, name, key_hash, key_last4, allowed_origin, created_by)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
-        $4, $5)
+        $4, $5, $6)
 `
 
 type CreateApiKeyParams struct {
 	ID            uuid.UUID
 	Name          string
 	KeyHash       string
+	KeyLast4      *string
 	AllowedOrigin string
 	CreatedBy     *uuid.UUID
 }
@@ -31,6 +32,7 @@ func (q *Queries) CreateApiKey(ctx context.Context, arg CreateApiKeyParams) erro
 		arg.ID,
 		arg.Name,
 		arg.KeyHash,
+		arg.KeyLast4,
 		arg.AllowedOrigin,
 		arg.CreatedBy,
 	)
@@ -39,7 +41,7 @@ func (q *Queries) CreateApiKey(ctx context.Context, arg CreateApiKeyParams) erro
 
 const listApiKeys = `-- name: ListApiKeys :many
 
-SELECT k.id, k.name, k.allowed_origin, k.last_used_at, k.revoked_at, k.created_at,
+SELECT k.id, k.name, k.key_last4, k.allowed_origin, k.last_used_at, k.revoked_at, k.created_at,
        k.created_by, u.name AS created_by_name
 FROM api_keys k
 LEFT JOIN users u ON u.id = k.created_by
@@ -51,6 +53,7 @@ ORDER BY k.created_at DESC, k.id DESC
 type ListApiKeysRow struct {
 	ID            uuid.UUID
 	Name          string
+	KeyLast4      *string
 	AllowedOrigin string
 	LastUsedAt    *time.Time
 	RevokedAt     *time.Time
@@ -60,7 +63,8 @@ type ListApiKeysRow struct {
 }
 
 // Storefront API keys (P1-200, BR-028). The key itself is never stored:
-// key_hash is its SHA-256, and nothing here ever selects it.
+// key_hash is its SHA-256, and nothing here ever selects it; key_last4 is
+// its last four characters, for lists.
 // Live keys only, newest first; with id set, that one live key.
 func (q *Queries) ListApiKeys(ctx context.Context, id *uuid.UUID) ([]ListApiKeysRow, error) {
 	rows, err := q.db.Query(ctx, listApiKeys, id)
@@ -74,6 +78,7 @@ func (q *Queries) ListApiKeys(ctx context.Context, id *uuid.UUID) ([]ListApiKeys
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.KeyLast4,
 			&i.AllowedOrigin,
 			&i.LastUsedAt,
 			&i.RevokedAt,

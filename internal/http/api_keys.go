@@ -36,7 +36,7 @@ func (s *Server) CreateApiKey(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		out := apiKeyOut(k)
-		writeJSON(w, http.StatusCreated, ApiKeyCreated{Id: out.Id, Name: out.Name, Key: key,
+		writeJSON(w, http.StatusCreated, ApiKeyCreated{Id: out.Id, Name: out.Name, Key: key, KeyLast4: out.KeyLast4,
 			AllowedOrigin: out.AllowedOrigin, CreatedBy: out.CreatedBy, LastUsedAt: out.LastUsedAt,
 			RevokedAt: out.RevokedAt, CreatedAt: out.CreatedAt})
 	})(w, r)
@@ -82,7 +82,7 @@ func (s *Server) RevokeApiKey(w http.ResponseWriter, r *http.Request, id Id) {
 }
 
 func apiKeyOut(k team.APIKey) ApiKey {
-	out := ApiKey{Id: k.ID, Name: k.Name, AllowedOrigin: k.AllowedOrigin, LastUsedAt: k.LastUsedAt,
+	out := ApiKey{Id: k.ID, Name: k.Name, KeyLast4: k.KeyLast4, AllowedOrigin: k.AllowedOrigin, LastUsedAt: k.LastUsedAt,
 		RevokedAt: k.RevokedAt, CreatedAt: k.CreatedAt}
 	if k.CreatedBy != nil && k.CreatedByName != nil {
 		out.CreatedBy = &Ref{Id: *k.CreatedBy, Name: *k.CreatedByName}

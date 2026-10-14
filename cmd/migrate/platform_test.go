@@ -79,6 +79,8 @@ func TestPlatformSchema(t *testing.T) {
 			{"revoked_at", "timestamp with time zone", true},
 			{"created_by", "uuid", true},
 			{"created_at", "timestamp with time zone", false},
+			// 000026 adds it, so it sits last, not after key_hash as in the ERD.
+			{"key_last4", "text", true},
 		}},
 	} {
 		t.Run(tt.table+" columns", func(t *testing.T) {
