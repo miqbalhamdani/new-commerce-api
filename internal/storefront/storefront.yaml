@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: New Commerce Storefront API
-  version: 0.9.0
+  version: 0.9.1
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -61,11 +61,27 @@ servers:
 security:
   - apiKey: []
 
+# Sidebar groups for /v1/storefront/docs, in the order a storefront is built.
+tags:
+  - name: Catalog
+    description: Products, categories and brands a shopper browses.
+  - name: Config
+    description: What the website needs to render sign-in and payment.
+  - name: Cart & checkout
+    description: From first item in the cart to a placed order.
+  - name: Customer auth
+    description: Accounts, sign-in, tokens and password reset.
+  - name: Me & order history
+    description: The signed-in customer and their orders.
+  - name: Orders & payment
+    description: A guest's order, and paying a pending one.
+
 paths:
 
   /products:
     get:
       operationId: listProducts
+      tags: ["Catalog"]
       summary: The shop's visible products
       description: |
         Only visible products (BR-080) that have at least one visible variant, so every row has a
@@ -122,6 +138,7 @@ paths:
           type: string
     get:
       operationId: getProduct
+      tags: ["Catalog"]
       summary: One visible product with its visible variants
       description: |
         A draft, archived or unknown slug is `404` (BR-080). `price` is what a shopper pays now;
@@ -143,6 +160,7 @@ paths:
   /categories:
     get:
       operationId: listCategories
+      tags: ["Catalog"]
       summary: The shop's categories, every tree or one kind
       description: Unpaginated, ordered by `path`. Archived categories are left out.
       parameters:
@@ -168,6 +186,7 @@ paths:
   /brands:
     get:
       operationId: listBrands
+      tags: ["Catalog"]
       summary: The shop's brands
       description: Unpaginated, ordered by name. Archived brands are left out.
       responses:
@@ -185,6 +204,7 @@ paths:
   /config:
     get:
       operationId: getConfig
+      tags: ["Config"]
       summary: What the website needs to render sign-in and payment
       description: |
         Public by design, and read once: the shop's name, its Google client ID (`null` when
@@ -206,6 +226,7 @@ paths:
   /carts:
     post:
       operationId: createCart
+      tags: ["Cart & checkout"]
       summary: Start a cart
       description: |
         No body. The `cart_id` is a random UUID and is the cart's only credential: whoever holds
@@ -233,6 +254,7 @@ paths:
       - $ref: "#/components/parameters/CartId"
     get:
       operationId: getCart
+      tags: ["Cart & checkout"]
       summary: A cart, priced now
       description: |
         Every item at today's price, sales included; a cart stores no prices (BR-046, BR-087).
@@ -264,6 +286,7 @@ paths:
           format: uuid
     put:
       operationId: setCartItem
+      tags: ["Cart & checkout"]
       summary: Set a variant's quantity in the cart
       description: |
         Sets the quantity, whether or not the variant is already in the cart; `0` removes it,
@@ -297,6 +320,7 @@ paths:
       - $ref: "#/components/parameters/CartId"
     post:
       operationId: cartShippingRates
+      tags: ["Cart & checkout"]
       summary: What shipping the cart to a postal code costs
       description: |
         Quoted by Biteship from the shop's origin, for the couriers it offers, over the cart's
@@ -332,6 +356,7 @@ paths:
       - $ref: "#/components/parameters/CartId"
     post:
       operationId: checkout
+      tags: ["Cart & checkout"]
       summary: Turn the cart into an order
       description: |
         Nothing in the request is a price: lines are priced now through `variant_price()`
@@ -393,6 +418,7 @@ paths:
   /customers:
     post:
       operationId: registerCustomer
+      tags: ["Customer auth"]
       summary: Create a customer account and sign in
       description: |
         Accounts belong to one shop: an email registered here is `422` on `email`, and the same
@@ -423,6 +449,7 @@ paths:
   /auth/login:
     post:
       operationId: login
+      tags: ["Customer auth"]
       summary: Sign in with email and password
       description: |
         A wrong password, an unknown email and an account with no password (Google only) are
@@ -453,6 +480,7 @@ paths:
   /auth/google:
     post:
       operationId: googleSignIn
+      tags: ["Customer auth"]
       summary: Sign in with Google
       description: |
         `id_token` is the credential Google Identity Services gives the website, for the shop's own
@@ -494,6 +522,7 @@ paths:
   /auth/refresh:
     post:
       operationId: refresh
+      tags: ["Customer auth"]
       summary: Swap a refresh token for new tokens
       description: |
         Every refresh rotates: the response has a new `refresh_token`, and the one sent is spent.
@@ -523,6 +552,7 @@ paths:
   /auth/logout:
     post:
       operationId: logout
+      tags: ["Customer auth"]
       summary: Sign out of one session
       description: Revokes the session `refresh_token` belongs to, if it is the caller's.
       security:
@@ -547,6 +577,7 @@ paths:
   /auth/password-reset:
     post:
       operationId: requestPasswordReset
+      tags: ["Customer auth"]
       summary: Email a password reset link
       description: |
         Always `202`, whether or not the email has an account, so the answer cannot be used to
@@ -575,6 +606,7 @@ paths:
   /auth/password-reset/confirm:
     post:
       operationId: confirmPasswordReset
+      tags: ["Customer auth"]
       summary: Set a new password with a reset link's token
       description: |
         Sets the password and signs the customer out everywhere: every session is revoked
@@ -601,6 +633,7 @@ paths:
   /me:
     get:
       operationId: getMe
+      tags: ["Me & order history"]
       summary: The signed-in customer
       security:
         - apiKey: []
@@ -618,6 +651,7 @@ paths:
           $ref: "#/components/responses/OriginNotAllowed"
     patch:
       operationId: updateMe
+      tags: ["Me & order history"]
       summary: Change the signed-in customer's name or phone
       description: |
         Send only what changes (BR-009): `phone: null` clears it, `name` cannot be null. The email
@@ -648,6 +682,7 @@ paths:
   /me/orders:
     get:
       operationId: listMyOrders
+      tags: ["Me & order history"]
       summary: The signed-in customer's orders, newest first
       security:
         - apiKey: []
@@ -674,6 +709,7 @@ paths:
       - $ref: "#/components/parameters/OrderNumber"
     get:
       operationId: getMyOrder
+      tags: ["Me & order history"]
       summary: One of the signed-in customer's orders
       description: Another customer's order is `404`, the same as one that does not exist (BR-011).
       security:
@@ -698,6 +734,7 @@ paths:
       - $ref: "#/components/parameters/OrderNumber"
     get:
       operationId: getGuestOrder
+      tags: ["Orders & payment"]
       summary: A guest's order, with its order token
       description: |
         Send the `order_token` checkout returned as `X-Order-Token`. A missing or wrong token is
@@ -724,6 +761,7 @@ paths:
       - $ref: "#/components/parameters/OrderNumber"
     post:
       operationId: payAgain
+      tags: ["Orders & payment"]
       summary: A link to pay a pending Midtrans order
       description: |
         For the shopper whose order it is: a signed-in customer for their own order, or a guest
