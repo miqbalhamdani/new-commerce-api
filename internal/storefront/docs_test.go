@@ -88,7 +88,7 @@ func TestStorefrontDocs(t *testing.T) {
 
 	rec = get(BaseURL + "/docs")
 	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") ||
-		!strings.Contains(rec.Body.String(), `spec-url="/v1/storefront/openapi.json"`) ||
+		!strings.Contains(rec.Body.String(), `data-url="/v1/storefront/openapi.json"`) ||
 		!strings.Contains(rec.Body.String(), `integrity="sha384-`) ||
 		!strings.Contains(rec.Header().Get("Content-Security-Policy"), "default-src 'none'") {
 		t.Errorf("docs: %d %v %s", rec.Code, rec.Header(), rec.Body)

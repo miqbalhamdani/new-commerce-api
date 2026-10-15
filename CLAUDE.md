@@ -217,8 +217,8 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
   `contracts/storefront.yaml` (`internal/storefront`) via `oapi-codegen`. Do not hand-write route
   registration for a documented endpoint. A path appears in either file when its backlog item is
   done. The storefront spec is copied into `internal/storefront` at generate time, embedded, and served, with no key, at
-  `/v1/storefront/openapi.json` and as a Redoc page at `/v1/storefront/docs` (P1-213); bumping
-  Redoc means a new `integrity` hash in `internal/storefront/docs.go`.
+  `/v1/storefront/openapi.json` and as a Scalar page at `/v1/storefront/docs` (P1-213); bumping
+  Scalar means a new `integrity` hash in `internal/storefront/docs.go`.
 - **Errors are RFC 9457** `application/problem+json` with a `trace_id`. Use `platform/errors`;
   never `http.Error` in a handler, and never `200` with an error body.
 - **A permission check goes at the handler boundary**, as `requirePermission("resource:action", …)`

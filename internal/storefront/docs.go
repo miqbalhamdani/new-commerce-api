@@ -32,9 +32,11 @@ var specJSON = sync.OnceValues(func() ([]byte, error) {
 	return json.Marshal(spec)
 })
 
-// redoc is pinned and checked by its hash, and the page may load nothing
+// scalar is pinned and checked by its hash, and the page may load nothing
 // else: it is served from the API's own origin, where a tampered script
-// could call the admin API with the staff refresh cookie.
+// could call the admin API with the staff refresh cookie. proxyUrl is nulled
+// because Scalar's try-it client otherwise routes requests -- API key
+// included -- through proxy.scalar.com; direct is 'self' and allowed.
 const docsPage = `<!doctype html>
 <html lang="en">
 <head>
@@ -43,16 +45,17 @@ const docsPage = `<!doctype html>
 <title>Storefront API</title>
 </head>
 <body>
-<redoc spec-url="` + BaseURL + `/openapi.json"></redoc>
-<script src="https://cdn.jsdelivr.net/npm/redoc@2.5.4/bundles/redoc.standalone.js"
-  integrity="sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5"
+<script id="api-reference" data-url="` + BaseURL + `/openapi.json"
+  data-configuration='{"proxyUrl":null}'></script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.min.js"
+  integrity="sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH"
   crossorigin="anonymous"></script>
 </body>
 </html>
 `
 
 const docsPolicy = "default-src 'none'; script-src https://cdn.jsdelivr.net; style-src 'unsafe-inline'; " +
-	"img-src data: https:; font-src data:; connect-src 'self'; worker-src blob:; " +
+	"img-src data: https:; font-src data: https://fonts.scalar.com; connect-src 'self'; worker-src blob:; " +
 	"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // docs answers the two documentation routes ahead of the key check, and
