@@ -90,7 +90,12 @@ else
 fi
 
 # A schema already here was frozen into one mode by its first migration.
-existing=$(psql -c "SELECT CASE WHEN to_regprocedure('db_role_mode()') IS NULL THEN '' ELSE db_role_mode() END")
+# Two queries: a function name is resolved when the query is parsed, so a
+# CASE cannot guard a call to one that does not exist yet.
+existing=""
+if [[ $(psql -c "SELECT to_regprocedure('db_role_mode()') IS NOT NULL") == t ]]; then
+	existing=$(psql -c "SELECT db_role_mode()")
+fi
 if [[ -z $existing ]]; then
 	info "no schema yet: the first migrate creates it in $DB_ROLE_MODE mode"
 elif [[ $existing == "$DB_ROLE_MODE" ]]; then
