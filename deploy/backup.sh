@@ -25,8 +25,19 @@ name="pg/new_commerce-$(date -u +%Y%m%dT%H%M%SZ).dump.enc"
 
 # Custom format (pg_restore can pick tables back out of it), compressed by
 # pg_dump; openssl only encrypts.
-docker run --rm --network host -e DBURL "postgres:$major" \
-	sh -c 'exec pg_dump --format=custom --compress=6 "$DBURL"' |
+#
+# Limited-roles mode (BR-001): the owner is bound by FORCE ROW LEVEL SECURITY,
+# and a plain pg_dump refuses a table RLS would filter. --enable-row-security
+# dumps what the policies admit, and app.rls_bypass -- set for this connection
+# only -- makes limited_read_bypass admit every row. This is one of the two
+# places allowed to set it.
+pgoptions="" rowsec=""
+if [[ $DB_ROLE_MODE == limited ]]; then
+	pgoptions="-c app.rls_bypass=on" rowsec="--enable-row-security"
+fi
+export PGOPTIONS=$pgoptions ROWSEC=$rowsec
+docker run --rm --network host -e DBURL -e PGOPTIONS -e ROWSEC "postgres:$major" \
+	sh -c 'exec pg_dump --format=custom --compress=6 $ROWSEC "$DBURL"' |
 	openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE |
 	rclone rcat "r2:$BACKUP_S3_BUCKET/$name"
 
@@ -35,4 +46,4 @@ if ((size < 1024)); then
 	echo "backup $name is only $size bytes" >&2
 	exit 1
 fi
-echo "backed up $name ($size bytes, postgres $major)"
+echo "backed up $name ($size bytes, postgres $major, $DB_ROLE_MODE mode)"

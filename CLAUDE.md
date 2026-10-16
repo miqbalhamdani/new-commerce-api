@@ -210,6 +210,20 @@ not add a `BYPASSRLS` pool for it.
 owner is a superuser, and a superuser bypasses RLS outright, `FORCE` included. Point the API at
 `DATABASE_URL` and every policy in the schema becomes decorative.
 
+**Limited-roles mode** (BR-001) is the one exception, for a managed database whose owner can
+create neither role (production on Sumopod's shared plan). `DB_ROLE_MODE=limited` on the *first*
+migrate freezes it into `db_role_mode()`; migrations branch on that function, and the strong
+branch must stay statement-for-statement what it was. In limited mode the app connects as the
+owner (not a superuser, so `FORCE` binds it), `enable_tenant_rls` adds a `SELECT`-only
+`limited_read_bypass` policy, `USING (rls_bypass_on())`, and the four lookups are plpgsql that
+set `app.rls_bypass` around their one query. `rls_bypass_on()` is deliberately `IMMUTABLE` so the
+planner folds it to false for the app and `tenant_id = X OR …` still uses the tenant indexes; the
+cost is that a statement keeps the value it was planned with. **So only those functions and
+`deploy/backup.sh` may set `app.rls_bypass` -- never an application session**, or a statement
+planned with it on sees every tenant afterwards. `TestNothingSetsRLSBypass` fails on Go code that
+names it, and `lint-rls` checks the policy's shape and `rls_bypass_on()`'s exact body. CI's `limited-roles` job runs the suite on PostgreSQL 16 as such
+an owner; its test owner DSN carries `app.rls_bypass` so test oracles can read across tenants.
+
 **Every query goes through `InTenantTx`.** The tenant is set per *transaction* with
 `set_config(..., true)`, never per connection — pgx pools connections and a leaked `SET` follows
 into the next request's tenant.
@@ -240,6 +254,11 @@ that cannot serve it is dead weight.
 
 - **Migrations are forward-only in production.** Write a `down` for local use; never rely on it.
   `make migrate` applies them and exits, `make migrate-down N=1` rolls back locally.
+- **A migration that reads or writes tenant rows across shops must not rely on the owner seeing
+  them.** In limited-roles mode the owner is bound by `FORCE`: an unscoped read sees nothing and an
+  unscoped write is refused, so a data guard like 000006's `IF EXISTS (SELECT 1 FROM api_keys)`
+  would silently pass. Set a tenant per shop, or wrap the work in `ALTER TABLE … NO FORCE ROW LEVEL
+  SECURITY` / `FORCE …` inside the migration's own transaction. Never `app.rls_bypass` (BR-001).
 - **A new tenant table calls `SELECT enable_tenant_rls('<table>');` in its own migration.** That
   is the whole of the tenancy setup for a table -- the function does `ENABLE`, `FORCE` and the
   `tenant_isolation` policy, and refuses a table with no `tenant_id`. Do not hand-write the four

@@ -38,13 +38,20 @@ of `.env.example` shows. Before the first deploy:
 
 The migrations create `auth_lookup NOLOGIN BYPASSRLS`, the owner of the four
 cross-tenant lookups (`../CLAUDE.md`, "Tenancy"). A provider that will not let
-its admin role create a `BYPASSRLS` role cannot run this schema; preflight
+its admin role create a `BYPASSRLS` role cannot run the default mode; preflight
 says so before migrate half-applies.
+
+Such a provider (a shared plan) can run `DB_ROLE_MODE=limited` (BR-001): no
+`app_user`, the app connects as the admin role, `FORCE` still binds it, and a
+`SELECT`-only policy behind `app.rls_bypass` serves the four lookups and the
+backup. It is weaker -- the app owns its tables -- and fixed by the first
+migrate: moving to a provider with the real roles means a fresh schema in the
+default mode and a data-only restore, not a switch.
 
 ### A new shop
 
-There is no signup; the platform team opens a shop. As `app_user`, inside the
-new shop's own transaction:
+There is no signup; the platform team opens a shop. As the app's role
+(`app_user`; the owner in limited mode), inside the new shop's own transaction:
 
 ```bash
 docker compose run --rm --no-deps --entrypoint create-tenant api-1 \
@@ -69,7 +76,28 @@ sudo systemctl start new-commerce-backup.service   # one now; journalctl -u it
 ./restore-drill.sh   # newest backup -> a throwaway postgres here, row counts compared
 ```
 
-R2 deletes backups after 30 days (a lifecycle rule on the bucket).
+R2 deletes backups after 30 days (a lifecycle rule on the bucket). In
+limited mode `backup.sh` dumps through `limited_read_bypass`
+(`--enable-row-security`, `app.rls_bypass` for its connection only); a plain
+`pg_dump` there refuses every tenant table.
+
+#### Restoring into a limited-mode database
+
+Into a new, empty provider database, as its admin role. One `pg_restore` is
+enough: `pg_dump` puts `ENABLE`/`FORCE ROW LEVEL SECURITY` and the policies in
+its post-data section, so the rows load before RLS exists, and the grants
+(`REVOKE … FROM PUBLIC` on the lookups) come back with them:
+
+```bash
+# decrypt the newest dump as restore-drill.sh does, into ./db.dump; then, with
+# DBURL=<the new database's admin URL> in the environment:
+pg_restore --no-owner --exit-on-error -d "$DBURL" db.dump
+DB_ROLE_MODE=limited ./db-preflight.sh     # "existing schema is in limited mode"
+DATABASE_URL=$DBURL go run ../cmd/lint-rls  # FORCE and both policies on every table
+```
+
+Point `MIGRATE_DATABASE_URL` and `APP_DATABASE_URL` at it and `./deploy.sh`.
+Rehearsed on PostgreSQL 16 as a role with no CREATEROLE or BYPASSRLS.
 
 ## On a developer machine
 

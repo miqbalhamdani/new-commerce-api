@@ -6,11 +6,9 @@
 #
 # The checklist asks for the drill on a clean machine; this proves the backup,
 # the passphrase and the restore path, not the box. A real restore goes into a
-# new, empty provider database, as the same admin role so ownership survives:
-# db-preflight.sh --apply against it (app_user; the dump carries auth_lookup's
-# CREATE ROLE in migration 3's DO block only, so create it first:
-# CREATE ROLE auth_lookup NOLOGIN BYPASSRLS), then pg_restore with ACLs kept --
-# they are app_user's grants.
+# new, empty provider database as its admin role: README.md, "Restoring into a
+# limited-mode database" (in the default mode, first app_user with
+# db-preflight.sh --apply, and CREATE ROLE auth_lookup NOLOGIN BYPASSRLS).
 set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=deploy/backup-env.sh
@@ -58,8 +56,13 @@ read -r -a live < <(docker run --rm --network host -e DBURL "postgres:$major" sh
 
 printf '%-12s %10s %10s\n' table restored live
 for i in "${!tables[@]}"; do
-	printf '%-12s %10s %10s\n' "${tables[$i]}" "${restored[$i]}" "${live[$i]}"
+	shown=${live[$i]}
+	# Limited mode: the owner is bound by FORCE ROW LEVEL SECURITY, so only
+	# tenants (no RLS) can be counted live.
+	[[ $DB_ROLE_MODE == limited && $i -gt 0 ]] && shown="-"
+	printf '%-12s %10s %10s\n' "${tables[$i]}" "${restored[$i]}" "$shown"
 done
+[[ $DB_ROLE_MODE == limited ]] && echo "(limited-roles mode: live counts other than tenants are hidden by RLS)"
 if [[ ${restored[0]} != "${live[0]}" ]]; then
 	echo "FAIL: tenants differ" >&2
 	exit 1

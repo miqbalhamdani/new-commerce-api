@@ -2,15 +2,22 @@
 # service. Turned on from .env:
 #   COMPOSE_FILE=compose.yaml:compose.managed-db.yaml[:compose.small.yaml]
 #
-# The two roles stay two DSNs (CLAUDE.md, "Tenancy"): migrate as the provider's
-# admin role, which owns the schema; api and worker as app_user, which owns
-# nothing and is created once by db-preflight.sh --apply. Use the provider's
-# direct port, not a transaction-mode PgBouncer: pgx caches prepared
-# statements per connection, and a pooler hands those to other connections.
+# Default mode: the two roles stay two DSNs (CLAUDE.md, "Tenancy") -- migrate
+# as the provider's admin role, which owns the schema; api and worker as
+# app_user, which owns nothing and is created once by db-preflight.sh --apply.
+#
+# DB_ROLE_MODE=limited (BR-001) is for a provider whose admin role can create
+# neither app_user nor auth_lookup: APP_DATABASE_URL is then the same admin
+# role as MIGRATE_DATABASE_URL, which FORCE ROW LEVEL SECURITY still binds.
+# The first migrate fixes the mode for good; db-preflight.sh checks first.
+#
+# Use the provider's direct port, not a transaction-mode PgBouncer: pgx caches
+# prepared statements per connection, and a pooler hands those to other
+# connections.
 #
 # compose.yaml still interpolates POSTGRES_PASSWORD and APP_DB_PASSWORD; set
 # POSTGRES_PASSWORD to any placeholder, and APP_DB_PASSWORD to the password
-# that APP_DATABASE_URL carries (db-preflight.sh sets it on the role).
+# that APP_DATABASE_URL carries (any placeholder in limited mode).
 
 services:
   postgres:
@@ -21,6 +28,7 @@ services:
   migrate:
     environment:
       DATABASE_URL: ${MIGRATE_DATABASE_URL:?}
+      DB_ROLE_MODE: ${DB_ROLE_MODE:-strong}
     depends_on: !reset {}
 
   api-1:

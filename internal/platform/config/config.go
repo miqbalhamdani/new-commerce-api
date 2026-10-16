@@ -51,6 +51,12 @@ func DatabaseURL() string { return Getenv("DATABASE_URL", DefaultDatabaseURL) }
 // AppDatabaseURL is the DSN the application serves requests on, as app_user.
 func AppDatabaseURL() string { return Getenv("APP_DATABASE_URL", DefaultAppDatabaseURL) }
 
+// DBRoleMode is DB_ROLE_MODE: "strong", the default, or "limited" for a managed
+// database whose schema owner cannot create app_user or auth_lookup (BR-001).
+// cmd/migrate hands it to the first migration, which freezes it into
+// db_role_mode(); after that the database, not this setting, is the answer.
+func DBRoleMode() string { return Getenv("DB_ROLE_MODE", "strong") }
+
 // RedisURL is the Redis DSN.
 func RedisURL() string { return Getenv("REDIS_URL", DefaultRedisURL) }
 

@@ -73,6 +73,71 @@ jobs:
           go run ./cmd/storage-init
       - run: make check
 
+  # BR-001's limited-roles mode, as production runs it on a shared managed
+  # database: PostgreSQL 16, and a schema owner with no CREATEROLE, no
+  # BYPASSRLS and no ownership of the database itself. The app's DSN is that
+  # owner, exactly as deployed; the tests' owner DSN adds app.rls_bypass so
+  # their cross-tenant oracles can read, as a superuser owner does in `check`.
+  limited-roles:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30
+      redis:
+        image: redis:8
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-retries 30
+    env:
+      GOFLAGS: -p=1
+      DB_ROLE_MODE: limited
+      SUPERUSER_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      DATABASE_URL: postgres://owner_limited:owner_limited@localhost:5432/limited_db?sslmode=disable&options=-c%20app.rls_bypass%3Don
+      APP_DATABASE_URL: postgres://owner_limited:owner_limited@localhost:5432/limited_db?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install libvips
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libvips-dev pkg-config postgresql-client
+      - name: Cache MinIO
+        id: minio
+        uses: actions/cache@v4
+        with:
+          path: ~/minio-bin
+          key: minio-${{ env.MINIO_VERSION }}
+      - name: Build MinIO
+        if: steps.minio.outputs.cache-hit != 'true'
+        run: GOBIN=$HOME/minio-bin CGO_ENABLED=0 go install "github.com/minio/minio@${MINIO_VERSION}"
+      - name: Start MinIO
+        run: |
+          MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin nohup ~/minio-bin/minio server /tmp/minio --address :9000 >/tmp/minio.log 2>&1 &
+          for i in $(seq 30); do curl -sf localhost:9000/minio/health/ready && exit 0; sleep 1; done; cat /tmp/minio.log; exit 1
+      - name: A shared-plan owner, like the production database's
+        run: |
+          psql "$SUPERUSER_URL" -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE owner_limited LOGIN PASSWORD 'owner_limited' NOSUPERUSER NOCREATEROLE NOBYPASSRLS NOCREATEDB" \
+            -c "CREATE DATABASE limited_db" \
+            -c "GRANT CREATE ON DATABASE limited_db TO owner_limited"
+          psql "postgres://postgres:postgres@localhost:5432/limited_db?sslmode=disable" -v ON_ERROR_STOP=1 \
+            -c "GRANT CREATE ON SCHEMA public TO owner_limited"
+      - name: Migrate in limited mode, lint RLS, bucket rules
+        run: |
+          go run ./cmd/migrate
+          go run ./cmd/lint-rls
+          go run ./cmd/storage-init
+      # The schema-shape tests in cmd/migrate write as the owner with no tenant,
+      # which only a superuser may; `check` runs them. TestLimitedRoleMode is
+      # this mode's own. ./internal/... includes `make test-iso`.
+      - run: go test ./cmd/migrate -run TestLimitedRoleMode -v
+      - run: go test ./cmd/lint-rls ./cmd/create-tenant ./internal/...
+
   # Every migration in the PR applied over main's schema with seeded data
   # (01-product-requirements.md §8.6), until a restored production backup
   # takes the seed's place.
@@ -129,7 +194,9 @@ jobs:
   # P1-001: the image the box runs. Built on every PR so a broken Dockerfile
   # is red; pushed to ghcr.io only from main, as sha-<commit> and main.
   image:
-    needs: [check]
+    # Production runs limited-roles mode (deploy/README.md), so its job gates
+    # the image as much as `check` does.
+    needs: [check, limited-roles]
     runs-on: ubuntu-24.04
     permissions:
       contents: read

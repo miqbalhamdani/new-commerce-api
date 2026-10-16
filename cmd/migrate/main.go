@@ -6,16 +6,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/db/migrations"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
@@ -34,7 +37,16 @@ func main() {
 }
 
 func run(down int) error {
-	m, err := open(config.DatabaseURL())
+	mode := config.DBRoleMode()
+	if mode != "strong" && mode != "limited" {
+		return fmt.Errorf("DB_ROLE_MODE is %q; want strong or limited", mode)
+	}
+	if mode == "limited" {
+		if err := refuseNeedlessLimited(config.DatabaseURL()); err != nil {
+			return err
+		}
+	}
+	m, err := open(config.DatabaseURL(), mode)
 	if err != nil {
 		return err
 	}
@@ -71,12 +83,64 @@ func run(down int) error {
 		// automatic can fix this: someone has to look at what half-applied.
 		return fmt.Errorf("schema is dirty at version %d -- inspect and force a version before retrying", version)
 	}
-	slog.Info("migrations applied", "version", version)
+	if err := checkRoleMode(config.DatabaseURL(), mode); err != nil {
+		return err
+	}
+	slog.Info("migrations applied in "+mode+" role mode", "version", version)
 	return nil
 }
 
-// open builds a migrator over the embedded SQL files.
-func open(dsn string) (*migrate.Migrate, error) {
+// refuseNeedlessLimited is the first migration's own refusal, made before
+// anything runs: where the migrating role could create app_user and
+// auth_lookup, limited mode is a choice of convenience, never a fallback
+// (BR-001). Failing inside the migration would also leave it dirty.
+func refuseNeedlessLimited(dsn string) error {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("connect to check the role mode: %w", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+
+	var capable bool
+	if err := conn.QueryRow(ctx, `SELECT rolsuper OR (rolcreaterole AND rolbypassrls)
+		FROM pg_roles WHERE rolname = current_user`).Scan(&capable); err != nil {
+		return fmt.Errorf("read the migrating role: %w", err)
+	}
+	if capable {
+		return errors.New("DB_ROLE_MODE is limited, but this role can create app_user and auth_lookup -- " +
+			"use the default mode (BR-001)")
+	}
+	return nil
+}
+
+// checkRoleMode fails when the database was created in a different mode than
+// DB_ROLE_MODE asks for. The first migration freezes the mode into
+// db_role_mode() (BR-001), so a later DB_ROLE_MODE changes nothing -- and an
+// API configured for one mode against a schema built for the other would
+// either fail every sign-in or run as a role it was never meant to.
+func checkRoleMode(dsn, want string) error {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return fmt.Errorf("connect to check the role mode: %w", err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+
+	var got string
+	if err := conn.QueryRow(ctx, `SELECT db_role_mode()`).Scan(&got); err != nil {
+		return fmt.Errorf("read db_role_mode(): %w", err)
+	}
+	if got != want {
+		return fmt.Errorf("the schema was created in %s mode but DB_ROLE_MODE is %s -- "+
+			"the mode is fixed when the schema is created (BR-001)", got, want)
+	}
+	return nil
+}
+
+// open builds a migrator over the embedded SQL files. The role mode travels as
+// the session setting app.role_mode, which only the first migration reads.
+func open(dsn, mode string) (*migrate.Migrate, error) {
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {
 		return nil, fmt.Errorf("read embedded migrations: %w", err)
@@ -91,6 +155,9 @@ func open(dsn string) (*migrate.Migrate, error) {
 		return nil, fmt.Errorf("parse DATABASE_URL: %w", err)
 	}
 	u.Scheme = "pgx5"
+	q := u.Query()
+	q.Set("options", strings.TrimSpace(q.Get("options")+" -c app.role_mode="+mode))
+	u.RawQuery = q.Encode()
 
 	m, err := migrate.NewWithSourceInstance("iofs", src, u.String())
 	if err != nil {

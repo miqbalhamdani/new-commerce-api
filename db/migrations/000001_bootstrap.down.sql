@@ -2,10 +2,18 @@
 
 DROP FUNCTION IF EXISTS enable_tenant_rls(regclass);
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM app_user;
+DO $$
+BEGIN
+    IF db_role_mode() = 'strong' THEN
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public
+            REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM app_user;
+        REVOKE USAGE ON SCHEMA public FROM app_user;
+    END IF;
+END
+$$;
 
-REVOKE USAGE ON SCHEMA public FROM app_user;
+DROP FUNCTION IF EXISTS rls_bypass_on();
+DROP FUNCTION IF EXISTS db_role_mode();
 
 -- app_user is deliberately NOT dropped. A role is cluster-wide: dropping it here
 -- would break every other database in the cluster that granted anything to it,

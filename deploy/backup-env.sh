@@ -3,7 +3,7 @@
 # and the two tools they share. Not `source .env` -- Compose's format allows
 # unquoted spaces (TLS=...), which bash would run as a command.
 
-env_get() { grep -E "^$1=" .env | tail -n 1 | cut -d= -f2-; }
+env_get() { { grep -E "^$1=" .env || true; } | tail -n 1 | cut -d= -f2-; }
 
 for key in MIGRATE_DATABASE_URL BACKUP_PASSPHRASE BACKUP_S3_ENDPOINT BACKUP_S3_ACCESS_KEY \
 	BACKUP_S3_SECRET_KEY BACKUP_S3_BUCKET; do
@@ -11,6 +11,11 @@ for key in MIGRATE_DATABASE_URL BACKUP_PASSPHRASE BACKUP_S3_ENDPOINT BACKUP_S3_A
 	[[ -n ${!key} ]] || { echo "set $key in .env" >&2; exit 1; }
 	export "${key?}"
 done
+
+# DB_ROLE_MODE (BR-001): in limited mode the dump runs as the schema owner,
+# which FORCE ROW LEVEL SECURITY binds, so it reads through limited_read_bypass.
+DB_ROLE_MODE=${DB_ROLE_MODE:-$(env_get DB_ROLE_MODE)}
+export DB_ROLE_MODE=${DB_ROLE_MODE:-strong}
 
 # Secrets reach containers as `-e NAME`, inherited from this environment --
 # never `-e NAME=value`, which any user on the box can read in `ps`.

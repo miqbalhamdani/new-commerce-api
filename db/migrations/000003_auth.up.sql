@@ -30,22 +30,26 @@ ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
 -- definition time: no name, no created_at, nothing that could be turned into a
 -- cross-tenant directory. Widening it is a schema change and a contract change.
 
+--
+-- In limited mode (BR-001) there is no auth_lookup; see the end of each
+-- function below.
+
 DO $$
 BEGIN
+    IF db_role_mode() = 'limited' THEN
+        RETURN;
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'auth_lookup') THEN
         -- NOLOGIN: nothing connects as this role. It exists to own one function.
         CREATE ROLE auth_lookup NOLOGIN BYPASSRLS;
     END IF;
-END
-$$;
 
-GRANT SELECT (id, tenant_id, password_hash, status, role, email) ON users TO auth_lookup;
+    GRANT SELECT (id, tenant_id, password_hash, status, role, email) ON users TO auth_lookup;
 
--- Owning a function requires membership in the owning role. The role's creator
--- holds ADMIN OPTION on it, so this is a no-op on a fresh database and a
--- deliberate re-grant on one where the role already existed.
-DO $$
-BEGIN
+    -- Owning a function requires membership in the owning role. The role's creator
+    -- holds ADMIN OPTION on it, so this is a no-op on a fresh database and a
+    -- deliberate re-grant on one where the role already existed.
     EXECUTE format('GRANT auth_lookup TO %I', current_user);
 END
 $$;
@@ -70,12 +74,50 @@ AS $$
      WHERE u.email = p_email;
 $$;
 
-ALTER FUNCTION auth_lookup_user(citext) OWNER TO auth_lookup;
-
 -- EXECUTE is granted to PUBLIC by default on a new function, which would make
 -- this readable by anything that can reach the database.
-REVOKE ALL ON FUNCTION auth_lookup_user(citext) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_lookup_user(citext) TO app_user;
+DO $$
+BEGIN
+    IF db_role_mode() = 'strong' THEN
+        ALTER FUNCTION auth_lookup_user(citext) OWNER TO auth_lookup;
+        REVOKE ALL ON FUNCTION auth_lookup_user(citext) FROM PUBLIC;
+        GRANT EXECUTE ON FUNCTION auth_lookup_user(citext) TO app_user;
+        RETURN;
+    END IF;
+
+    -- Limited mode (BR-001, BR-003): no auth_lookup to own this, so it belongs
+    -- to the schema owner and opens limited_read_bypass for its one query.
+    -- plpgsql, because a non-superuser cannot put a custom setting in a
+    -- function's SET clause; set_config(..., true) is undone with the
+    -- transaction or savepoint if the query fails, and restored here if not.
+    --
+    -- app.tenant_id goes to the nil uuid, which no shop has, for the same one
+    -- query. RLS evaluates tenant_isolation next to the bypass, and on a pooled
+    -- connection that has run a tenant transaction before, the setting is ''
+    -- rather than unset -- and ''::uuid is an error, not a false.
+    CREATE OR REPLACE FUNCTION auth_lookup_user(p_email citext)
+    RETURNS TABLE (id uuid, tenant_id uuid, password_hash text, status text, role text)
+    LANGUAGE plpgsql
+    VOLATILE
+    SECURITY DEFINER
+    SET search_path = pg_catalog, public
+    AS $fn$
+    #variable_conflict use_column
+    DECLARE
+        prev        text := current_setting('app.rls_bypass', true);
+        prev_tenant text := current_setting('app.tenant_id', true);
+    BEGIN
+        PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
+        PERFORM set_config('app.rls_bypass', 'on', true);
+        RETURN QUERY
+            SELECT u.id, u.tenant_id, u.password_hash, u.status, u.role FROM users u WHERE u.email = p_email;
+        PERFORM set_config('app.rls_bypass', coalesce(prev, ''), true);
+        PERFORM set_config('app.tenant_id', coalesce(prev_tenant, ''), true);
+    END
+    $fn$;
+    REVOKE ALL ON FUNCTION auth_lookup_user(citext) FROM PUBLIC;
+END
+$$;
 
 COMMENT ON FUNCTION auth_lookup_user(citext) IS
     'Cross-tenant read for the login path only (BR-003). Returns five fixed columns and nothing else.';
@@ -98,8 +140,14 @@ COMMENT ON FUNCTION auth_lookup_user(citext) IS
 -- Returns no token material: the caller already holds the token, and the hash
 -- would be a verifier if it leaked.
 
-GRANT SELECT (id, tenant_id, user_id, token_hash, expires_at, revoked_at)
-    ON refresh_tokens TO auth_lookup;
+DO $$
+BEGIN
+    IF db_role_mode() = 'strong' THEN
+        GRANT SELECT (id, tenant_id, user_id, token_hash, expires_at, revoked_at)
+            ON refresh_tokens TO auth_lookup;
+    END IF;
+END
+$$;
 
 CREATE FUNCTION auth_lookup_refresh_token(p_token_hash text)
 RETURNS TABLE (
@@ -119,9 +167,48 @@ AS $$
      WHERE t.token_hash = p_token_hash;
 $$;
 
-ALTER FUNCTION auth_lookup_refresh_token(text) OWNER TO auth_lookup;
-REVOKE ALL ON FUNCTION auth_lookup_refresh_token(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_lookup_refresh_token(text) TO app_user;
+DO $$
+BEGIN
+    IF db_role_mode() = 'strong' THEN
+        ALTER FUNCTION auth_lookup_refresh_token(text) OWNER TO auth_lookup;
+        REVOKE ALL ON FUNCTION auth_lookup_refresh_token(text) FROM PUBLIC;
+        GRANT EXECUTE ON FUNCTION auth_lookup_refresh_token(text) TO app_user;
+        RETURN;
+    END IF;
+
+    -- Limited mode (BR-001, BR-003): no auth_lookup to own this, so it belongs
+    -- to the schema owner and opens limited_read_bypass for its one query.
+    -- plpgsql, because a non-superuser cannot put a custom setting in a
+    -- function's SET clause; set_config(..., true) is undone with the
+    -- transaction or savepoint if the query fails, and restored here if not.
+    --
+    -- app.tenant_id goes to the nil uuid, which no shop has, for the same one
+    -- query. RLS evaluates tenant_isolation next to the bypass, and on a pooled
+    -- connection that has run a tenant transaction before, the setting is ''
+    -- rather than unset -- and ''::uuid is an error, not a false.
+    CREATE OR REPLACE FUNCTION auth_lookup_refresh_token(p_token_hash text)
+    RETURNS TABLE (id uuid, tenant_id uuid, user_id uuid, expires_at timestamptz, revoked_at timestamptz)
+    LANGUAGE plpgsql
+    VOLATILE
+    SECURITY DEFINER
+    SET search_path = pg_catalog, public
+    AS $fn$
+    #variable_conflict use_column
+    DECLARE
+        prev        text := current_setting('app.rls_bypass', true);
+        prev_tenant text := current_setting('app.tenant_id', true);
+    BEGIN
+        PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
+        PERFORM set_config('app.rls_bypass', 'on', true);
+        RETURN QUERY
+            SELECT t.id, t.tenant_id, t.user_id, t.expires_at, t.revoked_at FROM refresh_tokens t WHERE t.token_hash = p_token_hash;
+        PERFORM set_config('app.rls_bypass', coalesce(prev, ''), true);
+        PERFORM set_config('app.tenant_id', coalesce(prev_tenant, ''), true);
+    END
+    $fn$;
+    REVOKE ALL ON FUNCTION auth_lookup_refresh_token(text) FROM PUBLIC;
+END
+$$;
 
 COMMENT ON FUNCTION auth_lookup_refresh_token(text) IS
     'Resolves a refresh token to its tenant so the rotation can proceed inside InTenantTx. Returns no token material.';

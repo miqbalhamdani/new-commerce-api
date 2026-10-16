@@ -21,4 +21,11 @@ SELECT enable_tenant_rls('audit_log');
 
 -- The bootstrap grants app_user tables but deliberately no sequences; this is
 -- the first bigserial, and inserting needs nextval.
-GRANT USAGE ON SEQUENCE audit_log_id_seq TO app_user;
+-- Limited mode (BR-001) has no app_user; the owner has the sequence already.
+DO $$
+BEGIN
+    IF db_role_mode() = 'strong' THEN
+        GRANT USAGE ON SEQUENCE audit_log_id_seq TO app_user;
+    END IF;
+END
+$$;
