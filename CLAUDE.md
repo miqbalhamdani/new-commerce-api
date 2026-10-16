@@ -1,8 +1,15 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # backend — Go API
 
-Phase 0 · Foundation (Phase 1 · Catalog next). Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2.
+Phases 0–3 (foundation, catalog, orders, storefront API) are built and mostly in `review`;
+Phase 6a (CI, the Compose stack) is under way, Phase 4 (Shopee import) is next in the backlog.
+Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2 (MinIO locally).
 
-**The contract lives in `contracts/`** (git submodule, pinned to a tag):
+**The contract lives in `contracts/`** (git submodule pinned to a contracts commit on `main` — CI's `drift` job enforces this; `contracts/VERSION`). A
+fresh clone has it empty -- `git submodule update --init` (`make generate` refuses otherwise):
 
 | File | What it holds |
 |---|---|
@@ -12,6 +19,7 @@ Phase 0 · Foundation (Phase 1 · Catalog next). Go 1.26 · PostgreSQL 18 · Red
 | `04-api-spec.md` | Routes, payloads, errors, the permission matrix (§3) |
 | `05-backlog.md` | Items per phase, Acceptance, Rules, Definition of Done |
 | `openapi.yaml` | The admin `/v1` contract the server is generated from |
+| `storefront.yaml` | The `/v1/storefront` contract (`internal/storefront`) |
 
 Read the relevant sections before changing anything they cover. If the code and the contract
 disagree, the code is wrong — unless the contract is, in which case change it there first, in its
@@ -19,6 +27,7 @@ own commit.
 
 **Workflow and "done" are `05-backlog.md`**: take the topmost `todo` item whose dependencies are
 done; an item is done only when its Acceptance is proven, with a test wherever a test is possible.
+Claiming (`wip` + owner), branch naming (`p1-<id>-<slug>`) and the other statuses are in its "Rules".
 
 ---
 
@@ -31,13 +40,34 @@ make storage-init # create the dev bucket in MinIO: public product images, expir
 make dev-seed     # a demo shop to sign in as: owner@example.com / development-password (DEV_SEED_EMAIL, DEV_SEED_PASSWORD)
 make db-create    # create the local development database
 make migrate      # apply migrations
+make migrate-down N=1  # roll back N (local only)
 make generate     # sqlc + oapi-codegen. MUST be a no-op on a clean tree
-make test         # unit + integration against host PostgreSQL and Redis (P1-000)
-make test-iso     # tenant isolation suite over every registered route
-make lint         # golangci-lint
-make lint-rls     # fail if a tenant table has no RLS policy
+make generated-diff  # fail if generated files differ from what is committed
+make test         # unit + integration against host PostgreSQL, Redis and MinIO (P1-000)
+make test-iso     # tenant isolation suite over every registered admin route
+make fmt-check    # gofmt -l
+make vet          # go vet ./...
+make lint         # golangci-lint (v2 config: errcheck, govet, ineffassign, staticcheck, unused, gofmt)
+make lint-rls     # fail if a tenant table has no RLS policy (reads the live database)
 make check        # generate, generated-diff, fmt-check, vet, lint, lint-rls, test
 ```
+
+There is no `make help` and no `build` target; `go build ./...` compiles everything (cgo:
+libvips is needed for `internal/images`). Every target sources `.env` if present; the compiled-in
+defaults (`internal/platform/config`) already match `.env.example`, so tests and `go run` work
+without one.
+
+```bash
+make db-create migrate storage-init             # once, before the first test run
+go test ./internal/http/ -run TestBrands -v     # one package / one test (no .env needed)
+go test -short ./...                            # skips the slow 10,000-variant tests
+GOFLAGS=-p=1 make test                          # what CI does: packages share the Redis
+                                                # `jobs` stream, so parallel packages can steal
+                                                # each other's jobs and flake
+```
+
+Integration tests fail rather than skip when a service is down (`cmd/api/health_test.go`
+explains why); a red test with "connection refused" means start the service, not skip the test.
 
 `make check` green is the bar for a PR. CI (`.github/workflows/ci.yml`, P1-004) runs it on every
 PR against PostgreSQL 18, Redis 8 and a source-built MinIO, plus the PR's migrations over main's
@@ -47,8 +77,20 @@ Tests need PostgreSQL, Redis and MinIO running on the host
 for the worker's image derivatives (`brew install vips pkg-config`). Local mail goes to Mailpit
 (`brew services start mailpit`, inbox at http://localhost:8025) when `SMTP_ADDR` is set.
 
-The generator is pinned in `go.mod` as a `tool` directive and invoked as `go tool oapi-codegen`,
-so `make generate` produces the same bytes on every machine without anyone installing anything.
+`oapi-codegen` is pinned in `go.mod` as a `tool` directive (`go tool oapi-codegen`), so it needs
+no install. `sqlc` and `golangci-lint` are **not** pinned in the module: install the versions CI
+uses (`SQLC_VERSION` / `GOLANGCI_LINT_VERSION` in `ci.yml`, currently sqlc 1.31.1 and
+golangci-lint v2.13.2), or `make generate` / `make lint` may produce a different diff or result.
+
+### Codegen pipeline
+
+`make generate` does four things, and `make generated-diff` then requires the tree unchanged:
+`contracts/openapi.yaml` → `internal/http/gen.go` (package `httpapi`, chi + strict server,
+`oapi-codegen.yaml`); `contracts/storefront.yaml` → `internal/storefront/gen.go` (chi, non-strict,
+`oapi-codegen.storefront.yaml`); a copy of `storefront.yaml` into `internal/storefront/` (embedded
+and served); and `sqlc generate` (`db/migrations` + `db/queries` → `internal/db/sqlcgen`). An API
+change therefore starts with a contracts PR, then a submodule bump here, then `make generate`.
+CI's `drift` job fails if the pinned contracts commit is not on contracts `main`.
 
 ---
 
@@ -57,20 +99,28 @@ so `make generate` produces the same bytes on every machine without anyone insta
 ```
 cmd/api/          HTTP API: /v1 admin, /v1/storefront from Phase 3. Stateless; 2 replicas
                   behind Caddy in production (P1-001).
-cmd/migrate/      Runs migrations to completion, exits.
+cmd/migrate/      Runs migrations (embedded from db/migrations) to completion, exits. -down N
 cmd/lint-rls/     RLS policy guard (make lint-rls).
-cmd/worker/       Redis Streams consumer (P1-060). Phase 1: image derivatives, product CSV
-                  import, invitation email; order export, order email, nightly retention
-                  (P1-214). Later: channel import.
+cmd/dev-seed/     Demo shop + owner (make dev-seed). cmd/storage-init/: bucket + lifecycle rules
+cmd/worker/       Redis Streams consumer (P1-060): `jobs` stream (product_import, order_export,
+                  image_derivatives, customer_purge), `emails` stream (invitation,
+                  password_reset, order mails), and the nightly retention sweep (P1-214).
+                  Later: channel import.
 internal/
   platform/       config, errors, logging, telemetry — imported by everything
-  db/             pool, InTenantTx, audit recorder, sqlc output. THE ONLY package that imports pgx
+  db/             pool, InTenantTx, audit recorder, SECURITY DEFINER lookups, sqlc output
   tenant/         request-scoped tenant and actor
-  auth/           JWT, argon2id, RBAC
-  queue/          Redis: rate-limit windows now, Redis Streams from P1-060
+  auth/           JWT, argon2id, RBAC (roles.go), invite / reset / order tokens, Google sign-in
+  queue/          the one Redis client; stream helpers
+  ratelimit/      BR-014 sliding windows, admin and storefront alike
   http/           chi router, middleware, handlers, DTOs (admin)
   httpkit/        problem+json, strict JSON decoding, cursors, tracing -- shared by http and storefront
-  catalog/        (Phase 1) products, variants, categories, brands, media
+  catalog/        products, variants, categories, brands, media, bulk upsert, CSV import
+  orders/         state machine (Transition), checkout, payments, refunds, export, order mail
+  carts/          storefront carts. customers/: customer accounts, sessions, password reset
+  midtrans/ biteship/  payment and shipping-rate clients
+  secrets/        envelope encryption for shop credentials (ENCRYPTION_KEY)
+  retention/      nightly cross-shop sweep (see Tenancy)
   storage/        object store (R2 / MinIO): presign, HEAD, public URLs, lifecycle rules
   images/         WebP derivatives via libvips (cgo). Worker only -- cmd/api never imports it
   email/          senders (Resend; SMTP and stdout in development) and templates
@@ -82,19 +132,41 @@ deploy/           the production stack: Compose, Caddyfile, deploy.sh, and the s
                   developer machine (deploy/README.md). Dockerfile: one image, every binary
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries
-contracts/        submodule, pinned to a tag — READ ONLY from here
+contracts/        submodule, pinned to a commit on contracts main — READ ONLY from here
 ```
 
 ### Import rules
 
-Not tool-enforced yet; checked in review until a linter lands (P1-004).
+Not tool-enforced yet (except the admin/storefront boundary, enforced by
+`TestAdminAndStorefrontDoNotImportEachOther` in `internal/storefront/keys_test.go`); checked in
+review until a linter lands.
 
-- Only `internal/db` imports `pgx`.
-- Domain packages do not import each other. They compose in `internal/http`, or through an
+- Only `internal/db` holds the pool (`pgxpool`) and runs queries outside a transaction. Other
+  packages see pgx only as the `pgx.Tx` that `InTenantTx` hands them (plus `pgx.ErrNoRows`).
+- Domain packages (`catalog`, `orders`, `carts`, `customers`, `team`) do not import each other.
+  They may use infrastructure (`db`, `jobs`, `storage`, `email`, `auth`, `secrets`, `midtrans`,
+  `biteship`), and compose in `internal/http` / `internal/storefront` / `cmd/*`, or through an
   interface declared by the consumer.
 - Nothing imports `internal/http`. Admin and storefront handlers do not import each other (P1-202).
 
 These exist so extracting a service later is mechanical. Breaking them is not a style question.
+
+### Request flow
+
+`cmd/api/main.go` builds one `db.Store` (as `app_user`), the Redis client and the services, then
+mounts two routers on one mux, plus `GET /healthz`:
+
+- **Admin `/v1/*`** (`internal/http/router.go`): `tracing` → `Authenticate` (staff JWT → tenant,
+  role and actor into the context; the short `unauthenticated` list mirrors `security: []` --
+  login, refresh, accept-invite, the Midtrans webhook) → admin rate limiter → generated chi routes
+  → handler wrapped in `requirePermission` → domain service → `store.InTenantTx` → sqlc.
+- **Storefront `/v1/storefront/*`** (`internal/storefront/router.go`): tracing → docs (no key) →
+  `Keys.Middleware` (`X-Api-Key` → shop via `resolve_api_key`, cached; Origin checks, BR-083) →
+  storefront limits → optional customer token → generated routes.
+
+Background work: a handler creates a `jobs` row inside its `InTenantTx` and enqueues it on the
+Redis stream after commit; `cmd/worker` delivers it (at-least-once, reclaimed after `ClaimIdle`,
+`MaxDeliveries` 5) and records the outcome the API's `GET /v1/jobs/{id}` reads.
 
 ---
 
@@ -263,7 +335,7 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
 |---|---|
 | Unit | Pure logic: slugify, matrix diff, permission checks |
 | Integration | Real PostgreSQL and Redis on the host. **Do not mock the database** — RLS, triggers, row locks and `security_invoker` views cannot be mocked meaningfully |
-| Isolation | `make test-iso` (P1-008): two seeded tenants, every registered admin route, zero leakage. Storefront routes also need P1-211 (two tenants × two customers) and P1-210 (origin × token matrix) |
+| Isolation | `make test-iso` (P1-008): two seeded tenants, every registered admin route, zero leakage. Storefront routes are covered in `internal/storefront` (`isolation_test.go`, P1-211: two tenants × two customers; `authmatrix_test.go`, P1-210: origin × token matrix), run by `make test`, not `test-iso` |
 | Concurrency | `go test -race`; checkout proven with 20 parallel requests on one cart (P1-205) |
 | Migration | CI's `migrate-snapshot`: the PR's migrations over main's schema with `dev-seed` data, then `lint-rls` (P1-004). A restored production backup replaces the seed once production exists |
 
