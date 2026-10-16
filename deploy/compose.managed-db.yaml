@@ -1,0 +1,45 @@
+# PostgreSQL run by a provider (Sumopod in production) instead of the postgres
+# service. Turned on from .env:
+#   COMPOSE_FILE=compose.yaml:compose.managed-db.yaml[:compose.small.yaml]
+#
+# The two roles stay two DSNs (CLAUDE.md, "Tenancy"): migrate as the provider's
+# admin role, which owns the schema; api and worker as app_user, which owns
+# nothing and is created once by db-preflight.sh --apply. Use the provider's
+# direct port, not a transaction-mode PgBouncer: pgx caches prepared
+# statements per connection, and a pooler hands those to other connections.
+#
+# compose.yaml still interpolates POSTGRES_PASSWORD and APP_DB_PASSWORD; set
+# POSTGRES_PASSWORD to any placeholder, and APP_DB_PASSWORD to the password
+# that APP_DATABASE_URL carries (db-preflight.sh sets it on the role).
+
+services:
+  postgres:
+    # Never started: deploy.sh and `docker compose up` skip a service whose
+    # profile is not active.
+    profiles: ["local-db"]
+
+  migrate:
+    environment:
+      DATABASE_URL: ${MIGRATE_DATABASE_URL:?}
+    depends_on: !reset {}
+
+  api-1:
+    environment:
+      APP_DATABASE_URL: ${APP_DATABASE_URL:?}
+    depends_on: !override
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  api-2:
+    environment:
+      APP_DATABASE_URL: ${APP_DATABASE_URL:?}
+    depends_on: !override
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    environment:
+      APP_DATABASE_URL: ${APP_DATABASE_URL:?}
+    depends_on: !override
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }

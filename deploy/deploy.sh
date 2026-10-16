@@ -21,7 +21,13 @@ if [[ ${SKIP_PULL:-} != 1 ]]; then
 	docker compose pull --quiet api-1 web
 fi
 
-docker compose up -d --wait postgres redis
+# postgres only when this stack runs it: compose.managed-db.yaml takes it out
+# of the service list.
+if docker compose config --services | grep -qx postgres; then
+	docker compose up -d --wait postgres redis
+else
+	docker compose up -d --wait redis
+fi
 docker compose run --rm migrate
 
 healthy() {

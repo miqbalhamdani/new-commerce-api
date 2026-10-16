@@ -1,0 +1,13 @@
+# backup.sh as a oneshot (P1-003). Installed by README.md, "Backups", which
+# replaces DEPLOY_DIR with this checkout's deploy/ directory.
+[Unit]
+Description=new-commerce: encrypted pg_dump to the R2 backups bucket
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=DEPLOY_DIR
+ExecStart=DEPLOY_DIR/backup.sh
+# A dump of a pilot shop takes seconds; this is a hang, not a slow night.
+TimeoutStartSec=1h

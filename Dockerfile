@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 # One image, three entrypoints (01-product-requirements.md, P1-001):
-#   api, worker, migrate -- plus storage-init for a MinIO stand-in.
+#   api, worker, migrate -- plus storage-init for a MinIO stand-in, and
+#   create-tenant, the platform team's way to open a shop.
 # The worker needs libvips (cgo), so every binary shares its base.
 FROM golang:1.26-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends libvips-dev \
@@ -10,7 +11,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -o /out/ ./cmd/api ./cmd/worker ./cmd/migrate ./cmd/storage-init
+    go build -trimpath -o /out/ ./cmd/api ./cmd/worker ./cmd/migrate ./cmd/storage-init ./cmd/create-tenant
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends libvips42 ca-certificates curl \

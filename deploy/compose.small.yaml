@@ -1,0 +1,33 @@
+# Limits for a 2 vCPU / 2 GB box with the database managed elsewhere
+# (compose.managed-db.yaml), instead of the 4 vCPU / 8 GB that compose.yaml is
+# sized for (P1-002). Add swap on such a box: an import's image derivatives
+# are the peak, and the worker is the one allowed to reach into it.
+#
+# Both API replicas stay, smaller, so deploy.sh still rolls one at a time.
+
+services:
+  caddy:
+    cpus: 0.5
+    mem_limit: 128m
+
+  web:
+    cpus: 0.5
+    mem_limit: 256m
+
+  api-1:
+    cpus: 1
+    mem_limit: 256m
+
+  api-2:
+    cpus: 1
+    mem_limit: 256m
+
+  worker:
+    cpus: 1
+    mem_limit: 640m
+
+  redis:
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec",
+              "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    cpus: 0.5
+    mem_limit: 192m

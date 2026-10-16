@@ -5,11 +5,15 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "== postgres"
-docker compose exec -T postgres psql -U postgres -d new_commerce -AtF ' = ' -c "
+if docker compose config --services | grep -qx postgres; then
+	docker compose exec -T postgres psql -U postgres -d new_commerce -AtF ' = ' -c "
   SELECT name, setting || coalesce(' ' || unit, '') FROM pg_settings
   WHERE name IN ('shared_buffers', 'effective_cache_size', 'max_connections', 'work_mem',
                  'maintenance_work_mem', 'random_page_cost', 'wal_level')
   ORDER BY name"
+else
+	echo "managed by the provider (compose.managed-db.yaml); db-preflight.sh reports it"
+fi
 
 echo "== redis"
 for k in appendonly appendfsync maxmemory maxmemory-policy; do
