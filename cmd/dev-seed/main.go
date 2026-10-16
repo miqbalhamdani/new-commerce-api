@@ -4,6 +4,9 @@
 // development stand-in for that. It refuses to run anywhere else.
 //
 //	make dev-seed   # owner@example.com / development-password
+//
+// DEV_SEED_EMAIL and DEV_SEED_PASSWORD sign in as someone else, without
+// editing this file.
 package main
 
 import (
@@ -22,9 +25,9 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
-const (
-	email    = "owner@example.com"
-	password = "development-password"
+var (
+	email    = config.Getenv("DEV_SEED_EMAIL", "owner@example.com")
+	password = config.Getenv("DEV_SEED_PASSWORD", "development-password")
 )
 
 func main() {
@@ -48,12 +51,12 @@ func run() error {
 
 	owner, err := store.LookupUserForAuth(ctx, email)
 	if err == nil {
-		slog.Info("shop already seeded; sign in with owner@example.com / development-password")
+		slog.Info("shop already seeded; sign in as " + email)
 	} else {
 		if owner, err = createShop(ctx, store); err != nil {
 			return err
 		}
-		slog.Info("seeded Demo Shop; sign in with owner@example.com / development-password")
+		slog.Info("seeded Demo Shop; sign in as " + email)
 	}
 	return seedSamples(ctx, store, owner)
 }
