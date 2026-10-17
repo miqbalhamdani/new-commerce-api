@@ -59,9 +59,9 @@ staff token; storefront requests take it from the API key (BR-086). Exactly four
 tenants on a request path, each through its own `SECURITY DEFINER` function that returns only
 what it must:
 
-- staff login: `id, tenant_id, password_hash, status, role`. Staff signup, its email code and
-  staff Google sign-in (BR-020, BR-026) call the same function, for the same columns, to find
-  the user an email or a verified Google email names;
+- staff login: `id, tenant_id, password_hash, status, role`. Staff signup, its email code,
+  staff Google sign-in and staff password reset (BR-020, BR-026, BR-094) call the same function,
+  for the same columns, to find the user an email or a verified Google email names;
 - staff token refresh: `id, tenant_id, user_id, expires_at, revoked_at` (the cookie carries no
   tenant, and taking one from the request is what this rule forbids);
 - API key resolution: `id, tenant_id, allowed_origin, revoked_at`;
@@ -249,7 +249,8 @@ a verified email), and the user is found by that email. An `active` user is sign
 `invited` one has just proved the address, so the invitation is accepted and they are signed in
 with no password; `disabled` or no user is `401`. Signing up with Google creates the tenant and an
 `active` owner with no password: Google already confirmed the email, so there is no code. A
-Google-only user signs in with Google; password sign-in refuses them like a wrong password.
+Google-only user signs in with Google; password sign-in refuses them like a wrong password,
+until they set a password with a reset (BR-094).
 Telling a Google caller that their own email has no account names nothing they do not already
 control, so that `401` says so.
 
@@ -737,8 +738,13 @@ customer resets their own (BR-094).
 
 ### BR-094 Password reset
 A reset sends a one-time link valid for 30 minutes. Using it revokes every session of that
-customer. The request always answers `202`, whether or not the email exists (BR-021). A
-Google-only customer may use it to add a password.
+account. The request always answers `202`, whether or not the email exists (BR-021). A
+Google-only account may use it to add a password.
+
+Customers reset on the shop's website (§11.8). Staff reset in the admin: the link opens the
+admin's `/reset-password`, only an `active` user is sent one (an `invited` owner confirms the
+signup instead, BR-026), and using it signs them in. A staff link never resets a customer's
+password, nor a customer's link a staff one.
 
 ### BR-095 Carts follow the shopper
 When a request carries both a cart id and a customer token, the cart's `customer_id` is set, so a
@@ -915,7 +921,7 @@ address, so linking by email cannot be assumed for every provider.
 
 ### BR-128 Transactional email
 Sent through Resend from `"{shop name}" <no-reply@{domain}>` with Reply-To
-set to the shop's contact email. Emails: staff invitation, customer password reset, order placed,
+set to the shop's contact email. Emails: staff invitation, staff and customer password reset, order placed,
 payment received, order shipped (with courier and tracking). A signup's confirmation comes from
 `"Belli.id"` with no Reply-To: the shop is not set up yet. The worker sends them after the
 change commits; a rare lost email is accepted, and every email's content is also visible in the

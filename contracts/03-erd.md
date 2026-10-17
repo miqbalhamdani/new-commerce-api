@@ -560,10 +560,11 @@ CREATE TABLE customer_identities (
         FOREIGN KEY (customer_id, tenant_id) REFERENCES customers (id, tenant_id) ON DELETE CASCADE
 );
 
--- Password reset links have no table (BR-094). The token is signed and expiring, like an
--- invitation's (BR-026), and the customer's current password_hash is part of what is signed:
--- setting a password, with the link or any other way, changes the hash, so a used link stops
--- verifying. That is what makes it single use, a Google-only customer's NULL hash included.
+-- Password reset links have no table (BR-094), for customers or staff. The token is signed and
+-- expiring, like an invitation's (BR-026), and the account's current password_hash is part of
+-- what is signed: setting a password, with the link or any other way, changes the hash, so a
+-- used link stops verifying. That is what makes it single use, a Google-only account's NULL hash
+-- included.
 
 -- One row per signed-in device. The refresh token rotates on every use (BR-093).
 CREATE TABLE customer_sessions (

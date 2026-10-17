@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.15.0
+  version: 2.16.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -329,6 +329,62 @@ paths:
                 $ref: "#/components/schemas/Session"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/password-reset:
+    post:
+      operationId: requestStaffPasswordReset
+      summary: Email a password reset link
+      description: |
+        Always `202`, whatever the email (BR-021). Only an `active` user is sent a link, to the
+        admin's `/reset-password`, valid 30 minutes and single use (BR-094); an `invited` owner
+        confirms the signup instead. A Google-only user adds a password this way. Counted against
+        the login limit (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffPasswordResetRequest"
+      responses:
+        "202":
+          description: Accepted. If the email belongs to an active user, a link is on its way.
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/password-reset/confirm:
+    post:
+      operationId: confirmStaffPasswordReset
+      summary: Set a new password from a reset link and sign in
+      description: |
+        Sets the password, revokes every refresh token the user has and signs them in with a new
+        session (BR-094). An expired, used or forged token, or a customer's reset token, is `422`
+        on `token`. Limited per IP (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffPasswordResetConfirm"
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              description: The refresh token, httpOnly, Secure, SameSite=Lax.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /roles:
     get:
@@ -3101,6 +3157,29 @@ components:
         token:
           type: string
           examples: ["inv_9c2e…"]
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    StaffPasswordResetRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+
+    StaffPasswordResetConfirm:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          examples: ["prt_…"]
         password:
           type: string
           format: password

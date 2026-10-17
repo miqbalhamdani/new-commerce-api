@@ -122,6 +122,7 @@ appear (BR-025).
 | Sign in / accept invitation | All staff | Way in: email and password, or Google | M5 |
 | Register | A new owner | Shop name, name and email, then the emailed 6-digit code (or link) confirms the address and a password is set, then onboarding; or Google and a shop name | M5 |
 | Verify email | A new owner | The 6-digit code from the signup email; resend | M5 |
+| Forgot / reset password | All staff | An email for a reset link; the link sets a new password and signs in. A Google-only user adds a password this way | M5 |
 | Onboarding wizard | Owner | Shop settings, brands, category tree, first product (a draft with a price). Each step shows the shop's real list and links to its page | M5 |
 | Order list | Ops | Daily workspace. Saved views, search | M1 |
 | Order detail | Ops | Status actions, ship dialog, refund record, audit trail | M1 |
