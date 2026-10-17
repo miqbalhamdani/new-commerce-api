@@ -1,0 +1,1724 @@
+openapi: 3.1.0
+
+info:
+  title: New Commerce Storefront API
+  version: 0.9.1
+  description: |
+    The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
+    separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
+    storefront developer reads this file alone, and the API generates the storefront server from
+    it into its own package, which never imports the admin one (P1-202).
+
+    **This file grows with the backlog**, as `openapi.yaml` does: a path appears when the item
+    that builds it is done (`05-backlog.md`, Phase 3). The API serves it as
+    `/v1/storefront/openapi.json` and renders it at `/v1/storefront/docs`, neither needing a key,
+    and a test fails when a §11.3 route is missing from it (P1-213).
+
+    ## Credentials (BR-082)
+
+    Every request carries `X-Api-Key`. Personal data also needs a customer token
+    (`Authorization: Bearer`) or, for a guest's order, `X-Order-Token`. A staff token is never
+    accepted here (BR-086).
+
+    ## Browser and server (BR-083)
+
+    A request with an `Origin` header must come from the key's `allowed_origin`, else
+    `403 origin_not_allowed` with no `Access-Control-Allow-Origin`. Responses echo the matched
+    origin (never `*`) and carry `Vary: Origin`. A request with no `Origin` — the website's own
+    server — is accepted. A preflight `OPTIONS` needs no key and is answered for any origin.
+
+    ## Conventions
+
+    The admin API's conventions hold here (`04-api-spec.md` §1): money is an integer of minor
+    units, times are RFC 3339 in `+07:00`, errors are RFC 9457 `application/problem+json` with
+    a `trace_id`, a field the route does not define is `422 unknown_field` — a price field on a
+    cart or checkout route above all (BR-089) — and lists are cursor-paginated.
+
+    ## Rate limits (BR-014)
+
+    Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (for the
+    tightest limit the request counted against), readable from browser code. Over a limit is
+    `429 rate_limited` with `Retry-After` in seconds.
+
+    | Caller | Limit |
+    |---|---|
+    | Browser (has `Origin`) | 120 a minute per IP, 3,000 a minute per key |
+    | Server (no `Origin`) | 600 a minute per key per IP |
+    | Sign-in and password reset | 10 per 15 minutes per email, 30 per 15 minutes per IP |
+    | Checkout | 10 a minute per IP |
+
+    Per-IP limits are loose on purpose: Indonesian carriers put many shoppers behind one address.
+
+servers:
+  - url: https://api.{domain}/v1/storefront
+    description: Production. The domain is still undecided — see `05-backlog.md`, `P1-001`.
+    variables:
+      domain:
+        default: example.com
+  - url: http://localhost:8080/v1/storefront
+    description: Local development.
+
+security:
+  - apiKey: []
+
+# Sidebar groups for /v1/storefront/docs, in the order a storefront is built.
+tags:
+  - name: Catalog
+    description: Products, categories and brands a shopper browses.
+  - name: Config
+    description: What the website needs to render sign-in and payment.
+  - name: Cart & checkout
+    description: From first item in the cart to a placed order.
+  - name: Customer auth
+    description: Accounts, sign-in, tokens and password reset.
+  - name: Me & order history
+    description: The signed-in customer and their orders.
+  - name: Orders & payment
+    description: A guest's order, and paying a pending one.
+
+paths:
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: ["Catalog"]
+      summary: The shop's visible products
+      description: |
+        Only visible products (BR-080) that have at least one visible variant, so every row has a
+        price. `price_min` and `price_max` are what a shopper pays right now, sales included
+        (BR-046). `category` is a category `path` and includes its descendants; `brand` is a
+        brand slug; `q` matches the title. `image` is the first image, or `null`.
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            examples: ["apparel.tees"]
+        - name: brand
+          in: query
+          required: false
+          schema:
+            type: string
+            examples: ["erigo"]
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["-updated_at", "price_min", "-price_min", "title"]
+            default: "-updated_at"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of products.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /products/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getProduct
+      tags: ["Catalog"]
+      summary: One visible product with its visible variants
+      description: |
+        A draft, archived or unknown slug is `404` (BR-080). `price` is what a shopper pays now;
+        show `regular_price` crossed out when `on_sale` (BR-046).
+      responses:
+        "200":
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: ["Catalog"]
+      summary: The shop's categories, every tree or one kind
+      description: Unpaginated, ordered by `path`. Archived categories are left out.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CategoryKind"
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryList"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /brands:
+    get:
+      operationId: listBrands
+      tags: ["Catalog"]
+      summary: The shop's brands
+      description: Unpaginated, ordered by name. Archived brands are left out.
+      responses:
+        "200":
+          description: The brands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandList"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+
+  /config:
+    get:
+      operationId: getConfig
+      tags: ["Config"]
+      summary: What the website needs to render sign-in and payment
+      description: |
+        Public by design, and read once: the shop's name, its Google client ID (`null` when
+        Google sign-in is off), the payment methods it takes, its bank transfer instructions, and
+        what Snap.js needs when Midtrans is on (`null` otherwise). Nothing here is secret: no
+        server key, no notification URL (BR-122, BR-127, BR-129).
+      responses:
+        "200":
+          description: The configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorefrontConfig"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+
+  /carts:
+    post:
+      operationId: createCart
+      tags: ["Cart & checkout"]
+      summary: Start a cart
+      description: |
+        No body. The `cart_id` is a random UUID and is the cart's only credential: whoever holds
+        it can read and change the cart, so the website keeps it as it would a session (BR-087).
+        An open cart expires 30 days after its last change.
+
+        With a customer token, on this or any cart route, the cart becomes that customer's if it
+        is nobody's yet, so a cart started as a guest follows the shopper after sign-in (BR-095).
+      responses:
+        "201":
+          description: The new, empty cart.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /carts/{cart_id}:
+    parameters:
+      - $ref: "#/components/parameters/CartId"
+    get:
+      operationId: getCart
+      tags: ["Cart & checkout"]
+      summary: A cart, priced now
+      description: |
+        Every item at today's price, sales included; a cart stores no prices (BR-046, BR-087).
+        An item whose variant has gone out of view stays listed with `available: false` and no
+        price, and `subtotal` leaves it out (BR-090). An unknown, expired or checked-out cart is
+        `404`.
+      responses:
+        "200":
+          description: The cart.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /carts/{cart_id}/items/{variant_id}:
+    parameters:
+      - $ref: "#/components/parameters/CartId"
+      - name: variant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: setCartItem
+      tags: ["Cart & checkout"]
+      summary: Set a variant's quantity in the cart
+      description: |
+        Sets the quantity, whether or not the variant is already in the cart; `0` removes it,
+        even when the variant is no longer visible. Adding a variant that is not visible is `422`
+        on `variant_id` (BR-080). `qty` outside 0–999 is `422`. A price field is
+        `422 unknown_field` (BR-089). Moves `expires_at` to 30 days out.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartItemWrite"
+      responses:
+        "200":
+          description: The cart after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /carts/{cart_id}/shipping-rates:
+    parameters:
+      - $ref: "#/components/parameters/CartId"
+    post:
+      operationId: cartShippingRates
+      tags: ["Cart & checkout"]
+      summary: What shipping the cart to a postal code costs
+      description: |
+        Quoted by Biteship from the shop's origin, for the couriers it offers, over the cart's
+        available items (BR-120). A quote holds for 10 minutes: checkout within that window charges
+        the same price (BR-121). A shop that has not set its origin or couriers gets no options.
+        An empty cart is `422 empty_cart`; Biteship down is `502 shipping_rates_unavailable`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShippingRatesRequest"
+      responses:
+        "200":
+          description: The options, cheapest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShippingQuote"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /carts/{cart_id}/checkout:
+    parameters:
+      - $ref: "#/components/parameters/CartId"
+    post:
+      operationId: checkout
+      tags: ["Cart & checkout"]
+      summary: Turn the cart into an order
+      description: |
+        Nothing in the request is a price: lines are priced now through `variant_price()`
+        (BR-046, BR-089). Checking out the same cart again — a double tap, a retry, twenty at
+        once — returns the one order it made with `200` and the same body (BR-088).
+
+        Every item is checked first: any that is no longer available is
+        `409 item_unavailable`, naming each in `errors` with its `variant_id`, `sku` and
+        `title`, and the cart is left as it was (BR-090). An empty cart is `422 empty_cart`. A
+        payment method the shop has not enabled is `422` (BR-122).
+
+        A guest checkout returns `order_token`, the guest's proof the order is theirs; send it
+        as `X-Order-Token` to read the order later (BR-091). It is the same on every replay.
+
+        `shipping_option` is a courier service from `/shipping-rates`. Checkout quotes again and
+        charges that price: within the quote's 10 minutes it is the price shown (BR-121). A service
+        no longer offered is `409 shipping_unavailable`; Biteship down is
+        `502 shipping_rates_unavailable`, and no order is made.
+
+        With `midtrans`, the order is made first and then its Snap payment (BR-123): `payment` is
+        the link to pay at. If Midtrans does not answer, the order still exists, `payment` is
+        `null` and `payment_error` is `payment_unavailable`; ask for a link with
+        `POST /orders/{order_number}/payment`. A replay returns the live link. Midtrans takes whole
+        rupiah, so a total with sen in it is `422` on `payment_method`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "201":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutOrder"
+        "200":
+          description: The order this cart already made (BR-088).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutOrder"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /customers:
+    post:
+      operationId: registerCustomer
+      tags: ["Customer auth"]
+      summary: Create a customer account and sign in
+      description: |
+        Accounts belong to one shop: an email registered here is `422` on `email`, and the same
+        email at another shop is unrelated (BR-092). The password is at least 8 characters.
+        Answers with tokens: the new customer is signed in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerRegister"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "201":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: ["Customer auth"]
+      summary: Sign in with email and password
+      description: |
+        A wrong password, an unknown email and an account with no password (Google only) are
+        the same `401 unauthenticated` (BR-021). Tokens travel in the body, never a cookie
+        (BR-093).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/google:
+    post:
+      operationId: googleSignIn
+      tags: ["Customer auth"]
+      summary: Sign in with Google
+      description: |
+        `id_token` is the credential Google Identity Services gives the website, for the shop's own
+        `google_client_id` (`/config`). Its signature, issuer, audience, expiry and
+        `email_verified` are checked; any failure is `401 unauthenticated`. A shop without a
+        client ID is `422` (BR-127).
+
+        The customer is the one this Google account signed in as before; else the account with
+        the same verified email, which the Google login is then linked to; else a new customer
+        with no password, answered `201`. One Google account is one customer per shop.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleSignIn"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "200":
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        "201":
+          description: Signed in as a new customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/refresh:
+    post:
+      operationId: refresh
+      tags: ["Customer auth"]
+      summary: Swap a refresh token for new tokens
+      description: |
+        Every refresh rotates: the response has a new `refresh_token`, and the one sent is spent.
+        A spent token sent again means it was copied, so the whole session is revoked and the
+        answer is `401`; sign the customer in again (BR-093). A session lasts 30 days from its
+        last refresh.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New tokens.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: ["Customer auth"]
+      summary: Sign out of one session
+      description: Revokes the session `refresh_token` belongs to, if it is the caller's.
+      security:
+        - apiKey: []
+          customerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Signed out.
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/password-reset:
+    post:
+      operationId: requestPasswordReset
+      tags: ["Customer auth"]
+      summary: Email a password reset link
+      description: |
+        Always `202`, whether or not the email has an account, so the answer cannot be used to
+        find out (BR-021, BR-094). If it has one, the customer gets `reset_url?token=prt_…`,
+        which works once, for 30 minutes. `reset_url` is the reset page on the shop's website:
+        its origin must be the key's `allowed_origin`, else `422`. A customer who signs in only
+        with Google can use this to add a password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "202":
+          description: If the email has an account, a link is on its way.
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /auth/password-reset/confirm:
+    post:
+      operationId: confirmPasswordReset
+      tags: ["Customer auth"]
+      summary: Set a new password with a reset link's token
+      description: |
+        Sets the password and signs the customer out everywhere: every session is revoked
+        (BR-094). A token that has expired, was already used, or is for another shop is `422` on
+        `token`; ask for a new link.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirm"
+      responses:
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "204":
+          description: The password is set.
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /me:
+    get:
+      operationId: getMe
+      tags: ["Me & order history"]
+      summary: The signed-in customer
+      security:
+        - apiKey: []
+          customerBearer: []
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+    patch:
+      operationId: updateMe
+      tags: ["Me & order history"]
+      summary: Change the signed-in customer's name or phone
+      description: |
+        Send only what changes (BR-009): `phone: null` clears it, `name` cannot be null. The email
+        cannot be changed in v2.
+      security:
+        - apiKey: []
+          customerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeUpdate"
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /me/orders:
+    get:
+      operationId: listMyOrders
+      tags: ["Me & order history"]
+      summary: The signed-in customer's orders, newest first
+      security:
+        - apiKey: []
+          customerBearer: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of orders.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyOrderPage"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /me/orders/{order_number}:
+    parameters:
+      - $ref: "#/components/parameters/OrderNumber"
+    get:
+      operationId: getMyOrder
+      tags: ["Me & order history"]
+      summary: One of the signed-in customer's orders
+      description: Another customer's order is `404`, the same as one that does not exist (BR-011).
+      security:
+        - apiKey: []
+          customerBearer: []
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerOrder"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /orders/{order_number}:
+    parameters:
+      - $ref: "#/components/parameters/OrderNumber"
+    get:
+      operationId: getGuestOrder
+      tags: ["Orders & payment"]
+      summary: A guest's order, with its order token
+      description: |
+        Send the `order_token` checkout returned as `X-Order-Token`. A missing or wrong token is
+        `401 customer_auth_required`, and so is an order number that does not exist: order
+        numbers are sequential, so telling the two apart would let anyone list them. A token
+        opens only its own order (BR-091).
+      security:
+        - apiKey: []
+          orderToken: []
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerOrder"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+
+  /orders/{order_number}/payment:
+    parameters:
+      - $ref: "#/components/parameters/OrderNumber"
+    post:
+      operationId: payAgain
+      tags: ["Orders & payment"]
+      summary: A link to pay a pending Midtrans order
+      description: |
+        For the shopper whose order it is: a signed-in customer for their own order, or a guest
+        with its `X-Order-Token` (BR-126). The live link is returned if there is one; otherwise a
+        new attempt is made (`ERG-000123-2`, …) for the order's total as it is now (BR-123).
+        Asking twice at once gets one link.
+
+        Only a `pending` Midtrans order has a payment to make: anything else is `422`. Another
+        customer's order is `404`; a guest with a missing or wrong token, or an unknown order
+        number, is `401 customer_auth_required`. Midtrans not answering is
+        `502 payment_unavailable`; ask again shortly.
+      security:
+        - apiKey: []
+          customerBearer: []
+        - apiKey: []
+          orderToken: []
+      responses:
+        "200":
+          description: The link to pay at.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+components:
+
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        One kind of key, `sf_live_…`, made in the admin (Settings › API keys). Browser requests
+        must come from the key's `allowed_origin`; server requests (no `Origin`) are accepted.
+        The tenant comes from the key, and nothing in a request can choose another (BR-003,
+        BR-028, BR-083). A revoked key stops working within 60 s (BR-085). Missing, unknown or
+        revoked is `401 invalid_api_key`.
+
+    customerBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A 15-minute customer access token (`aud = storefront`) from sign-in, sent alongside
+        `X-Api-Key`. Its shop must be the key's shop, else `401 customer_auth_required`
+        (BR-086, BR-093).
+
+    orderToken:
+      type: apiKey
+      in: header
+      name: X-Order-Token
+      description: |
+        The guest order token a checkout returns; it opens exactly that one order (BR-091).
+
+  parameters:
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size. Pairs with `cursor`; there is no `offset`.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+    CartId:
+      name: cart_id
+      in: path
+      required: true
+      description: The cart's id, which is also its credential (BR-087).
+      schema:
+        type: string
+        format: uuid
+
+    OrderNumber:
+      name: order_number
+      in: path
+      required: true
+      schema:
+        type: string
+        examples: ["ERG-000123"]
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: The previous page's `next_cursor`, opaque.
+      schema:
+        type: string
+
+  schemas:
+
+    Money:
+      type: integer
+      format: int64
+      description: Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+      examples: [19900000]
+
+    BrandRef:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          examples: ["erigo"]
+        name:
+          type: string
+          examples: ["Erigo"]
+
+    Image:
+      type: object
+      description: |
+        `url` is the 800 px rendition in a list and the 1600 px one on a product, or the original
+        until those exist. `sizes` has a URL per width (`1600`, `800`, `200`) once the image
+        has been processed, a few seconds after upload; until then it is empty.
+      required: [url, sizes]
+      properties:
+        url:
+          type: string
+          format: uri
+        sizes:
+          type: object
+          additionalProperties:
+            type: string
+            format: uri
+
+    ProductListItem:
+      type: object
+      required: [slug, title, brand, price_min, price_max, image]
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        brand:
+          oneOf:
+            - $ref: "#/components/schemas/BrandRef"
+            - type: "null"
+        price_min:
+          $ref: "#/components/schemas/Money"
+        price_max:
+          $ref: "#/components/schemas/Money"
+        image:
+          oneOf:
+            - $ref: "#/components/schemas/Image"
+            - type: "null"
+
+    ProductPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductListItem"
+        next_cursor:
+          type: [string, "null"]
+
+    ProductImage:
+      type: object
+      required: [variant_id, url, sizes]
+      properties:
+        variant_id:
+          description: The variant this image shows, or `null` for the whole product.
+          type: [string, "null"]
+          format: uuid
+        url:
+          type: string
+          format: uri
+        sizes:
+          type: object
+          additionalProperties:
+            type: string
+            format: uri
+
+    ProductVariant:
+      type: object
+      required: [id, sku, option_values, price, regular_price, on_sale, weight_grams]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: [string, "null"]
+        option_values:
+          type: array
+          items:
+            type: string
+          examples: [["Black", "S"]]
+        price:
+          $ref: "#/components/schemas/Money"
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        on_sale:
+          type: boolean
+        weight_grams:
+          type: integer
+
+    ProductCategory:
+      type: object
+      required: [kind, name, path]
+      properties:
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        name:
+          type: string
+        path:
+          type: string
+
+    ProductDetail:
+      type: object
+      required: [id, slug, title, description, brand, categories, attributes, option_names, images, variants, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        description:
+          type: [string, "null"]
+        brand:
+          oneOf:
+            - $ref: "#/components/schemas/BrandRef"
+            - type: "null"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductCategory"
+        attributes:
+          type: object
+          additionalProperties: true
+        option_names:
+          type: array
+          items:
+            type: string
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductImage"
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVariant"
+        updated_at:
+          type: string
+          format: date-time
+
+    CategoryKind:
+      type: string
+      enum: [category, series, collection, activity, custom]
+
+    Category:
+      type: object
+      required: [id, parent_id, kind, name, path]
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        name:
+          type: string
+        path:
+          type: string
+
+    CategoryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+
+    BrandList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrandRef"
+
+    CartItem:
+      type: object
+      required: [variant_id, sku, title, product_slug, option_values, qty, unit_price, line_total, image_url, available]
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        sku:
+          type: [string, "null"]
+        title:
+          type: string
+          examples: ["Erigo Basic Tee — Black / M"]
+        product_slug:
+          type: string
+        option_values:
+          type: array
+          items:
+            type: string
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 999
+        unit_price:
+          description: Today's price (BR-046); `null` when the item is not available.
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        line_total:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        image_url:
+          description: The 200 px image of the variant, else of the product; `null` if neither has one.
+          type: [string, "null"]
+          format: uri
+        available:
+          description: Whether the variant can still be bought (BR-080, BR-090).
+          type: boolean
+
+    Cart:
+      type: object
+      required: [cart_id, items, item_count, subtotal, expires_at]
+      properties:
+        cart_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        item_count:
+          description: The total quantity of every item.
+          type: integer
+        subtotal:
+          description: Available items only.
+          allOf:
+            - $ref: "#/components/schemas/Money"
+        expires_at:
+          type: string
+          format: date-time
+
+    CartItemWrite:
+      type: object
+      required: [qty]
+      additionalProperties: false
+      properties:
+        qty:
+          type: integer
+          minimum: 0
+          maximum: 999
+
+    Contact:
+      type: object
+      required: [name, email]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        phone:
+          type: [string, "null"]
+
+    ShippingAddress:
+      type: object
+      required: [line1, city, province, postal_code]
+      additionalProperties: false
+      properties:
+        line1:
+          type: string
+          minLength: 1
+        line2:
+          type: [string, "null"]
+        city:
+          type: string
+          minLength: 1
+        province:
+          type: string
+          minLength: 1
+        postal_code:
+          type: string
+          pattern: "^[0-9]{5}$"
+
+    CheckoutRequest:
+      type: object
+      description: |
+        `contact` is required for a guest. With a customer token it may be left out, and the
+        customer's own name, email and phone are used; the order goes into their history
+        (BR-095).
+      required: [shipping_address, shipping_option, payment_method]
+      additionalProperties: false
+      properties:
+        contact:
+          $ref: "#/components/schemas/Contact"
+        shipping_address:
+          $ref: "#/components/schemas/ShippingAddress"
+        shipping_option:
+          $ref: "#/components/schemas/ShippingChoice"
+        payment_method:
+          type: string
+          enum: [bank_transfer, midtrans]
+        note:
+          type: [string, "null"]
+
+    OrderLine:
+      type: object
+      required: [sku, title, qty, unit_price]
+      properties:
+        sku:
+          type: [string, "null"]
+        title:
+          type: string
+          examples: ["Erigo Basic Tee — Black / M"]
+        qty:
+          type: integer
+        unit_price:
+          $ref: "#/components/schemas/Money"
+
+    Payment:
+      type: object
+      description: A Midtrans Snap payment link (BR-123).
+      required: [snap_token, redirect_url, expires_at]
+      properties:
+        snap_token:
+          type: string
+        redirect_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+
+    CheckoutOrder:
+      type: object
+      required: [order_number, status, lines, subtotal, shipping, total, shipping_courier, shipping_service,
+                 payment_method, payment, payment_error, placed_at, order_token]
+      properties:
+        order_number:
+          type: string
+          examples: ["ERG-000123"]
+        status:
+          type: string
+          examples: ["pending"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        subtotal:
+          $ref: "#/components/schemas/Money"
+        shipping:
+          $ref: "#/components/schemas/Money"
+        total:
+          $ref: "#/components/schemas/Money"
+        shipping_courier:
+          type: [string, "null"]
+        shipping_service:
+          type: [string, "null"]
+        payment_method:
+          type: string
+          enum: [bank_transfer, midtrans]
+        payment:
+          description: The Midtrans link to pay; `null` for bank transfer, or when there is no live link.
+          oneOf:
+            - $ref: "#/components/schemas/Payment"
+            - type: "null"
+        payment_error:
+          description: |
+            `payment_unavailable` when a Midtrans order has no live payment link, because Midtrans
+            did not answer or the link has expired; `null` otherwise.
+          oneOf:
+            - type: string
+              enum: [payment_unavailable]
+            - type: "null"
+        placed_at:
+          type: string
+          format: date-time
+        order_token:
+          description: |
+            Guests only, `null` for a signed-in customer. Send it as `X-Order-Token` to read the
+            order (BR-091).
+          type: [string, "null"]
+
+    CustomerRegister:
+      type: object
+      required: [email, password, name]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: [string, "null"]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    GoogleSignIn:
+      type: object
+      required: [id_token]
+      additionalProperties: false
+      properties:
+        id_token:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      additionalProperties: false
+      properties:
+        refresh_token:
+          type: string
+          examples: ["rt_8d1f…"]
+
+    CustomerProfile:
+      type: object
+      required: [id, email, name, phone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        phone:
+          type: [string, "null"]
+
+    Tokens:
+      type: object
+      description: |
+        `access_token` is a 15-minute JWT to send as `Authorization: Bearer`. `refresh_token` is
+        the long-lived credential: keep it out of reach of other scripts, and swap it at
+        `/auth/refresh` before the access token runs out (BR-093).
+      required: [access_token, expires_in, refresh_token, customer]
+      properties:
+        access_token:
+          type: string
+        expires_in:
+          description: Seconds until `access_token` expires.
+          type: integer
+          examples: [900]
+        refresh_token:
+          type: string
+          examples: ["rt_8d1f…"]
+        customer:
+          $ref: "#/components/schemas/CustomerProfile"
+
+    PasswordResetRequest:
+      type: object
+      required: [email, reset_url]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        reset_url:
+          type: string
+          format: uri
+          examples: ["https://tokoabc.com/reset-password"]
+
+    PasswordResetConfirm:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          examples: ["prt_…"]
+        password:
+          type: string
+          minLength: 8
+
+    Me:
+      type: object
+      required: [id, email, name, phone, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        phone:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    MeUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        phone:
+          type: [string, "null"]
+
+    MyOrderRow:
+      type: object
+      required: [order_number, status, total, item_count, placed_at]
+      properties:
+        order_number:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        total:
+          $ref: "#/components/schemas/Money"
+        item_count:
+          description: The total quantity of every line.
+          type: integer
+        placed_at:
+          type: string
+          format: date-time
+
+    MyOrderPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyOrderRow"
+        next_cursor:
+          type: [string, "null"]
+
+    OrderStatus:
+      type: string
+      enum: [pending, paid, processing, shipped, completed, cancelled]
+
+    PaymentStatus:
+      type: string
+      enum: [pending, paid, failed]
+
+    OrderAddress:
+      type: object
+      required: [line1, line2, city, province, postal_code]
+      properties:
+        line1:
+          type: string
+        line2:
+          type: [string, "null"]
+        city:
+          type: string
+        province:
+          type: string
+        postal_code:
+          type: string
+
+    CustomerOrder:
+      type: object
+      required: [order_number, status, lines, subtotal, shipping, discount, total, shipping_address,
+                 payment_method, payment_status, courier, tracking_number, placed_at, paid_at,
+                 shipped_at, completed_at, cancelled_at]
+      properties:
+        order_number:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        subtotal:
+          $ref: "#/components/schemas/Money"
+        shipping:
+          $ref: "#/components/schemas/Money"
+        discount:
+          $ref: "#/components/schemas/Money"
+        total:
+          $ref: "#/components/schemas/Money"
+        shipping_address:
+          $ref: "#/components/schemas/OrderAddress"
+        payment_method:
+          type: string
+          enum: [bank_transfer, midtrans]
+        payment_status:
+          description: |
+            The Midtrans payment's state (`P1-220`); `null` for bank transfer, which the shop
+            confirms by hand.
+          oneOf:
+            - $ref: "#/components/schemas/PaymentStatus"
+            - type: "null"
+        courier:
+          type: [string, "null"]
+        tracking_number:
+          type: [string, "null"]
+        placed_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: [string, "null"]
+          format: date-time
+        shipped_at:
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        cancelled_at:
+          type: [string, "null"]
+          format: date-time
+
+    StorefrontConfig:
+      type: object
+      required: [shop_name, google_client_id, payment_methods, bank_transfer_instructions, midtrans]
+      properties:
+        shop_name:
+          type: string
+          examples: ["Toko ABC"]
+        google_client_id:
+          type: [string, "null"]
+        payment_methods:
+          type: array
+          items:
+            type: string
+            enum: [bank_transfer, midtrans]
+        bank_transfer_instructions:
+          type: [string, "null"]
+        midtrans:
+          oneOf:
+            - $ref: "#/components/schemas/MidtransConfig"
+            - type: "null"
+
+    MidtransConfig:
+      type: object
+      required: [client_key, environment, snap_js_url]
+      properties:
+        client_key:
+          type: string
+        environment:
+          type: string
+          enum: [sandbox, production]
+        snap_js_url:
+          type: string
+          format: uri
+          examples: ["https://app.midtrans.com/snap/snap.js"]
+
+    ShippingChoice:
+      type: object
+      description: A courier service picked from `/shipping-rates`; nothing in it is a price (BR-089).
+      required: [courier_code, courier_service_code]
+      additionalProperties: false
+      properties:
+        courier_code:
+          type: string
+          examples: ["jne"]
+        courier_service_code:
+          type: string
+          examples: ["reg"]
+
+    ShippingRatesRequest:
+      type: object
+      required: [destination_postal_code]
+      additionalProperties: false
+      properties:
+        destination_postal_code:
+          type: string
+          pattern: "^[0-9]{5}$"
+
+    ShippingOption:
+      type: object
+      required: [courier_code, courier_service_code, courier_name, service_name, price, duration]
+      properties:
+        courier_code:
+          type: string
+          examples: ["jne"]
+        courier_service_code:
+          type: string
+          examples: ["reg"]
+        courier_name:
+          type: string
+          examples: ["JNE"]
+        service_name:
+          type: string
+          examples: ["Reguler"]
+        price:
+          $ref: "#/components/schemas/Money"
+        duration:
+          type: string
+          examples: ["2 - 3 days"]
+
+    ShippingQuote:
+      type: object
+      required: [weight_grams, options]
+      properties:
+        weight_grams:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShippingOption"
+
+    ErrorCode:
+      type: string
+      description: |
+        The error codes this API returns, a subset of `04-api-spec.md` §1.1. The code is the last
+        segment of a `Problem.type` URI.
+      enum:
+        - validation_failed
+        - unknown_field
+        - empty_cart
+        - unauthenticated
+        - invalid_api_key
+        - customer_auth_required
+        - origin_not_allowed
+        - not_found
+        - item_unavailable
+        - shipping_unavailable
+        - rate_limited
+        - shipping_rates_unavailable
+        - payment_unavailable
+        - internal
+
+    ProblemError:
+      type: object
+      description: |
+        One field-level detail inside a `Problem`. An unavailable cart item, for instance, carries
+        `variant_id`, `sku` and `title`, so extra properties are permitted by design.
+      required: [field]
+      properties:
+        field:
+          type: string
+          examples: ["items"]
+        detail:
+          type: string
+      additionalProperties: true
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 `application/problem+json`. Every error response uses it. `trace_id` is the
+        OpenTelemetry trace id; quote it when reporting a problem.
+      required: [type, title, status, trace_id]
+      properties:
+        type:
+          type: string
+          format: uri
+          examples: ["https://docs.example.com/errors/item_unavailable"]
+        title:
+          type: string
+          examples: ["Item unavailable"]
+        status:
+          type: integer
+          examples: [409]
+        detail:
+          type: string
+        instance:
+          type: string
+        trace_id:
+          type: string
+          examples: ["4bf92f3577b34da6a3ce929d0e0e4736"]
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemError"
+
+  responses:
+
+    InvalidApiKey:
+      description: |
+        `invalid_api_key`: `X-Api-Key` is missing, unknown or revoked. `customer_auth_required`:
+        a customer or order token is missing, invalid, expired or for another shop.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    OriginNotAllowed:
+      description: |
+        `origin_not_allowed`: the request's `Origin` is not the key's `allowed_origin`. Sent
+        without `Access-Control-Allow-Origin`, so a browser hides it from the page (BR-083).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    NotFound:
+      description: No such resource in this shop.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    Conflict:
+      description: |
+        `item_unavailable`: an item in the cart can no longer be bought; `errors` names each one
+        with `variant_id`, `sku` and `title` (BR-090). `shipping_unavailable`: the courier service
+        picked is no longer offered to that address; get the rates again (BR-121).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    TooManyRequests:
+      description: Over a rate limit (BR-014). Wait `Retry-After` seconds.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    BadGateway:
+      description: |
+        `shipping_rates_unavailable` or `payment_unavailable`: Biteship or Midtrans did not answer.
+        Try again shortly.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    UnprocessableEntity:
+      description: |
+        Validation failed, or the body has a field the route does not define
+        (`unknown_field`, BR-089).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
