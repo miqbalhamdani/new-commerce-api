@@ -1,8 +1,8 @@
 openapi: 3.1.0
 
 info:
-  title: New Commerce API
-  version: 2.12.0
+  title: Belli.id API
+  version: 2.13.1
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
