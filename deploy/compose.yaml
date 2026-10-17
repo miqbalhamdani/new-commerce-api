@@ -24,6 +24,7 @@ x-app-env: &app-env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   INVITE_SECRET: ${INVITE_SECRET:?}
   PASSWORD_RESET_SECRET: ${PASSWORD_RESET_SECRET:?}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
 
 x-app-deps: &app-deps
   postgres: { condition: service_healthy }

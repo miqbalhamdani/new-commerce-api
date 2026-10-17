@@ -132,7 +132,10 @@ func run() error {
 	}
 	enqueueMail := func(ctx context.Context, e email.Envelope) error { return email.Enqueue(ctx, redis, e) }
 	customersSvc := customers.NewService(pool, signer, resets, enqueueMail)
-	customersSvc.Google = auth.NewGoogleVerifier()
+	// One verifier, one key cache: shoppers check against their shop's client
+	// ID (BR-127), staff against the platform's (BR-020).
+	google := auth.NewGoogleVerifier()
+	customersSvc.Google = google
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
@@ -155,13 +158,15 @@ func run() error {
 	adminLimits := httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow)
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
-			Auth:    auth.NewService(pool, signer),
-			Catalog: catalogSvc,
-			Jobs:    jobsSvc,
-			Team:    teamSvc,
-			Orders:  ordersSvc,
-			Invites: invites,
-			Limits:  adminLimits,
+			Auth:           auth.NewService(pool, signer),
+			Catalog:        catalogSvc,
+			Jobs:           jobsSvc,
+			Team:           teamSvc,
+			Orders:         ordersSvc,
+			Invites:        invites,
+			Google:         google,
+			GoogleClientID: config.GoogleClientID(),
+			Limits:         adminLimits,
 		}, !config.IsDevelopment()),
 		signer,
 		adminLimits,

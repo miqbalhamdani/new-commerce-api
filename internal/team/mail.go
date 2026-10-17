@@ -103,8 +103,9 @@ func SignupMail(store *db.Store, invites *auth.InviteSigner, adminURL string) em
 		}
 		// signup=1 tells the screen to say "confirm your email" and open
 		// onboarding afterwards.
-		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now()) + "&signup=1"
-		subject, text, html := email.Signup(shop.Name, user.Name, link)
+		now := time.Now()
+		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, now) + "&signup=1"
+		subject, text, html := email.Signup(shop.Name, user.Name, invites.Code(user.ID, user.TenantID, now), link)
 		return &email.Message{FromName: "Belli.id", To: string(user.Email), Subject: subject, Text: text, HTML: html}, nil
 	}
 }

@@ -56,11 +56,15 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 // expose it. It is kept short and explicit for that reason, and the isolation
 // suite covers every route regardless of which side of this it falls on.
 func unauthenticated(r *http.Request) bool {
+	if r.Method == http.MethodGet {
+		return r.URL.Path == "/v1/auth/providers"
+	}
 	if r.Method != http.MethodPost {
 		return false
 	}
 	switch r.URL.Path {
-	case "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/register", "/v1/auth/accept-invite":
+	case "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/register", "/v1/auth/accept-invite",
+		"/v1/auth/verify-code", "/v1/auth/resend-code", "/v1/auth/google", "/v1/auth/register/google":
 		return true
 	}
 	// Midtrans has no token: the webhook id names the shop and the

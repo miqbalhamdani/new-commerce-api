@@ -872,6 +872,12 @@ type AuditPage struct {
 	NextCursor *string      `json:"next_cursor"`
 }
 
+// AuthProviders defines model for AuthProviders.
+type AuthProviders struct {
+	// GoogleClientId Examples: 1234-abc.apps.googleusercontent.com
+	GoogleClientId *string `json:"google_client_id"`
+}
+
 // Brand defines model for Brand.
 type Brand struct {
 	ArchivedAt *time.Time         `json:"archived_at"`
@@ -1096,6 +1102,19 @@ type CustomerPage struct {
 // per-row results where an operation partially succeeds (§7.3, §7.5).
 type ErrorCode string
 
+// GoogleRegisterRequest defines model for GoogleRegisterRequest.
+type GoogleRegisterRequest struct {
+	IdToken string `json:"id_token"`
+
+	// ShopName Examples: Erigo
+	ShopName string `json:"shop_name"`
+}
+
+// GoogleSignInRequest defines model for GoogleSignInRequest.
+type GoogleSignInRequest struct {
+	IdToken string `json:"id_token"`
+}
+
 // ImportRequest defines model for ImportRequest.
 type ImportRequest struct {
 	// ColumnMapping CSV header → target: `title`, `sku`, `regular_price`, `sale_price`, `weight_grams`,
@@ -1113,6 +1132,12 @@ type ImportRequest struct {
 
 // ImportRequestOnConflict defines model for ImportRequest.OnConflict.
 type ImportRequestOnConflict string
+
+// InviteToken defines model for InviteToken.
+type InviteToken struct {
+	// Token Examples: inv_9c2e…
+	Token string `json:"token"`
+}
 
 // InviteUser defines model for InviteUser.
 type InviteUser struct {
@@ -1614,6 +1639,11 @@ type RegisterRequest struct {
 	ShopName string `json:"shop_name"`
 }
 
+// ResendCodeRequest defines model for ResendCodeRequest.
+type ResendCodeRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
 // Role One of the four seeded roles and everything it grants.
 type Role struct {
 	// Description One line a client can show next to the role in a picker.
@@ -1973,6 +2003,13 @@ type VariantUpdate struct {
 	WeightGrams  *int       `json:"weight_grams,omitempty"`
 }
 
+// VerifyCodeRequest defines model for VerifyCodeRequest.
+type VerifyCodeRequest struct {
+	// Code Examples: 482913
+	Code  string              `json:"code"`
+	Email openapi_types.Email `json:"email"`
+}
+
 // Cursor defines model for Cursor.
 type Cursor = string
 
@@ -2195,11 +2232,23 @@ type UpdateApiKeyJSONRequestBody = ApiKeyUpdate
 // AcceptInviteJSONRequestBody defines body for AcceptInvite for application/json ContentType.
 type AcceptInviteJSONRequestBody = AcceptInvite
 
+// GoogleSignInJSONRequestBody defines body for GoogleSignIn for application/json ContentType.
+type GoogleSignInJSONRequestBody = GoogleSignInRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
 // RegisterJSONRequestBody defines body for Register for application/json ContentType.
 type RegisterJSONRequestBody = RegisterRequest
+
+// RegisterWithGoogleJSONRequestBody defines body for RegisterWithGoogle for application/json ContentType.
+type RegisterWithGoogleJSONRequestBody = GoogleRegisterRequest
+
+// ResendCodeJSONRequestBody defines body for ResendCode for application/json ContentType.
+type ResendCodeJSONRequestBody = ResendCodeRequest
+
+// VerifyCodeJSONRequestBody defines body for VerifyCode for application/json ContentType.
+type VerifyCodeJSONRequestBody = VerifyCodeRequest
 
 // CreateBrandJSONRequestBody defines body for CreateBrand for application/json ContentType.
 type CreateBrandJSONRequestBody = BrandWrite
@@ -2518,18 +2567,33 @@ type ServerInterface interface {
 	// AcceptInvite Set a password from an invitation link and sign in
 	// (POST /auth/accept-invite)
 	AcceptInvite(w http.ResponseWriter, r *http.Request)
+	// GoogleSignIn Sign in with a Google ID token
+	// (POST /auth/google)
+	GoogleSignIn(w http.ResponseWriter, r *http.Request)
 	// Login Exchange an email and password for an access token
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
 	// Logout Revoke the current refresh token
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// AuthProviders The sign-in providers the admin offers
+	// (GET /auth/providers)
+	AuthProviders(w http.ResponseWriter, r *http.Request)
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(w http.ResponseWriter, r *http.Request)
 	// Register Open a shop; the owner confirms their email from a link
 	// (POST /auth/register)
 	Register(w http.ResponseWriter, r *http.Request)
+	// RegisterWithGoogle Open a shop with a Google ID token
+	// (POST /auth/register/google)
+	RegisterWithGoogle(w http.ResponseWriter, r *http.Request)
+	// ResendCode Send a signup's code and link again
+	// (POST /auth/resend-code)
+	ResendCode(w http.ResponseWriter, r *http.Request)
+	// VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
+	// (POST /auth/verify-code)
+	VerifyCode(w http.ResponseWriter, r *http.Request)
 	// ListBrands Brands, sorted by name
 	// (GET /brands)
 	ListBrands(w http.ResponseWriter, r *http.Request, params ListBrandsParams)
@@ -2734,6 +2798,12 @@ func (_ Unimplemented) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// GoogleSignIn Sign in with a Google ID token
+// (POST /auth/google)
+func (_ Unimplemented) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Login Exchange an email and password for an access token
 // (POST /auth/login)
 func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
@@ -2746,6 +2816,12 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// AuthProviders The sign-in providers the admin offers
+// (GET /auth/providers)
+func (_ Unimplemented) AuthProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Refresh Rotate the refresh token and issue a new access token
 // (POST /auth/refresh)
 func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
@@ -2755,6 +2831,24 @@ func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
 // Register Open a shop; the owner confirms their email from a link
 // (POST /auth/register)
 func (_ Unimplemented) Register(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RegisterWithGoogle Open a shop with a Google ID token
+// (POST /auth/register/google)
+func (_ Unimplemented) RegisterWithGoogle(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ResendCode Send a signup's code and link again
+// (POST /auth/resend-code)
+func (_ Unimplemented) ResendCode(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
+// (POST /auth/verify-code)
+func (_ Unimplemented) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3296,6 +3390,20 @@ func (siw *ServerInterfaceWrapper) AcceptInvite(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GoogleSignIn operation middleware
+func (siw *ServerInterfaceWrapper) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GoogleSignIn(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
@@ -3324,6 +3432,20 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// AuthProviders operation middleware
+func (siw *ServerInterfaceWrapper) AuthProviders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AuthProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Refresh operation middleware
 func (siw *ServerInterfaceWrapper) Refresh(w http.ResponseWriter, r *http.Request) {
 
@@ -3343,6 +3465,48 @@ func (siw *ServerInterfaceWrapper) Register(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Register(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegisterWithGoogle operation middleware
+func (siw *ServerInterfaceWrapper) RegisterWithGoogle(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegisterWithGoogle(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResendCode operation middleware
+func (siw *ServerInterfaceWrapper) ResendCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResendCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyCode operation middleware
+func (siw *ServerInterfaceWrapper) VerifyCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyCode(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5185,6 +5349,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/register", wrapper.Register)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/verify-code", wrapper.VerifyCode)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/resend-code", wrapper.ResendCode)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/providers", wrapper.AuthProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/google", wrapper.GoogleSignIn)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/register/google", wrapper.RegisterWithGoogle)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/accept-invite", wrapper.AcceptInvite)
 	})
 	r.Group(func(r chi.Router) {
@@ -5786,6 +5965,98 @@ func (response AcceptInvite422ApplicationProblemPlusJSONResponse) VisitAcceptInv
 	return err
 }
 
+type GoogleSignInRequestObject struct {
+	Body *GoogleSignInJSONRequestBody
+}
+
+type GoogleSignInResponseObject interface {
+	VisitGoogleSignInResponse(w http.ResponseWriter) error
+}
+
+type GoogleSignIn200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type GoogleSignIn200JSONResponse struct {
+	Body    Session
+	Headers GoogleSignIn200ResponseHeaders
+}
+
+func (response GoogleSignIn200JSONResponse) VisitGoogleSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GoogleSignIn401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GoogleSignIn401ApplicationProblemPlusJSONResponse) VisitGoogleSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GoogleSignIn422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response GoogleSignIn422ApplicationProblemPlusJSONResponse) VisitGoogleSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GoogleSignIn429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response GoogleSignIn429ApplicationProblemPlusJSONResponse) VisitGoogleSignInResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type LoginRequestObject struct {
 	Body *LoginJSONRequestBody
 }
@@ -5917,6 +6188,27 @@ func (response Logout401ApplicationProblemPlusJSONResponse) VisitLogoutResponse(
 	return err
 }
 
+type AuthProvidersRequestObject struct {
+}
+
+type AuthProvidersResponseObject interface {
+	VisitAuthProvidersResponse(w http.ResponseWriter) error
+}
+
+type AuthProviders200JSONResponse AuthProviders
+
+func (response AuthProviders200JSONResponse) VisitAuthProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RefreshRequestObject struct {
 }
 
@@ -6001,6 +6293,224 @@ type Register429ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response Register429ApplicationProblemPlusJSONResponse) VisitRegisterResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegisterWithGoogleRequestObject struct {
+	Body *RegisterWithGoogleJSONRequestBody
+}
+
+type RegisterWithGoogleResponseObject interface {
+	VisitRegisterWithGoogleResponse(w http.ResponseWriter) error
+}
+
+type RegisterWithGoogle201ResponseHeaders struct {
+	SetCookie *string
+}
+
+type RegisterWithGoogle201JSONResponse struct {
+	Body    Session
+	Headers RegisterWithGoogle201ResponseHeaders
+}
+
+func (response RegisterWithGoogle201JSONResponse) VisitRegisterWithGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegisterWithGoogle401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response RegisterWithGoogle401ApplicationProblemPlusJSONResponse) VisitRegisterWithGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegisterWithGoogle422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response RegisterWithGoogle422ApplicationProblemPlusJSONResponse) VisitRegisterWithGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RegisterWithGoogle429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response RegisterWithGoogle429ApplicationProblemPlusJSONResponse) VisitRegisterWithGoogleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResendCodeRequestObject struct {
+	Body *ResendCodeJSONRequestBody
+}
+
+type ResendCodeResponseObject interface {
+	VisitResendCodeResponse(w http.ResponseWriter) error
+}
+
+type ResendCode202Response struct {
+}
+
+func (response ResendCode202Response) VisitResendCodeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ResendCode422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ResendCode422ApplicationProblemPlusJSONResponse) VisitResendCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResendCode429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response ResendCode429ApplicationProblemPlusJSONResponse) VisitResendCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyCodeRequestObject struct {
+	Body *VerifyCodeJSONRequestBody
+}
+
+type VerifyCodeResponseObject interface {
+	VisitVerifyCodeResponse(w http.ResponseWriter) error
+}
+
+type VerifyCode200JSONResponse InviteToken
+
+func (response VerifyCode200JSONResponse) VisitVerifyCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyCode422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyCode422ApplicationProblemPlusJSONResponse) VisitVerifyCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type VerifyCode429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response VerifyCode429ApplicationProblemPlusJSONResponse) VisitVerifyCodeResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -10174,18 +10684,33 @@ type StrictServerInterface interface {
 	// AcceptInvite Set a password from an invitation link and sign in
 	// (POST /auth/accept-invite)
 	AcceptInvite(ctx context.Context, request AcceptInviteRequestObject) (AcceptInviteResponseObject, error)
+	// GoogleSignIn Sign in with a Google ID token
+	// (POST /auth/google)
+	GoogleSignIn(ctx context.Context, request GoogleSignInRequestObject) (GoogleSignInResponseObject, error)
 	// Login Exchange an email and password for an access token
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
 	// Logout Revoke the current refresh token
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// AuthProviders The sign-in providers the admin offers
+	// (GET /auth/providers)
+	AuthProviders(ctx context.Context, request AuthProvidersRequestObject) (AuthProvidersResponseObject, error)
 	// Refresh Rotate the refresh token and issue a new access token
 	// (POST /auth/refresh)
 	Refresh(ctx context.Context, request RefreshRequestObject) (RefreshResponseObject, error)
 	// Register Open a shop; the owner confirms their email from a link
 	// (POST /auth/register)
 	Register(ctx context.Context, request RegisterRequestObject) (RegisterResponseObject, error)
+	// RegisterWithGoogle Open a shop with a Google ID token
+	// (POST /auth/register/google)
+	RegisterWithGoogle(ctx context.Context, request RegisterWithGoogleRequestObject) (RegisterWithGoogleResponseObject, error)
+	// ResendCode Send a signup's code and link again
+	// (POST /auth/resend-code)
+	ResendCode(ctx context.Context, request ResendCodeRequestObject) (ResendCodeResponseObject, error)
+	// VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
+	// (POST /auth/verify-code)
+	VerifyCode(ctx context.Context, request VerifyCodeRequestObject) (VerifyCodeResponseObject, error)
 	// ListBrands Brands, sorted by name
 	// (GET /brands)
 	ListBrands(ctx context.Context, request ListBrandsRequestObject) (ListBrandsResponseObject, error)
@@ -10560,6 +11085,37 @@ func (sh *strictHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GoogleSignIn operation middleware
+func (sh *strictHandler) GoogleSignIn(w http.ResponseWriter, r *http.Request) {
+	var request GoogleSignInRequestObject
+
+	var body GoogleSignInJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GoogleSignIn(ctx, request.(GoogleSignInRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GoogleSignIn")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GoogleSignInResponseObject); ok {
+		if err := validResponse.VisitGoogleSignInResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Login operation middleware
 func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var request LoginRequestObject
@@ -10615,6 +11171,30 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AuthProviders operation middleware
+func (sh *strictHandler) AuthProviders(w http.ResponseWriter, r *http.Request) {
+	var request AuthProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AuthProviders(ctx, request.(AuthProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AuthProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AuthProvidersResponseObject); ok {
+		if err := validResponse.VisitAuthProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Refresh operation middleware
 func (sh *strictHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var request RefreshRequestObject
@@ -10663,6 +11243,99 @@ func (sh *strictHandler) Register(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RegisterResponseObject); ok {
 		if err := validResponse.VisitRegisterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RegisterWithGoogle operation middleware
+func (sh *strictHandler) RegisterWithGoogle(w http.ResponseWriter, r *http.Request) {
+	var request RegisterWithGoogleRequestObject
+
+	var body RegisterWithGoogleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RegisterWithGoogle(ctx, request.(RegisterWithGoogleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RegisterWithGoogle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RegisterWithGoogleResponseObject); ok {
+		if err := validResponse.VisitRegisterWithGoogleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResendCode operation middleware
+func (sh *strictHandler) ResendCode(w http.ResponseWriter, r *http.Request) {
+	var request ResendCodeRequestObject
+
+	var body ResendCodeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResendCode(ctx, request.(ResendCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResendCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResendCodeResponseObject); ok {
+		if err := validResponse.VisitResendCodeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// VerifyCode operation middleware
+func (sh *strictHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
+	var request VerifyCodeRequestObject
+
+	var body VerifyCodeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.VerifyCode(ctx, request.(VerifyCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "VerifyCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(VerifyCodeResponseObject); ok {
+		if err := validResponse.VisitVerifyCodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

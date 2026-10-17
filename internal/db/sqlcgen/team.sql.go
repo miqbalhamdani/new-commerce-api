@@ -42,6 +42,61 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 	return i, err
 }
 
+const activateInvited = `-- name: ActivateInvited :one
+UPDATE users SET status = 'active' WHERE id = $1 AND status = 'invited'
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+`
+
+// A Google sign-in by an invited user (P1-086): the verified email accepts the
+// invitation, with no password (BR-020, BR-026).
+func (q *Queries) ActivateInvited(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, activateInvited, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createActiveOwner = `-- name: CreateActiveOwner :one
+INSERT INTO users (id, tenant_id, email, name, role, status)
+VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, 'owner', 'active')
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+`
+
+type CreateActiveOwnerParams struct {
+	ID    uuid.UUID
+	Email string
+	Name  string
+}
+
+// A Google signup (P1-086): Google confirmed the email, so the owner is active
+// with no password (BR-020).
+func (q *Queries) CreateActiveOwner(ctx context.Context, arg CreateActiveOwnerParams) (User, error) {
+	row := q.db.QueryRow(ctx, createActiveOwner, arg.ID, arg.Email, arg.Name)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createTenant = `-- name: CreateTenant :one
 INSERT INTO tenants (id, name, slug, order_prefix)
 VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)

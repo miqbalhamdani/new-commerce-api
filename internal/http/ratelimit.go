@@ -63,3 +63,15 @@ func (l *RateLimiter) checkLogin(w http.ResponseWriter, r *http.Request, scope, 
 	}
 	return res.Allowed
 }
+
+// checkGoogle counts a staff Google sign-in or sign-up against the per-IP
+// half of the login limit only: the token names nobody until it is checked
+// (BR-014).
+func (l *RateLimiter) checkGoogle(w http.ResponseWriter, r *http.Request) bool {
+	res := l.limits.Check(r.Context(), ratelimit.Login("google", "", clientIP(r).String())[1:]...)
+	res.Write(w.Header())
+	if !res.Allowed {
+		writeError(w, r, apperrors.RateLimited())
+	}
+	return res.Allowed
+}

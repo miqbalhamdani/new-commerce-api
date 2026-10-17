@@ -24,23 +24,30 @@ The link works for 7 days. If it has expired, ask %s to send a new invitation.
 	return subject, text, htmlBody
 }
 
-// Signup confirms a new owner's email (P1-084, BR-026, BR-128), in English
-// (BR-016).
-func Signup(shop, name, link string) (subject, text, htmlBody string) {
-	subject = "Confirm your email to open " + shop
+// Signup confirms a new owner's email (P1-084, P1-086, BR-026, BR-128), in
+// English (BR-016): the 6-digit code for the screen they are on, and the link
+// for anyone who closed it.
+func Signup(shop, name, code, link string) (subject, text, htmlBody string) {
+	subject = code + " is your Belli.id code"
 	text = fmt.Sprintf(`Hi %s,
 
-Confirm your email and choose a password to open %s on Belli.id:
+Your code to open %s on Belli.id:
+
+    %s
+
+It works for 30 minutes. Or confirm your email and choose a password with this link, which works for 7 days:
 %s
 
-The link works for 7 days. If it has expired, register again with the same email to get a new one.
+If both have expired, register again with the same email to get new ones.
 If you did not sign up, you can ignore this email.
-`, name, shop, link)
+`, name, shop, code, link)
 	htmlBody = fmt.Sprintf(`<p>Hi %s,</p>
-<p><a href="%s">Confirm your email and choose a password</a> to open <strong>%s</strong> on Belli.id.</p>
-<p>The link works for 7 days. If it has expired, register again with the same email to get a new one.
+<p>Your code to open <strong>%s</strong> on Belli.id:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:6px">%s</p>
+<p>It works for 30 minutes. Or <a href="%s">confirm your email and choose a password</a> with this link, which works for 7 days.</p>
+<p>If both have expired, register again with the same email to get new ones.
 If you did not sign up, you can ignore this email.</p>`,
-		html.EscapeString(name), html.EscapeString(link), html.EscapeString(shop))
+		html.EscapeString(name), html.EscapeString(shop), html.EscapeString(code), html.EscapeString(link))
 	return subject, text, htmlBody
 }
 

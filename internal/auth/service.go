@@ -24,6 +24,16 @@ import (
 // pursuing.
 var ErrUnauthenticated = errors.New("unauthenticated")
 
+// ErrInvalidCode is every way a signup code can fail: wrong, expired, spent,
+// or no unconfirmed signup behind the email. One answer, so a code says
+// nothing about the email (BR-021, BR-026).
+var ErrInvalidCode = errors.New("invalid code")
+
+// ErrNoAccount is a Google sign-in whose verified email has no user. Unlike a
+// password failure it may say so: the caller has just proved the email is
+// theirs (BR-020).
+var ErrNoAccount = errors.New("no account for this google email")
+
 // Session is what login and refresh return.
 type Session struct {
 	AccessToken  string
@@ -306,4 +316,69 @@ func (s *Service) AcceptInvite(ctx context.Context, invites *InviteSigner, token
 		return Session{}, err
 	}
 	return s.issue(ctx, inv.TenantID, inv.UserID, role, nil)
+}
+
+// VerifyCode exchanges a signup's emailed code for the invitation token its
+// link carries (BR-026). The code only confirms the address: the session still
+// needs a password, through AcceptInvite. The user is found through the
+// staff-login lookup (BR-003).
+func (s *Service) VerifyCode(ctx context.Context, invites *InviteSigner, email, code string) (string, error) {
+	u, err := s.store.LookupUserForAuth(ctx, email)
+	if errors.Is(err, db.ErrNotFound) {
+		return "", ErrInvalidCode
+	}
+	if err != nil {
+		return "", err
+	}
+	if u.Status != "invited" || u.PasswordHash != nil || !invites.CheckCode(u.ID, u.TenantID, code, s.now()) {
+		return "", ErrInvalidCode
+	}
+	return invites.Mint(u.ID, u.TenantID, s.now()), nil
+}
+
+// GoogleSignIn signs in the user a Google ID token's verified email names
+// (BR-020), with the platform's client ID. An invited user has just proved the
+// address, so their invitation is accepted first, with no password. A token
+// Google does not vouch for, or a disabled user, is ErrUnauthenticated; no
+// user is ErrNoAccount.
+func (s *Service) GoogleSignIn(ctx context.Context, google *GoogleVerifier, clientID, idToken string) (Session, error) {
+	id, err := google.Verify(ctx, idToken, clientID)
+	if err != nil {
+		return Session{}, ErrUnauthenticated
+	}
+	u, err := s.store.LookupUserForAuth(ctx, id.Email)
+	if errors.Is(err, db.ErrNotFound) {
+		return Session{}, ErrNoAccount
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	switch u.Status {
+	case "active":
+	case "invited":
+		tctx := tenant.NewActorContext(tenant.NewContext(ctx, u.TenantID), tenant.Actor{UserID: u.ID})
+		err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+			accepted, err := sqlcgen.New(tx).ActivateInvited(tctx, u.ID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrUnauthenticated // disabled or accepted in between
+			}
+			if err != nil {
+				return err
+			}
+			return db.Audit(tctx, tx, db.AuditEntry{Action: "user.accept_invite", SubjectType: "user",
+				SubjectID: accepted.ID.String(), After: map[string]any{"status": accepted.Status, "via": "google"}})
+		})
+		if err != nil {
+			return Session{}, err
+		}
+	default:
+		return Session{}, ErrUnauthenticated
+	}
+	return s.issue(ctx, u.TenantID, u.ID, u.Role, nil)
+}
+
+// SessionFor signs in a user the caller has just authenticated another way --
+// an owner whose Google signup created them (BR-020). Nothing else may call it.
+func (s *Service) SessionFor(ctx context.Context, tenantID, userID uuid.UUID, role string) (Session, error) {
+	return s.issue(ctx, tenantID, userID, role, nil)
 }
