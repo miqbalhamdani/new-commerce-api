@@ -40,8 +40,6 @@ GENERATED = internal/http/gen.go internal/storefront/gen.go internal/storefront/
 ## generate: contracts/openapi.yaml -> internal/http, contracts/storefront.yaml ->
 ##           internal/storefront, db/ -> internal/db/sqlcgen
 generate:
-	@test -f contracts/openapi.yaml \
-		|| { echo "contracts/ is empty. Run: git submodule update --init"; exit 1; }
 	@go tool oapi-codegen -config oapi-codegen.yaml contracts/openapi.yaml
 	@go tool oapi-codegen -config oapi-codegen.storefront.yaml contracts/storefront.yaml
 	@cp contracts/storefront.yaml internal/storefront/storefront.yaml

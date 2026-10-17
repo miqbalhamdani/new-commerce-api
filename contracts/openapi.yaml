@@ -1,0 +1,3843 @@
+openapi: 3.1.0
+
+info:
+  title: New Commerce API
+  version: 2.12.0
+  description: |
+    Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
+    own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
+
+    **This file is a skeleton plus the paths already built.** It carries the conventions from
+    `04-api-spec.md` §1 that every endpoint depends on — authentication, the error envelope,
+    money, pagination, optimistic concurrency, rate limiting — and only the endpoints whose
+    backlog item is done: `P1-011` the three auth paths, `P1-012` roles, `P1-021` brands, `P1-024` categories, `P1-028` products, `P1-029` variants, `P1-060` jobs, `P1-040` the variant matrix, `P1-043` media, `P1-072` bulk, `P1-073` import, `P1-064` users, `P1-071` settings, `P1-077` the audit log, `P1-102` order status routes, `P1-103` the order list, `P1-104` order detail, `P1-105` manual orders, `P1-106` customers, `P1-107` order export, `P1-200` API keys, `P1-216` storefront settings, `P1-218` shipping rates, `P1-221` the Midtrans webhook.
+
+    Every other path is added by the backlog item that builds it (`05-backlog.md`). The API repo
+    generates a strict server interface from this file, so a path listed here before its handler
+    exists breaks the build.
+
+    That leaves this file **incomplete** relative to `04-api-spec.md`, not in conflict with it.
+    For anything both files describe they must agree: change one, change the other, in the same
+    commit.
+
+    `/healthz` is deliberately absent and stays that way. A liveness probe is a property of how
+    the service is deployed, not of the contract, and putting it here would make every future
+    change to it a contract change.
+
+servers:
+  - url: https://api.{domain}/v1
+    description: |
+      Production. The domain is still undecided — see `05-backlog.md`, `P1-001`.
+    variables:
+      domain:
+        default: example.com
+  - url: http://localhost:8080/v1
+    description: Local development, against the host services from `P1-000`.
+
+# Every admin endpoint requires a staff bearer token unless it opts out with `security: []`.
+# The unauthenticated ones are login, refresh, accept-invite and the Midtrans webhook. Storefront credentials live in
+# storefront.yaml, the storefront's own document.
+security:
+  - bearerAuth: []
+
+paths:
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Exchange an email and password for an access token
+      description: |
+        The tenant is resolved from the user row -- `email` is unique across the whole system, so
+        it identifies exactly one user and therefore exactly one tenant. There is deliberately no
+        tenant, workspace or subdomain parameter.
+
+        On success the refresh token is set as an httpOnly, Secure, SameSite=Lax cookie. It is
+        never in the response body, where a script could read it.
+
+        A wrong password, an unknown email and a disabled account all return the same `401`. Any
+        difference between them tells an attacker which emails exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              description: The refresh token, httpOnly, Secure, SameSite=Lax.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/refresh:
+    post:
+      operationId: refresh
+      summary: Rotate the refresh token and issue a new access token
+      description: |
+        Reads the refresh token from the cookie, never from the body. Unauthenticated by
+        necessity -- this is what you call *because* the access token has expired.
+
+        Each call issues a new refresh token and revokes the one presented. **Presenting a token
+        that was already rotated means it was stolen**: the entire rotation chain is revoked and
+        every session for that user ends, rather than that one request being rejected.
+      security: []
+      responses:
+        "200":
+          description: Rotated.
+          headers:
+            Set-Cookie:
+              description: The new refresh token. The old one is revoked.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current refresh token
+      description: |
+        Revokes the refresh token in the cookie and clears it. The access token is not revoked --
+        it is stateless and expires on its own within 15 minutes.
+
+        Idempotent: logging out twice, or with no cookie at all, is still `204`. There is nothing
+        useful to tell a caller about a session that is already gone.
+      responses:
+        "204":
+          description: Signed out.
+          headers:
+            Set-Cookie:
+              description: Clears the refresh token cookie.
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/accept-invite:
+    post:
+      operationId: acceptInvite
+      summary: Set a password from an invitation link and sign in
+      description: |
+        The token is the one in the invitation email: signed, expiring after 7 days, never
+        stored (BR-026). It works while the user is `invited`; an expired, forged or already-used
+        token is `422` on `token`. On success the user is `active` and signed in, with the refresh
+        cookie set, exactly like login.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInvite"
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              description: The refresh token, httpOnly, Secure, SameSite=Lax.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /roles:
+    get:
+      operationId: listRoles
+      summary: The four seeded roles and the permissions each grants
+      description: |
+        Fixed and identical for every tenant. There are no custom roles and no per-user
+        overrides, so this is a constant -- it exists so a client can render a role picker and
+        explain what a role means without hardcoding the matrix from `04-api-spec.md` §3.
+
+        Requires `users:read`, because it is part of the team-management surface. An `ops` user
+        gets `403` naming that permission (BR-024).
+      responses:
+        "200":
+          description: The seeded roles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /brands:
+    get:
+      operationId: listBrands
+      summary: Brands, sorted by name
+      description: |
+        Cursor-paginated and sorted by `name`. `q` matches the name. Archived brands are listed
+        only with `archived=true` (BR-012). Requires `brands:read`.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of brands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createBrand
+      summary: Create a brand
+      description: |
+        `slug` is optional and defaults to `slugify(name)`. A slug that matches another brand's
+        in this tenant, deleted ones included, is `422` on `slug` when sent, else on `name`
+        (BR-030). Requires `brands:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /brands/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBrand
+      summary: One brand
+      responses:
+        "200":
+          description: The brand.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateBrand
+      summary: Rename a brand or change its slug
+      description: |
+        Without `slug`, the slug is re-derived from the new name. No `If-Match`: brands have no
+        version and the last save wins (BR-010). Requires `brands:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandWrite"
+      responses:
+        "200":
+          description: The renamed brand.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Brand"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveBrand
+      summary: Delete a brand
+      description: |
+        Soft delete: sets `archived_at` and keeps the row, and clears `brand_id` on every product
+        that carries it (BR-012). Never blocked by products. Requires `brands:write`.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /categories:
+    get:
+      operationId: listCategories
+      summary: Categories, flat, sorted by kind then path
+      description: |
+        Unpaginated; the client builds the tree from `parent_id`. `kind` limits to one tree,
+        `parent_id` starts below that node, `depth` limits how many levels below it (or below the
+        roots) come back. Archived categories are not listed. Requires `categories:read`.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CategoryKind"
+        - name: parent_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createCategory
+      summary: Create a category
+      description: |
+        `path` is derived from the parent and the label and is never accepted (BR-008,
+        BR-032). `label` defaults to the slugified name; a sent label that a sibling already
+        has is `422` on `label`. A parent must be a live category of the same kind in this
+        tenant, else `422` on `parent_id`. Same-named siblings get distinct derived labels
+        (BR-035). Requires `categories:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCategory
+      summary: One category, with the counts the move dialog needs
+      description: |
+        `descendant_count` is live categories below this one; `product_count` is live products
+        linked anywhere in the subtree (BR-033).
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCategory
+      summary: Rename, relabel or move a category
+      description: |
+        A rename, relabel or move rewrites every descendant's path in one statement and leaves
+        product links alone (BR-032, BR-033). `label: null` goes back to the derived label. Moving beneath itself or a descendant is `422` on
+        `parent_id` (BR-034); `parent_id: null` makes it a root. `kind` cannot change. No
+        `If-Match`: last save wins (BR-010). Requires `categories:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: The category with its new path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveCategory
+      summary: Delete a category
+      description: |
+        Soft-deletes (sets `archived_at`, BR-012) and removes the category from its products,
+        bumping their `version`. A category with live children is `409 category_in_use`, with
+        `errors` naming `children` and its count (BR-036). Requires `categories:write`.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /products:
+    get:
+      operationId: listProducts
+      summary: Products, filtered and cursor-paginated
+      description: |
+        `q` is a trigram match on the title, and an exact SKU also matches. `category_id`
+        includes its descendants. Archived products appear only with `status=archived`. Each
+        row's `categories` are its main-tree ones (`kind = category`), by path; an empty list
+        means it cannot be published (BR-038). `price_min` and `price_max` come from
+        `variant_price()` over live variants (BR-046), `null` when there are none. Target: p95
+        under 600 ms at 10k products (P1-030). Requires `products:read`.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ProductStatus"
+        - name: brand_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["-created_at", "-updated_at", "title"]
+            default: "-created_at"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of products.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createProduct
+      summary: Create a product
+      description: |
+        New products are `draft` (BR-037). The slug is derived from the title, with `-2`, `-3`, …
+        when another product of this tenant (archived included) holds it; it is editable later
+        and never follows the title (BR-042). `brand_id` and `category_ids` must name live rows
+        of this tenant. Requires `products:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /products/bulk:
+    post:
+      operationId: bulkProducts
+      summary: Create or update up to 500 rows keyed on SKU
+      description: |
+        Each row is its own savepoint: one bad row fails alone, the rest apply, and the answer
+        is `200` with a result per row by request index (BR-043). A row whose SKU exists is
+        updated (`on_conflict: update`) or reported as `duplicate_sku` (`error`). A row whose
+        SKU is new, or that has none, creates a draft product with one variant and needs
+        `title`. `status` applies to the variant's product; `active` runs the publish check for
+        that row (BR-038). Requires `products:write` and `variants:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkRequest"
+      responses:
+        "200":
+          description: Per-row results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /products/import:
+    post:
+      operationId: importProducts
+      summary: Import a CSV uploaded with presign purpose product_import
+      description: |
+        Starts a `product_import` job and answers `202 {job_id}`; poll `GET /jobs/{id}` (BR-060).
+        `r2_key` is the key the presign returned; the job takes the id in it. The worker
+        streams the file, detects `,` or `;` and a BOM, maps columns, and upserts in batches of
+        500. Prices are whole rupiah. Rows with the same `title` become one product, and
+        `option:<Name>` columns build its variants. Every failed row lands in `errors.csv` with
+        its original line number (BR-044). Requires `products:write` and `variants:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportRequest"
+      responses:
+        "202":
+          description: Queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /products/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getProduct
+      summary: One product
+      responses:
+        "200":
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateProduct
+      summary: Edit a product
+      description: |
+        `If-Match` is required (BR-010). `null` clears `description` or `brand_id`;
+        `category_ids` and `attributes` replace the whole value. `slug` must be lower-case
+        `a-z0-9-` and unique in the tenant. `option_names` changes only through the variant
+        matrix and is `422` here. `status: "active"` runs the publish check (`422
+        publish_check_failed`, BR-038); `"draft"` unpublishes; archiving is `DELETE`.
+        Requires `products:write`.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: The product, with its new version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveProduct
+      summary: Archive a product
+      description: |
+        Sets `status` to `archived` and `archived_at`; orders that reference it are untouched
+        (BR-012, BR-045). There is no restore in this version. Requires `products:write`.
+      responses:
+        "204":
+          description: Archived.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/variants:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listVariants
+      summary: A product's variants, in grid order
+      description: Unpaginated. Archived variants only with `archived=true`. Requires `variants:read`.
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The variants.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createVariant
+      summary: Add one variant
+      description: |
+        `option_values` has one entry per `option_names` entry and is unique among the product's
+        live variants (BR-040); it changes only through the matrix. A SKU already used in this
+        tenant is `409 duplicate_sku` naming the product that holds it (BR-039). A sale price not
+        below the regular price, or a sale that ends before it starts, is `422` (BR-046).
+        Requires `variants:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariantCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /variants/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateVariant
+      summary: Edit one variant
+      description: |
+        `If-Match` on the variant's version (BR-010). `regular_price`, `sale_price` and the
+        schedule are writable; `price` and `on_sale` are read-only, and `"sale_price": null` ends
+        the sale (BR-046). `option_values` changes only through the matrix. Requires
+        `variants:write`.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariantUpdate"
+      responses:
+        "200":
+          description: The variant, with its new version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveVariant
+      summary: Archive one variant
+      description: Archives (BR-012); orders keep their lines (BR-045). Requires `variants:write`.
+      responses:
+        "204":
+          description: Archived.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /jobs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getJob
+      summary: A background job's progress and result
+      description: |
+        Long work answers `202 {job_id}`; this is what the client polls (BR-060). The permission is
+        the job's own: `products:write` for `product_import`, `exports:read` for `order_export`,
+        `channels:read` for `channel_import`, `media:read` for `image_derivatives`,
+        `customers:purge` for `customer_purge`. Every `GET` of
+        a finished job signs fresh 15-minute URLs (BR-063); the database stores keys.
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/variant-matrix:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      operationId: putVariantMatrix
+      summary: Save the whole variant grid in one request
+      description: |
+        `If-Match` is the **product's** version (BR-010). Rows match live variants by
+        `option_values`; a row matching only an archived variant restores it; anything else is
+        created (BR-041). In a row, an omitted field is left as it is and `null` clears a
+        nullable one, as on `PATCH`. `archive_missing: true` archives the live variants not
+        sent; changing `option_names` needs it.
+
+        The whole request is `422` before any write when a row does not fit `option_names`,
+        two rows share `option_values`, or a Colour axis is not at position 0 (BR-040).
+        Otherwise one bad row fails alone and the answer is `200` with that row's error; the
+        product's version goes up once. Target: 100 cells in under 2 s (P1-041). Requires
+        `variants:write`.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VariantMatrix"
+      responses:
+        "200":
+          description: Per-row results and counts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantMatrixResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /media/presign:
+    post:
+      operationId: presignMedia
+      summary: Sign a direct upload to the object store
+      description: |
+        Bytes go straight from the browser to R2 with the returned URL; they never pass through
+        the API (BR-051). `product_image`: JPEG, PNG or WebP up to 20 MB, `product_id` required,
+        `media:write`. `product_import`: CSV up to 50 MB, no `product_id`, `products:write`; the
+        key carries the future job's id. The key contains the content hash (BR-053). The URL
+        lives 10 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignRequest"
+      responses:
+        "200":
+          description: Where to PUT the bytes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /media/confirm:
+    post:
+      operationId: confirmMedia
+      summary: Record an uploaded image on a product
+      description: |
+        Checks the object's type and size against the store's `HEAD`; a key never uploaded is
+        `422` on `r2_key`. The image is appended after the product's others. Derivatives arrive
+        within ~15 s (BR-052). Confirming the same key twice returns the same image. Requires
+        `media:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmMedia"
+      responses:
+        "201":
+          description: The image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /media/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateMedia
+      summary: Attach an image to a variant, or back to the product
+      description: |
+        `variant_id` must be a variant of the image's product; `null` makes it product-level. No
+        `If-Match` (BR-010). Requires `media:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaUpdate"
+      responses:
+        "200":
+          description: The image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Media"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: deleteMedia
+      summary: Delete an image
+      description: |
+        Media is the one thing truly deleted (BR-012). The stored objects go once no other row
+        uses the key. Requires `media:write`.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/media/order:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: orderMedia
+      summary: Reorder a product's images
+      description: |
+        `media_ids` is every image of the product, in the new order; anything else is `422`.
+        Requires `media:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaOrder"
+      responses:
+        "200":
+          description: The images, by position.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /users:
+    get:
+      operationId: listUsers
+      summary: The shop's staff
+      description: Requires `users:read`. Sorted by when they were added.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [invited, active, disabled]
+        - name: role
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [owner, admin, ops, viewer]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of users.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /users/invite:
+    post:
+      operationId: inviteUser
+      summary: Invite someone by email
+      description: |
+        Creates an `invited` user and emails them a link after the change commits (BR-026,
+        BR-128). An email already used in any shop is `422` on `email` (BR-020). Only an owner
+        can invite an owner (BR-023). Requires `users:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteUser"
+      responses:
+        "201":
+          description: The invited user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /users/{id}/resend-invite:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: resendInvite
+      summary: Email the invitation again
+      description: Only while the user is `invited`; otherwise `422`. Requires `users:write`.
+      responses:
+        "204":
+          description: Sent.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateUser
+      summary: Change a user's role, or disable or re-enable them
+      description: |
+        No `If-Match` (BR-010). `status` is `active` (re-enable a disabled user) or `disabled`;
+        an invited user becomes active only by accepting. Disabling revokes their refresh
+        tokens, so they are out within 15 minutes (BR-027). Only an owner can grant `owner` or
+        change an owner (BR-023), else `403`. The last active owner cannot be demoted or
+        disabled (`422`). Requires `users:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: disableUser
+      summary: Disable a user
+      description: Sets `disabled`; the row is never deleted (BR-027). Same rules as `PATCH`.
+      responses:
+        "204":
+          description: Disabled.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /settings:
+    get:
+      operationId: getSettings
+      summary: The shop's own settings
+      description: Requires `settings:read` (owner, admin, viewer).
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      operationId: updateSettings
+      summary: Change the shop's name, time zone or order prefix
+      description: |
+        Only the owner (`settings:write`, BR-029). `timezone` is an IANA name; it is for
+        display only, the wire stays WIB (BR-007). `order_prefix` is 2–6 of `A-Z0-9` and applies
+        to new orders only (BR-077). `id`, `slug` and `status` are not writable (BR-008). No
+        `If-Match`: last save wins (BR-010). There is no currency setting (BR-029).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /storefront-settings:
+    get:
+      operationId: getStorefrontSettings
+      summary: How the shop's website sells
+      description: |
+        Contact email, Google sign-in, shipping origin and couriers, and payment methods. The
+        Midtrans server key is never returned: `midtrans_server_key_set` says whether there is
+        one (BR-129). Requires `settings:read` (owner, admin, viewer).
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorefrontSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      operationId: updateStorefrontSettings
+      summary: Change how the shop's website sells
+      description: |
+        Only the owner (`settings:write`). Send only what changes (BR-009); `null` clears a
+        nullable field, the server key included. `midtrans_server_key` is write-only and stored
+        envelope-encrypted (BR-129). Enabling Midtrans without its environment, client key and
+        server key is `422`, and so is turning off both payment methods (BR-122).
+        `origin_postal_code` is 5 digits and `shipping_couriers` are Biteship courier codes
+        (BR-120). No `If-Match` (BR-010).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorefrontSettingsUpdate"
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorefrontSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      summary: The shop's storefront API keys
+      description: |
+        Requires `api_keys:read` (owner, admin). Unpaginated, newest first; revoked keys are not
+        listed. The key itself is never returned again after creation (BR-028).
+      responses:
+        "200":
+          description: Every live key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createApiKey
+      summary: Create a storefront API key
+      description: |
+        The plaintext `key` (`sf_live_…`) is in this response and nowhere else, ever; only its
+        SHA-256 is stored (BR-028). `allowed_origin` is required: one exact `scheme://host[:port]`
+        in lower case, no path, no wildcard, no trailing slash, no default port — anything else is
+        `422` (BR-083). A website on two origins needs one key per origin. Requires
+        `api_keys:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreate"
+      responses:
+        "201":
+          description: The key, with its plaintext shown this once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /api-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateApiKey
+      summary: Rename a key or change its allowed origin
+      description: |
+        No `If-Match`: last save wins (BR-010). Same `allowed_origin` rule as create. A revoked
+        key is `404`. Requires `api_keys:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyUpdate"
+      responses:
+        "200":
+          description: The key, without its plaintext.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke a key
+      description: |
+        Sets `revoked_at`; keys are revoked, never deleted (BR-028). Storefront requests with it
+        fail within 60 s, the resolution cache's lifetime (BR-085). A key already revoked is
+        `404`. Requires `api_keys:write`.
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /audit-log:
+    get:
+      operationId: listAuditLog
+      summary: Who changed what, newest first
+      description: |
+        Requires `audit_log:read` (owner, admin). `actor` is `null` for the system (import worker,
+        retention job). `from` and `to` take an RFC 3339 time with an offset, or a date, which
+        means midnight WIB (BR-007). The row's internal id is never exposed (BR-005); the cursor
+        is opaque (BR-018).
+      parameters:
+        - name: subject_type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: subject_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /shipping/rates:
+    post:
+      operationId: shippingRates
+      summary: Quote shipping for a manual order
+      description: |
+        The same quote as the storefront's (§11.6) for lines the order would have: the shop's origin
+        and couriers, the variants' weights, cached 10 minutes (BR-120, BR-121). A manual order
+        sends one of these back as `shipping_option`. Requires `orders:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShippingRatesRequest"
+      responses:
+        "200":
+          description: The options, cheapest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShippingQuote"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+
+  /webhooks/midtrans/{webhook_id}:
+    parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: midtransNotification
+      summary: Midtrans reports a payment
+      description: |
+        Called by Midtrans, never by a person: no token, no API key, no CORS (§11.10). The
+        `webhook_id` names the shop; the notification is trusted only once its `signature_key`
+        verifies with that shop's server key, and what it says is confirmed with Midtrans' Get
+        Status API before anything changes (BR-003, BR-124).
+
+        - Unknown `webhook_id`: `404`. Bad signature: `401`, nothing changes.
+        - Get Status not answering: `503`, so Midtrans retries.
+        - Otherwise `200`, whether or not anything changed: a replay, an unknown order id, or a
+          status that changes nothing are all answered `200` (BR-125).
+        - `settlement`, or `capture` with `fraud_status` `accept`, pays the attempt and moves a
+          pending order to `paid` (BR-074). An amount other than the attempt's is
+          `amount_mismatch`, flagged for an operator, and never pays. `expire`, `cancel` and
+          `deny` fail the attempt; the order stays `pending`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MidtransNotification"
+      responses:
+        "200":
+          description: Received.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Midtrans' Get Status API did not answer; Midtrans retries.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /orders:
+    get:
+      operationId: listOrders
+      summary: Orders, filtered and cursor-paginated
+      description: |
+        The ops workspace (BR-075). `status` repeats to OR values; the saved views are plain
+        filters — To confirm payment `status=pending`, To ship `status=paid&status=processing`,
+        Shipped `status=shipped`, Cancelled refund owed `refund_owed=true`, which returns exactly
+        the cancelled orders that were paid and not yet refunded. `q` matches `order_number` and
+        the customer's name, email and phone. `placed_from` and `placed_to` take an RFC 3339 time
+        with an offset, or a date, which means midnight WIB (BR-007). `item_count` is the summed
+        `qty`. Target: p95 first byte under 800 ms at 10k orders (P1-103). Requires `orders:read`.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/OrderStatus"
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/OrderSource"
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: refund_owed
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: placed_from
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: placed_to
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["-placed_at", "placed_at"]
+            default: "-placed_at"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of orders.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createOrder
+      summary: Enter a manual (WhatsApp) order
+      description: |
+        Line prices come from `variant_price()` exactly as checkout does — a `unit_price` anywhere
+        in the request is `422 unknown_field` (BR-046, BR-078). Archived variants are `422` naming
+        the line. `source` must be `manual`; the order is created `pending`, always
+        `bank_transfer`, with the customer and lines snapshotted (BR-076) and its number from the
+        tenant sequence (BR-077). `shipping` is a typed amount; `shipping_option` arrives with
+        `P1-218`. Requires `orders:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreateRequest"
+      responses:
+        "201":
+          description: Created, pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /orders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getOrder
+      summary: One order, with its allowed transitions and audit trail
+      description: |
+        `allowed_transitions` comes from the BR-070 allow-list so the client never hardcodes it.
+        `history` is the order's audit rows, newest first, readable with `orders:read` alone
+        (BR-073). `payments` is `[]` until `P1-220`. Requires `orders:read`.
+      responses:
+        "200":
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateOrder
+      summary: Edit a pending order's address, note or shipping amount
+      description: |
+        Accepts only `shipping_address`, `note` and `shipping`, and only while the order is
+        `pending`; any other status is `422` (BR-079). `If-Match` is required (BR-010); the total
+        is recomputed from the new shipping amount. Orders are never deleted (BR-079). Requires
+        `orders:write`.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdateRequest"
+      responses:
+        "200":
+          description: The order, with its new version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /orders/{id}/mark-paid:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: markOrderPaid
+      summary: Record a confirmed payment
+      description: |
+        The operator's confirmation of a bank transfer, and on a Midtrans order the override for a
+        payment confirmed outside Midtrans — a later notification is then a no-op (BR-074). Calls
+        the one Transition (BR-071): repeating a move is a `200` no-op, a move not in the allow-list
+        is `409 illegal_transition` naming from and to (BR-070). No `If-Match` on any transition:
+        the row lock is the concurrency control. Every transition bumps `version` and writes one
+        audit row (BR-073). Requires `orders:write`.
+      responses:
+        "200":
+          description: The order, paid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /orders/{id}/process:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: processOrder
+      summary: Start processing a paid order
+      description: |
+        `paid → processing` (BR-070); no timestamp of its own. Same Transition semantics as
+        `mark-paid`. Requires `orders:write`.
+      responses:
+        "200":
+          description: The order, processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /orders/{id}/ship:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: shipOrder
+      summary: Record the courier and tracking number and mark shipped
+      description: |
+        `processing → shipped`. `tracking_number` is required, else `422`; `courier` defaults to
+        the order's `shipping_courier`, so a manual order with no chosen courier must send it
+        (BR-072). Shipping is recorded, not booked. Same Transition semantics as `mark-paid`.
+        Requires `orders:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderShipRequest"
+      responses:
+        "200":
+          description: The order, shipped.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /orders/{id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: completeOrder
+      summary: Close a shipped order
+      description: |
+        `shipped → completed` (BR-070). Same Transition semantics as `mark-paid`. Requires
+        `orders:write`.
+      responses:
+        "200":
+          description: The order, completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /orders/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: cancelOrder
+      summary: Cancel an order
+      description: |
+        Allowed from `pending`, `paid` and `processing` (BR-070). The optional `reason` has no
+        column; it lands in the audit row (BR-073). Cancelling a paid order moves no money — the
+        refund is recorded separately (BR-075). Same Transition semantics as `mark-paid`.
+        Requires `orders:write`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCancelRequest"
+      responses:
+        "200":
+          description: The order, cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /orders/{id}/refund:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: refundOrder
+      summary: Record a refund made outside the system
+      description: |
+        Not a status change: the order stays `cancelled`, `refunded_at` is set and `version` bumps.
+        Allowed once, on a cancelled order that was paid; anything else is `422` (BR-075). The
+        optional `note` lands in the audit row. The row lock serialises it like a transition.
+        Requires `orders:write`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderRefundRequest"
+      responses:
+        "200":
+          description: The order, with `refunded_at` set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /orders/export:
+    post:
+      operationId: exportOrders
+      summary: Export orders to CSV as a background job
+      description: |
+        The accounting integration (BR-065): one CSV row per order line, order fields repeated,
+        UTF-8 BOM, amounts written so a comma-decimal locale cannot corrupt them (BR-064). The
+        body takes the §5.1 list filters with `status` as an array. Answers `202 {job_id}`; poll
+        `GET /jobs/{id}` — every `GET` of the finished job signs a fresh 15-minute `download_url`
+        (BR-063). Requires `exports:read`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderExportRequest"
+      responses:
+        "202":
+          description: Queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /customers:
+    get:
+      operationId: listCustomers
+      summary: Customers, searched and cursor-paginated
+      description: |
+        Read-only: staff never create accounts, set passwords or see password hashes (BR-092).
+        `q` matches name, email and phone. Requires `customers:read`.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of customers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /customers/{id}/purge:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: purgeCustomer
+      summary: Erase a customer's personal data as a background job
+      description: |
+        Answers a data subject's deletion request (BR-097): anonymises the customer, signs them
+        out everywhere, and redacts the name, email, phone, street address and note on their
+        orders, including guest and manual orders placed with the same email. Totals, lines and
+        payments stay. Cannot be undone. No body. Answers `202 {job_id}`; poll `GET /jobs/{id}`,
+        whose result is `{orders}`, the number of orders redacted. A purged customer can be
+        purged again harmlessly. Requires `customers:purge` (owner).
+      responses:
+        "202":
+          description: Queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /customers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getCustomer
+      summary: One customer and their latest orders
+      description: |
+        The profile plus up to 50 order-list rows, newest first. No credential field ever appears
+        (BR-092). Requires `customers:read`.
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A 15-minute staff JWT (`aud = admin`) for the Next.js admin. Admin routes accept nothing
+        else: API keys and customer tokens are storefront credentials and are rejected here
+        (BR-086).
+
+        The tenant is derived from the token and is **never** read from a header, query parameter
+        or request body — accepting it from the request would be a trivial cross-tenant
+        escalation (BR-003).
+
+  parameters:
+
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size. Pairs with `cursor`; there is no `offset` in this API.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
+        table is a sequential scan, so the parameter does not exist.
+      schema:
+        type: string
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        The `version` read from the resource. Required on every `PATCH`. The server checks it in
+        the `UPDATE … WHERE version = $n` predicate; a stale value is `409 version_conflict`, not
+        a silent no-op.
+
+        `version` travels here and never in the request body.
+      schema:
+        type: integer
+        minimum: 1
+
+  headers:
+
+    RateLimit-Limit:
+      description: Requests permitted in the current window.
+      schema:
+        type: integer
+
+    RateLimit-Remaining:
+      description: Requests left in the current window.
+      schema:
+        type: integer
+
+    RateLimit-Reset:
+      description: Seconds until the window resets.
+      schema:
+        type: integer
+
+  schemas:
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          examples: ["ops@erigo.co.id"]
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    Session:
+      type: object
+      description: |
+        Returned by both login and refresh. Carries everything the client needs to render a
+        signed-in shell without a second request.
+
+        The refresh token is **not** here -- it is in an httpOnly cookie, out of reach of any
+        script on the page.
+      required: [access_token, expires_in, user, tenant]
+      properties:
+        access_token:
+          type: string
+          description: JWT. Held in memory only, never in localStorage.
+        expires_in:
+          type: integer
+          description: Seconds until the access token expires.
+          examples: [900]
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        tenant:
+          $ref: "#/components/schemas/SessionTenant"
+
+    SessionUser:
+      type: object
+      required: [id, name, role, permissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, ops, viewer]
+        permissions:
+          type: array
+          description: |
+            `resource:action` strings the role grants. The client hides actions it does not find
+            here rather than disabling them -- a button that 403s advertises a capability the user
+            does not have.
+          items:
+            type: string
+            examples: ["products:read"]
+
+    SessionTenant:
+      type: object
+      required: [id, name, timezone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        timezone:
+          type: string
+          description: IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
+          examples: ["Asia/Jakarta"]
+
+    Role:
+      type: object
+      description: One of the four seeded roles and everything it grants.
+      required: [name, permissions]
+      properties:
+        name:
+          type: string
+          enum: [owner, admin, ops, viewer]
+        description:
+          type: string
+          description: One line a client can show next to the role in a picker.
+        permissions:
+          type: array
+          items:
+            type: string
+            examples: ["products:read"]
+
+    Brand:
+      type: object
+      required: [id, name, slug, archived_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          description: Defaults to `slugify(name)`; editable (BR-030).
+          examples: ["erigo"]
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BrandWrite:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: Omitted means `slugify(name)` (BR-030).
+
+    BrandPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Brand"
+        next_cursor:
+          type: [string, "null"]
+
+    CategoryKind:
+      type: string
+      enum: [category, series, collection, activity, custom]
+      description: Independent trees; a product may sit in several (BR-031).
+
+    Category:
+      type: object
+      required: [id, kind, name, label, parent_id, path, archived_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        name:
+          type: string
+        label:
+          type: [string, "null"]
+          description: |
+            This category's own path segment when the client set one; `null` while it is
+            derived from the name (BR-032).
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+        path:
+          type: string
+          description: Derived by the database from labels and parents; read-only (BR-032).
+          examples: ["apparel.outerwear.jackets"]
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CategoryDetail:
+      allOf:
+        - $ref: "#/components/schemas/Category"
+        - type: object
+          required: [descendant_count, product_count]
+          properties:
+            descendant_count:
+              type: integer
+            product_count:
+              type: integer
+
+    CategoryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+
+    CategoryCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          pattern: "^[a-z0-9]+(_[a-z0-9]+)*$"
+          description: This category's own path segment; defaults to the slugified name (BR-032).
+        parent_id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+
+    CategoryUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        label:
+          type: [string, "null"]
+          pattern: "^[a-z0-9]+(_[a-z0-9]+)*$"
+          description: "`null` goes back to the label derived from the name (BR-032)."
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+
+    Ref:
+      type: object
+      description: A reference expanded on read (04-api-spec.md §1).
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    CategoryRef:
+      type: object
+      required: [id, kind, name, path]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        name:
+          type: string
+        path:
+          type: string
+
+    ProductStatus:
+      type: string
+      enum: [draft, active, archived]
+
+    Media:
+      type: object
+      description: One product image (04-api-spec.md §8). URLs are built on read; the database stores keys (BR-050).
+      required: [id, product_id, variant_id, mime_type, bytes, width, height, position, url, derivatives, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        variant_id:
+          type: [string, "null"]
+          format: uuid
+        mime_type:
+          type: string
+        bytes:
+          type: integer
+          format: int64
+        width:
+          type: [integer, "null"]
+        height:
+          type: [integer, "null"]
+        position:
+          type: integer
+        url:
+          type: string
+        derivatives:
+          type: object
+          description: '`{"1600": url, "800": url, "200": url}` once the worker has made them (BR-052); `{}` before.'
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Product:
+      type: object
+      required: [id, version, title, slug, description, status, brand, categories, attributes,
+                 option_names, variant_count, media, archived_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Send it back in `If-Match`; never in a body (BR-010).
+        title:
+          type: string
+        slug:
+          type: string
+          examples: ["erigo-basic-tee"]
+        description:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/ProductStatus"
+        brand:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        categories:
+          type: array
+          description: Every category the product sits in, all kinds, by kind then path.
+          items:
+            $ref: "#/components/schemas/CategoryRef"
+        attributes:
+          type: object
+          additionalProperties: true
+        option_names:
+          type: array
+          items:
+            type: string
+        variant_count:
+          type: integer
+          description: Live variants.
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductCreate:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        brand_id:
+          type: string
+          format: uuid
+        category_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        attributes:
+          type: object
+          additionalProperties: true
+
+    ProductUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        description:
+          type: [string, "null"]
+        brand_id:
+          type: [string, "null"]
+          format: uuid
+        category_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        attributes:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [draft, active]
+
+    Variant:
+      type: object
+      required: [id, product_id, version, option_values, sku, barcode, regular_price, sale_price,
+                 sale_starts_at, sale_ends_at, price, on_sale, weight_grams, archived_at,
+                 created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        option_values:
+          type: array
+          items:
+            type: string
+        sku:
+          type: [string, "null"]
+        barcode:
+          type: [string, "null"]
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        sale_price:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        sale_starts_at:
+          type: [string, "null"]
+          format: date-time
+        sale_ends_at:
+          type: [string, "null"]
+          format: date-time
+        price:
+          $ref: "#/components/schemas/Money"
+        on_sale:
+          type: boolean
+          description: Read-only. True while the sale's schedule is running (BR-046).
+        weight_grams:
+          type: integer
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    VariantList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Variant"
+
+    VariantCreate:
+      type: object
+      required: [option_values]
+      additionalProperties: false
+      properties:
+        option_values:
+          type: array
+          items:
+            type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        sale_price:
+          $ref: "#/components/schemas/Money"
+        sale_starts_at:
+          type: string
+          format: date-time
+        sale_ends_at:
+          type: string
+          format: date-time
+        weight_grams:
+          type: integer
+          minimum: 0
+
+    VariantUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        sku:
+          type: [string, "null"]
+        barcode:
+          type: [string, "null"]
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        sale_price:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        sale_starts_at:
+          type: [string, "null"]
+          format: date-time
+        sale_ends_at:
+          type: [string, "null"]
+          format: date-time
+        weight_grams:
+          type: integer
+          minimum: 0
+
+    CategoryBrief:
+      type: object
+      required: [id, name, path]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        path:
+          type: string
+
+    ProductListItem:
+      type: object
+      required: [id, version, title, slug, status, brand, categories, variant_count, price_min,
+                 price_max, cover_url, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProductStatus"
+        brand:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        categories:
+          type: array
+          description: Main-tree categories only (`kind = category`), by path.
+          items:
+            $ref: "#/components/schemas/CategoryBrief"
+        variant_count:
+          type: integer
+        price_min:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        price_max:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        cover_url:
+          type: [string, "null"]
+          description: The first image's 200 px derivative, once made (BR-052).
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductListItem"
+        next_cursor:
+          type: [string, "null"]
+
+    JobKind:
+      type: string
+      enum: [product_import, order_export, channel_import, image_derivatives, customer_purge]
+
+    Job:
+      type: object
+      required: [id, kind, state, processed, total, failed, created_at, finished_at, result, error]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/JobKind"
+        state:
+          type: string
+          enum: [queued, running, done, failed]
+        processed:
+          type: integer
+        total:
+          type: [integer, "null"]
+        failed:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: [string, "null"]
+          format: date-time
+        result:
+          type: [object, "null"]
+          description: |
+            `null` until `done`. Per kind: `product_import` carries `created`, `updated` and
+            `error_report_url` (+ `expires_in`), `null` when nothing failed; `order_export` carries
+            `download_url`; `customer_purge` carries `orders`.
+          additionalProperties: true
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Problem"
+            - type: "null"
+
+    VariantMatrixRow:
+      type: object
+      required: [option_values]
+      additionalProperties: false
+      properties:
+        option_values:
+          type: array
+          items:
+            type: string
+        sku:
+          type: [string, "null"]
+        barcode:
+          type: [string, "null"]
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        sale_price:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        sale_starts_at:
+          type: [string, "null"]
+          format: date-time
+        sale_ends_at:
+          type: [string, "null"]
+          format: date-time
+        weight_grams:
+          type: integer
+          minimum: 0
+
+    VariantMatrix:
+      type: object
+      required: [option_names, rows, archive_missing]
+      additionalProperties: false
+      properties:
+        option_names:
+          type: array
+          description: Ordered axes; Colour at position 0 when present (BR-040).
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantMatrixRow"
+        archive_missing:
+          type: boolean
+
+    VariantMatrixRowResult:
+      type: object
+      required: [option_values, status, variant_id]
+      properties:
+        option_values:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [created, updated, restored, unchanged, error]
+        variant_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        detail:
+          type: string
+
+    VariantMatrixResult:
+      type: object
+      required: [product_version, created, updated, restored, unchanged, archived, failed,
+                 archived_variant_ids, results]
+      properties:
+        product_version:
+          type: integer
+        created:
+          type: integer
+        updated:
+          type: integer
+        restored:
+          type: integer
+        unchanged:
+          type: integer
+        archived:
+          type: integer
+        failed:
+          type: integer
+        archived_variant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantMatrixRowResult"
+
+    PresignRequest:
+      type: object
+      required: [purpose, mime_type, bytes, sha256]
+      additionalProperties: false
+      properties:
+        purpose:
+          type: string
+          enum: [product_image, product_import]
+        product_id:
+          type: string
+          format: uuid
+        mime_type:
+          type: string
+        bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+
+    PresignResponse:
+      type: object
+      required: [upload_url, r2_key, expires_in]
+      properties:
+        upload_url:
+          type: string
+        r2_key:
+          type: string
+        expires_in:
+          type: integer
+          examples: [600]
+
+    ConfirmMedia:
+      type: object
+      required: [r2_key, product_id]
+      additionalProperties: false
+      properties:
+        r2_key:
+          type: string
+        product_id:
+          type: string
+          format: uuid
+        variant_id:
+          type: [string, "null"]
+          format: uuid
+
+    MediaUpdate:
+      type: object
+      required: [variant_id]
+      additionalProperties: false
+      properties:
+        variant_id:
+          type: [string, "null"]
+          format: uuid
+
+    MediaOrder:
+      type: object
+      required: [media_ids]
+      additionalProperties: false
+      properties:
+        media_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    MediaList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+
+    BulkItem:
+      type: object
+      additionalProperties: false
+      properties:
+        sku:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, active]
+        regular_price:
+          $ref: "#/components/schemas/Money"
+        sale_price:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        sale_starts_at:
+          type: [string, "null"]
+          format: date-time
+        sale_ends_at:
+          type: [string, "null"]
+          format: date-time
+        weight_grams:
+          type: integer
+          minimum: 0
+        barcode:
+          type: [string, "null"]
+
+    BulkRequest:
+      type: object
+      required: [on_conflict, items]
+      additionalProperties: false
+      properties:
+        on_conflict:
+          type: string
+          enum: [update, error]
+        items:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/BulkItem"
+
+    BulkRowResult:
+      type: object
+      required: [index, sku, status, variant_id]
+      properties:
+        index:
+          type: integer
+        sku:
+          type: [string, "null"]
+        status:
+          type: string
+          enum: [created, updated, error]
+        variant_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        detail:
+          type: string
+
+    BulkResult:
+      type: object
+      required: [created, updated, failed, results]
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        failed:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkRowResult"
+
+    ImportRequest:
+      type: object
+      required: [r2_key, column_mapping, on_conflict]
+      additionalProperties: false
+      properties:
+        r2_key:
+          type: string
+          examples: ["jobs/0192-tenant/0193…/upload.csv"]
+        column_mapping:
+          type: object
+          description: |
+            CSV header → target: `title`, `sku`, `regular_price`, `sale_price`, `weight_grams`,
+            `barcode`, or `option:<Name>`. Unmapped columns are ignored. `title` or `sku` is
+            required.
+          additionalProperties:
+            type: string
+          examples: [{"Nama Produk": "title", "SKU": "sku", "Harga": "regular_price", "Warna": "option:Colour"}]
+        on_conflict:
+          type: string
+          enum: [update, error]
+
+    JobAccepted:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+
+    AcceptInvite:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          examples: ["inv_9c2e…"]
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    User:
+      type: object
+      required: [id, email, name, role, status, last_login_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, ops, viewer]
+        status:
+          type: string
+          enum: [invited, active, disabled]
+        last_login_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    UserPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        next_cursor:
+          type: [string, "null"]
+
+    InviteUser:
+      type: object
+      required: [email, name, role]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          enum: [owner, admin, ops, viewer]
+
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum: [owner, admin, ops, viewer]
+        status:
+          type: string
+          enum: [active, disabled]
+
+    Settings:
+      type: object
+      required: [id, name, slug, order_prefix, timezone, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        order_prefix:
+          type: string
+          examples: ["ERG"]
+        timezone:
+          type: string
+          examples: ["Asia/Jakarta"]
+        status:
+          type: string
+          enum: [active, suspended, closed]
+
+    SettingsUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        timezone:
+          type: string
+        order_prefix:
+          type: string
+          pattern: "^[A-Z0-9]{2,6}$"
+
+    CourierCode:
+      type: string
+      description: A Biteship courier code (BR-120).
+      enum: [jne, jnt, sicepat, anteraja, pos, tiki, ninja, lion, idexpress, sap, rpx, wahana]
+
+    StorefrontSettings:
+      type: object
+      required: [contact_email, google_client_id, origin_postal_code, shipping_couriers,
+                 bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled,
+                 midtrans_environment, midtrans_client_key, midtrans_server_key_set,
+                 midtrans_notification_url, updated_at]
+      properties:
+        contact_email:
+          type: [string, "null"]
+          format: email
+          description: Reply-To on every email the shop sends (BR-128).
+        google_client_id:
+          type: [string, "null"]
+          description: The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
+        origin_postal_code:
+          type: [string, "null"]
+          examples: ["40115"]
+        shipping_couriers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourierCode"
+        bank_transfer_enabled:
+          type: boolean
+        bank_transfer_instructions:
+          type: [string, "null"]
+        midtrans_enabled:
+          type: boolean
+        midtrans_environment:
+          oneOf:
+            - type: string
+              enum: [sandbox, production]
+            - type: "null"
+        midtrans_client_key:
+          type: [string, "null"]
+        midtrans_server_key_set:
+          type: boolean
+        midtrans_notification_url:
+          type: string
+          format: uri
+          description: Where Midtrans tells the API about payments; sent with every Snap transaction (BR-124).
+        updated_at:
+          type: string
+          format: date-time
+
+    StorefrontSettingsUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        contact_email:
+          type: [string, "null"]
+          format: email
+        google_client_id:
+          type: [string, "null"]
+        origin_postal_code:
+          type: [string, "null"]
+          pattern: "^[0-9]{5}$"
+        shipping_couriers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourierCode"
+        bank_transfer_enabled:
+          type: boolean
+        bank_transfer_instructions:
+          type: [string, "null"]
+        midtrans_enabled:
+          type: boolean
+        midtrans_environment:
+          oneOf:
+            - type: string
+              enum: [sandbox, production]
+            - type: "null"
+        midtrans_client_key:
+          type: [string, "null"]
+        midtrans_server_key:
+          type: [string, "null"]
+          writeOnly: true
+          description: Write-only; `null` removes it (and so needs Midtrans off).
+
+    ApiKey:
+      type: object
+      required: [id, name, key_last4, allowed_origin, created_by, last_used_at, revoked_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          examples: ["Main website"]
+        key_last4:
+          type: [string, "null"]
+          description: |
+            The key's last four characters, so a list can show `sf_live_••••42ab` (BR-028). `null`
+            for a key created before v2.12.0.
+          examples: ["42ab"]
+        allowed_origin:
+          type: string
+          examples: ["https://tokoabc.com"]
+        created_by:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        last_used_at:
+          type: [string, "null"]
+          format: date-time
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    ApiKeyCreated:
+      description: An `ApiKey` plus its plaintext `key`, returned only by create.
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              examples: ["sf_live_3f9a91c2e8…"]
+
+    ApiKeyList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKey"
+
+    ApiKeyCreate:
+      type: object
+      required: [name, allowed_origin]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        allowed_origin:
+          type: string
+
+    ApiKeyUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        allowed_origin:
+          type: string
+
+    AuditEntry:
+      type: object
+      required: [action, actor, subject_type, subject_id, before, after, ip, created_at]
+      properties:
+        action:
+          type: string
+          examples: ["order.transition"]
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        subject_type:
+          type: string
+        subject_id:
+          type: string
+        before:
+          type: [object, "null"]
+          additionalProperties: true
+        after:
+          type: [object, "null"]
+          additionalProperties: true
+        ip:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    AuditPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next_cursor:
+          type: [string, "null"]
+
+    OrderStatus:
+      type: string
+      description: The BR-070 state machine's states.
+      enum: [pending, paid, processing, shipped, completed, cancelled]
+
+    OrderSource:
+      type: string
+      enum: [storefront, manual]
+
+    OrderCustomerSnapshot:
+      type: object
+      description: The customer as they were when the order was placed (BR-076), not a live reference.
+      required: [name, email, phone]
+      properties:
+        name:
+          type: string
+        email:
+          type: [string, "null"]
+        phone:
+          type: [string, "null"]
+
+    ShippingAddress:
+      type: object
+      required: [line1, line2, city, province, postal_code]
+      properties:
+        line1:
+          type: string
+        line2:
+          type: [string, "null"]
+        city:
+          type: string
+        province:
+          type: string
+        postal_code:
+          type: string
+
+    ShippingAddressWrite:
+      type: object
+      required: [line1, city, province, postal_code]
+      additionalProperties: false
+      properties:
+        line1:
+          type: string
+          minLength: 1
+        line2:
+          type: [string, "null"]
+        city:
+          type: string
+          minLength: 1
+        province:
+          type: string
+          minLength: 1
+        postal_code:
+          type: string
+          minLength: 1
+
+    OrderLine:
+      type: object
+      description: |
+        A snapshot at the time of order (BR-076): the wire drops the `_snapshot` and `_amount`
+        suffixes. `sku` is empty for a variant that had none.
+      required: [id, variant_id, sku, title, qty, unit_price, discount]
+      properties:
+        id:
+          type: string
+          format: uuid
+        variant_id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        title:
+          type: string
+          examples: ["Erigo Basic Tee — Black / M"]
+        qty:
+          type: integer
+          minimum: 1
+        unit_price:
+          $ref: "#/components/schemas/Money"
+        discount:
+          allOf:
+            - $ref: "#/components/schemas/Money"
+          description: Per-line discount; manual orders only (BR-078).
+
+    OrderPayment:
+      type: object
+      description: |
+        One Midtrans Snap attempt, newest first (BR-123): `ERG-000123`, then `ERG-000123-2`, ….
+        Bank transfers never have a row.
+      required: [provider_order_id, status, transaction_status, amount, paid_at, created_at]
+      properties:
+        provider_order_id:
+          type: string
+          examples: ["ERG-000123"]
+        status:
+          type: string
+          enum: [pending, paid, failed, amount_mismatch]
+        transaction_status:
+          type: [string, "null"]
+          description: The last status confirmed by the Get Status API (BR-125).
+        amount:
+          $ref: "#/components/schemas/Money"
+        paid_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    OrderHistoryEntry:
+      type: object
+      description: |
+        One entry of the order's audit trail (BR-073), embedded in the order so ops can read it
+        with `orders:read` alone — `GET /audit-log` keeps requiring `audit_log:read`. `from` and
+        `to` are set for `order.transition` and `null` for other actions; `actor` is `null` for
+        the system.
+      required: [actor, action, from, to, created_at]
+      properties:
+        actor:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        action:
+          type: string
+          examples: ["order.transition"]
+        from:
+          oneOf:
+            - $ref: "#/components/schemas/OrderStatus"
+            - type: "null"
+        to:
+          oneOf:
+            - $ref: "#/components/schemas/OrderStatus"
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
+
+    Order:
+      type: object
+      description: |
+        An order in full. `allowed_transitions` comes from the BR-070 allow-list so clients never
+        hardcode it; recording a refund is not in it because it does not change `status` (BR-075).
+        `history` is newest first.
+      required: [id, order_number, source, status, version, customer_id, customer,
+                 shipping_address, note, lines, subtotal, shipping, discount, total,
+                 payment_method, payments, shipping_courier, shipping_service, courier,
+                 tracking_number, placed_at, paid_at, shipped_at, completed_at, cancelled_at,
+                 refunded_at, allowed_transitions, history]
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+          examples: ["ERG-000123"]
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        version:
+          type: integer
+          description: Send it back in `If-Match` on `PATCH`; transitions take none (BR-010).
+        customer_id:
+          type: [string, "null"]
+          format: uuid
+          description: "`null` for guest and manual orders."
+        customer:
+          $ref: "#/components/schemas/OrderCustomerSnapshot"
+        shipping_address:
+          $ref: "#/components/schemas/ShippingAddress"
+        note:
+          type: [string, "null"]
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+        subtotal:
+          allOf:
+            - $ref: "#/components/schemas/Money"
+          description: Σ qty·unit_price before any discount.
+        shipping:
+          $ref: "#/components/schemas/Money"
+        discount:
+          allOf:
+            - $ref: "#/components/schemas/Money"
+          description: Σ line discounts, so `total = subtotal + shipping - discount` (BR-078).
+        total:
+          $ref: "#/components/schemas/Money"
+        payment_method:
+          type: string
+          enum: [bank_transfer, midtrans]
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderPayment"
+        shipping_courier:
+          type: [string, "null"]
+          description: Biteship courier code the shopper chose; `null` on manual orders (BR-121).
+        shipping_service:
+          type: [string, "null"]
+        courier:
+          type: [string, "null"]
+          description: Set when shipped (BR-072); defaults to `shipping_courier`.
+        tracking_number:
+          type: [string, "null"]
+        placed_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: [string, "null"]
+          format: date-time
+        shipped_at:
+          type: [string, "null"]
+          format: date-time
+        completed_at:
+          type: [string, "null"]
+          format: date-time
+        cancelled_at:
+          type: [string, "null"]
+          format: date-time
+        refunded_at:
+          type: [string, "null"]
+          format: date-time
+        allowed_transitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderStatus"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderHistoryEntry"
+
+    OrderShipRequest:
+      type: object
+      required: [tracking_number]
+      additionalProperties: false
+      properties:
+        courier:
+          type: string
+          pattern: "^[a-z0-9_]+$"
+          description: Biteship courier code; defaults to the order's `shipping_courier` (BR-072).
+        tracking_number:
+          type: string
+          minLength: 1
+
+    OrderCancelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Recorded in the audit row only; there is no column (BR-073).
+
+    OrderRefundRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note:
+          type: string
+          description: Recorded in the audit row only (BR-075).
+
+    MidtransNotification:
+      type: object
+      description: |
+        Midtrans' HTTP notification. Only the fields the API reads are listed; Midtrans sends more,
+        and they are kept, not refused — this body is Midtrans', not a client's.
+      required: [order_id, status_code, gross_amount, signature_key]
+      additionalProperties: true
+      properties:
+        order_id:
+          type: string
+          examples: ["ERG-000123"]
+        status_code:
+          type: string
+          examples: ["200"]
+        gross_amount:
+          type: string
+          examples: ["409000.00"]
+        signature_key:
+          type: string
+        transaction_status:
+          type: string
+          examples: ["settlement"]
+        fraud_status:
+          type: string
+
+    ShippingRatesRequest:
+      type: object
+      required: [destination_postal_code, lines]
+      additionalProperties: false
+      properties:
+        destination_postal_code:
+          type: string
+          pattern: "^[0-9]{5}$"
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [variant_id, qty]
+            additionalProperties: false
+            properties:
+              variant_id:
+                type: string
+                format: uuid
+              qty:
+                type: integer
+                minimum: 1
+
+    ShippingOption:
+      type: object
+      required: [courier_code, courier_service_code, courier_name, service_name, price, duration]
+      properties:
+        courier_code:
+          type: string
+          examples: ["jne"]
+        courier_service_code:
+          type: string
+          examples: ["reg"]
+        courier_name:
+          type: string
+        service_name:
+          type: string
+        price:
+          $ref: "#/components/schemas/Money"
+        duration:
+          type: string
+
+    ShippingQuote:
+      type: object
+      required: [weight_grams, options]
+      properties:
+        weight_grams:
+          type: integer
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShippingOption"
+
+    ShippingChoice:
+      type: object
+      description: A courier service picked from a quote; the server quotes again and charges that (BR-121).
+      required: [courier_code, courier_service_code]
+      additionalProperties: false
+      properties:
+        courier_code:
+          type: string
+        courier_service_code:
+          type: string
+
+    OrderCreateRequest:
+      type: object
+      required: [source, customer, shipping_address, lines]
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          enum: [manual]
+        customer:
+          type: object
+          required: [name]
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+              minLength: 1
+            email:
+              type: [string, "null"]
+            phone:
+              type: [string, "null"]
+        shipping_address:
+          $ref: "#/components/schemas/ShippingAddressWrite"
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [variant_id, qty]
+            additionalProperties: false
+            properties:
+              variant_id:
+                type: string
+                format: uuid
+              qty:
+                type: integer
+                minimum: 1
+              discount:
+                allOf:
+                  - $ref: "#/components/schemas/Money"
+                description: Per-line discount in minor units (BR-078).
+        shipping:
+          allOf:
+            - $ref: "#/components/schemas/Money"
+          description: A typed shipping amount. Send this or `shipping_option`, not both.
+        shipping_option:
+          $ref: "#/components/schemas/ShippingChoice"
+        note:
+          type: string
+
+    OrderUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        shipping_address:
+          $ref: "#/components/schemas/ShippingAddressWrite"
+        note:
+          type: [string, "null"]
+        shipping:
+          allOf:
+            - $ref: "#/components/schemas/Money"
+          description: Replaces the shipping amount; the total is recomputed (BR-079).
+
+    OrderListRow:
+      type: object
+      required: [id, order_number, source, status, version, customer, item_count, total,
+                 placed_at, paid_at, refunded_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        version:
+          type: integer
+        customer:
+          $ref: "#/components/schemas/OrderCustomerSnapshot"
+        item_count:
+          type: integer
+          description: Summed `qty` over the order's lines.
+        total:
+          $ref: "#/components/schemas/Money"
+        placed_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: [string, "null"]
+          format: date-time
+        refunded_at:
+          type: [string, "null"]
+          format: date-time
+
+    OrderPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderListRow"
+        next_cursor:
+          type: [string, "null"]
+
+    OrderExportRequest:
+      type: object
+      description: The §5.1 order-list filters, with `status` as an array (BR-065).
+      additionalProperties: false
+      properties:
+        status:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderStatus"
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        customer_id:
+          type: string
+          format: uuid
+        refund_owed:
+          type: boolean
+        placed_from:
+          type: string
+          description: RFC 3339 with an offset, or a date meaning midnight WIB (BR-007).
+        placed_to:
+          type: string
+        q:
+          type: string
+
+    Customer:
+      type: object
+      description: Never a password hash, session or token (BR-092).
+      required: [id, name, email, phone, order_count, created_at, purged_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: [string, "null"]
+        order_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        purged_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the customer's personal data was erased (BR-097); `null` until then.
+
+    CustomerPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        next_cursor:
+          type: [string, "null"]
+
+    CustomerDetail:
+      allOf:
+        - $ref: "#/components/schemas/Customer"
+        - type: object
+          required: [orders]
+          properties:
+            orders:
+              type: array
+              description: The customer's orders, newest first, up to 50.
+              items:
+                $ref: "#/components/schemas/OrderListRow"
+
+    Money:
+      type: integer
+      format: int64
+      description: |
+        An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+        a float, a decimal string or an object; there is no currency field because there is only
+        one currency (BR-006, BR-029). Clients divide by 100 to display.
+      examples: [19900000]
+
+    ErrorCode:
+      type: string
+      description: |
+        The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
+        The code also appears as the last segment of a `Problem.type` URI, and directly in
+        per-row results where an operation partially succeeds (§7.3, §7.5).
+      enum:
+        - validation_failed
+        - unknown_field
+        - publish_check_failed
+        - empty_cart
+        - unauthenticated
+        - invalid_api_key
+        - customer_auth_required
+        - permission_denied
+        - origin_not_allowed
+        - not_found
+        - version_conflict
+        - duplicate_sku
+        - category_in_use
+        - illegal_transition
+        - item_unavailable
+        - shipping_unavailable
+        - rate_limited
+        - channel_unavailable
+        - shipping_rates_unavailable
+        - payment_unavailable
+        - internal
+
+    ProblemError:
+      type: object
+      description: |
+        One field-level detail inside a `Problem`. Carries whatever the specific failure needs —
+        a version conflict reports `expected` and `supplied`, a validation failure reports a
+        message — so extra properties are permitted by design.
+      required: [field]
+      properties:
+        field:
+          type: string
+          examples: ["version"]
+        detail:
+          type: string
+      additionalProperties: true
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 `application/problem+json`. Every error response in this API uses it.
+
+        `trace_id` is the OpenTelemetry trace id — a support ticket quoting it goes straight to
+        the span. There is no separate `code` field: the code is the last segment of `type`.
+      required: [type, title, status, trace_id]
+      properties:
+        type:
+          type: string
+          format: uri
+          examples: ["https://docs.example.com/errors/version_conflict"]
+        title:
+          type: string
+          examples: ["Version conflict"]
+        status:
+          type: integer
+          examples: [409]
+        detail:
+          type: string
+          examples: ["Product was modified by another user. Reload and retry."]
+        instance:
+          type: string
+          examples: ["/v1/products/01926f3a-0000-7000-8000-000000000000"]
+        trace_id:
+          type: string
+          examples: ["4bf92f3577b34da6a3ce929d0e0e4736"]
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemError"
+
+  responses:
+
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    Unauthorized:
+      description: Missing, expired or invalid credentials.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    Forbidden:
+      description: |
+        Authenticated but not permitted. **`detail` names the permission that was required**, so a
+        caller can tell "you cannot do this" from "you cannot do this yet, ask for `users:write`".
+        A client should not render an action it lacks the permission for at all -- a disabled
+        control advertises a capability and generates a support ticket.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    NotFound:
+      description: |
+        No such resource **in this tenant**. A row belonging to another tenant is indistinguishable
+        from one that does not exist, which is the intended behaviour.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    Conflict:
+      description: |
+        `version_conflict` when `If-Match` is stale, `duplicate_sku` when a SKU is already taken
+        within the tenant, `category_in_use` when deleting a category that has children,
+        or `illegal_transition` when an order status move is not in the allow-list.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    BadGateway:
+      description: |
+        `shipping_rates_unavailable` or `payment_unavailable`: Biteship or Midtrans did not answer.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    UnprocessableEntity:
+      description: |
+        Validation failed. Also returned when a client sends a server-managed field (on create or
+        update, BR-008), sends `null` on create or on a non-nullable field (BR-009), or sends a
+        field the endpoint does not define (`unknown_field`, BR-089). Omitting a field and
+        sending `null` are not the same thing.
+
+        `publish_check_failed` is also a `422`, listing every reason a product can't go active.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+    TooManyRequests:
+      description: Rate limit exceeded. See `Retry-After` and the `RateLimit-*` headers (BR-014).
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+        RateLimit-Limit:
+          $ref: "#/components/headers/RateLimit-Limit"
+        RateLimit-Remaining:
+          $ref: "#/components/headers/RateLimit-Remaining"
+        RateLimit-Reset:
+          $ref: "#/components/headers/RateLimit-Reset"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

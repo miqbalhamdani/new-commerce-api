@@ -1,11 +1,13 @@
-# P1-004: a PR is red when lint, the tests, a migration over seeded data, or
-# the contract drift check fails (05-backlog.md, Phase 6).
+# P1-004: a PR is red when lint, the tests, a migration over seeded data, the
+# contract lint or the contract drift check fails (05-backlog.md, Phase 6).
 name: ci
 
 on:
   pull_request:
   push:
     branches: [main]
+    # A backlog status flip pushed straight to main (/next) rebuilds nothing.
+    paths-ignore: [contracts/05-backlog.md]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,8 +45,6 @@ jobs:
       GOFLAGS: -p=1
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -99,8 +99,6 @@ jobs:
       APP_DATABASE_URL: postgres://owner_limited:owner_limited@localhost:5432/limited_db?sslmode=disable
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -176,20 +174,17 @@ jobs:
           go run ./cmd/migrate
           go run ./cmd/lint-rls
 
-  # The other half of drift: the pinned contracts commit must be on contracts
-  # main, so a PR is green only once its contracts PR has merged.
-  drift:
+  # contracts/ is the contract both repos build against (new-commerce-web
+  # mirrors it): both OpenAPI documents must stay valid. Warnings are allowed,
+  # errors are red.
+  contract-lint:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Pinned contracts are on contracts main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          pinned=$(git ls-tree HEAD contracts | awk '{print $3}')
-          status=$(gh api "repos/miqbalhamdani/new-commerce-contracts/compare/main...${pinned}" --jq .status)
-          echo "contracts ${pinned}: ${status} relative to main"
-          case "$status" in identical|behind) ;; *) echo "::error::pin a contracts commit that is on main"; exit 1;; esac
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx -y @redocly/cli@2.62.1 lint contracts/openapi.yaml contracts/storefront.yaml
 
   # P1-001: the image the box runs. Built on every PR so a broken Dockerfile
   # is red; pushed to ghcr.io only from main, as sha-<commit> and main.
