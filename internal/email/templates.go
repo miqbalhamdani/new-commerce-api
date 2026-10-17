@@ -24,6 +24,26 @@ The link works for 7 days. If it has expired, ask %s to send a new invitation.
 	return subject, text, htmlBody
 }
 
+// Signup confirms a new owner's email (P1-084, BR-026, BR-128), in English
+// (BR-016).
+func Signup(shop, name, link string) (subject, text, htmlBody string) {
+	subject = "Confirm your email to open " + shop
+	text = fmt.Sprintf(`Hi %s,
+
+Confirm your email and choose a password to open %s on Belli.id:
+%s
+
+The link works for 7 days. If it has expired, register again with the same email to get a new one.
+If you did not sign up, you can ignore this email.
+`, name, shop, link)
+	htmlBody = fmt.Sprintf(`<p>Hi %s,</p>
+<p><a href="%s">Confirm your email and choose a password</a> to open <strong>%s</strong> on Belli.id.</p>
+<p>The link works for 7 days. If it has expired, register again with the same email to get a new one.
+If you did not sign up, you can ignore this email.</p>`,
+		html.EscapeString(name), html.EscapeString(link), html.EscapeString(shop))
+	return subject, text, htmlBody
+}
+
 // PasswordReset is a customer's reset link (BR-094, BR-128), in English
 // (BR-016).
 func PasswordReset(shop, name, link string) (subject, text, htmlBody string) {

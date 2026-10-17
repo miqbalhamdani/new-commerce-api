@@ -120,6 +120,7 @@ appear (BR-025).
 | Screen | Main user | Purpose | Module |
 |---|---|---|---|
 | Sign in / accept invitation | All staff | Way in | M5 |
+| Register | A new owner | Shop name, name and email; the emailed link confirms the address and sets the password, then onboarding | M5 |
 | Onboarding wizard | Owner | Shop settings, first brand, first category tree, first API key | M5 |
 | Order list | Ops | Daily workspace. Saved views, search | M1 |
 | Order detail | Ops | Status actions, ship dialog, refund record, audit trail | M1 |
@@ -488,6 +489,7 @@ The questions open at v2.0, and how they were closed (6 October 2026).
 | **Transactional email** | **Resend**, on its free plan (3,000 a month, 100 a day) until about 7–10 shops, then Pro at $20/month. Amazon SES ($0.10 per 1,000) is the cheapest at scale; switching only touches the email sender (`P1-226`). | BR-128 |
 | **Customer sign-in** | **Email + password, and Google** with the shop's own client ID. No WhatsApp, no OTP. | BR-092, BR-127 |
 | **Currency** | **IDR only.** No multi-currency, no cross-border sellers. | BR-029 |
+| **Self-service signup** (17 October 2026) | **Open to anyone**, rate-limited like login. The email is confirmed by a link that also sets the password; no CAPTCHA until abuse shows up. | BR-020, BR-026 |
 | **Production domain** | Stays `{domain}` in every document until `P1-001`. | `05-backlog.md` |
 | **Shopee partner approval** | **Parked.** Unpark before Phase 4. | `P1-080` |
 | **Tokopedia API access** | **Parked.** Phase 5 stays conditional on it. | `P1-080`, Phase 5 |

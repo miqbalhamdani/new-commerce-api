@@ -112,6 +112,24 @@ func (s *Server) DisableUser(w http.ResponseWriter, r *http.Request, id Id) {
 	})(w, r)
 }
 
+// Register handles POST /auth/register (P1-084): unauthenticated, and 202
+// whatever the email, so it says nothing about who has an account (BR-021).
+func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
+	var body RegisterRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	// Counted like a sign-in, before anything touches the database (BR-014).
+	if s.limits != nil && !s.limits.checkLogin(w, r, "signup", string(body.Email)) {
+		return
+	}
+	if err := s.team.Register(r.Context(), body.ShopName, body.Name, string(body.Email), clientIP(r)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 // AcceptInvite handles POST /auth/accept-invite: unauthenticated, the token
 // is the credential.
 func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {

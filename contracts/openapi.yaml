@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.13.1
+  version: 2.14.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -129,6 +129,36 @@ paths:
                 type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /auth/register:
+    post:
+      operationId: register
+      summary: Open a shop; the owner confirms their email from a link
+      description: |
+        Always `202`, whether or not the email is free, so the route never says which emails
+        have an account (BR-020, BR-021).
+
+        A new email gets a tenant and an `owner` who is `invited`, with no password, and an email
+        from "Belli.id" with a confirmation link (BR-128). The link is an invitation token (BR-026):
+        `accept-invite` with it sets the password, confirms the address and signs the owner in. If
+        the email belongs to an owner still `invited` with no password, the link is sent again;
+        any other existing email gets nothing.
+
+        Rate-limited like login (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "202":
+          description: Accepted. If the email can be used, a confirmation link is on its way.
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /auth/accept-invite:
     post:
@@ -2839,6 +2869,27 @@ components:
         job_id:
           type: string
           format: uuid
+
+    RegisterRequest:
+      type: object
+      required: [shop_name, name, email]
+      additionalProperties: false
+      properties:
+        shop_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          examples: ["Erigo"]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          examples: ["Budi"]
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          examples: ["budi@erigo.co.id"]
 
     AcceptInvite:
       type: object

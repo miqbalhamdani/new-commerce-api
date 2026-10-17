@@ -46,3 +46,10 @@ UPDATE tenants SET
   order_prefix = coalesce(sqlc.narg(order_prefix), order_prefix)
 WHERE id = current_setting('app.tenant_id')::uuid
 RETURNING *;
+
+-- name: CreateTenant :one
+-- Signup (P1-084). tenants has no RLS; the id is the one the transaction set
+-- as app.tenant_id, so the owner inserted next lands in this tenant.
+INSERT INTO tenants (id, name, slug, order_prefix)
+VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix))
+RETURNING *;

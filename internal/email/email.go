@@ -84,14 +84,17 @@ type Resend struct {
 }
 
 func (r Resend) Send(ctx context.Context, m Message) error {
-	body, _ := json.Marshal(map[string]any{
-		"from":     fmt.Sprintf("%q <no-reply@%s>", m.FromName, r.Domain),
-		"to":       []string{m.To},
-		"reply_to": m.ReplyTo,
-		"subject":  m.Subject,
-		"text":     m.Text,
-		"html":     m.HTML,
-	})
+	payload := map[string]any{
+		"from":    fmt.Sprintf("%q <no-reply@%s>", m.FromName, r.Domain),
+		"to":      []string{m.To},
+		"subject": m.Subject,
+		"text":    m.Text,
+		"html":    m.HTML,
+	}
+	if m.ReplyTo != "" { // a signup's confirmation has none (BR-128)
+		payload["reply_to"] = m.ReplyTo
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.URL, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -147,8 +150,11 @@ func (s SMTP) Send(_ context.Context, m Message) error {
 	}
 
 	var msg bytes.Buffer
-	fmt.Fprintf(&msg, "From: %s\r\nTo: %s\r\nReply-To: %s\r\nSubject: %s\r\nDate: %s\r\n",
-		from.String(), m.To, m.ReplyTo, mime.QEncoding.Encode("utf-8", m.Subject), time.Now().Format(time.RFC1123Z))
+	fmt.Fprintf(&msg, "From: %s\r\nTo: %s\r\n", from.String(), m.To)
+	if m.ReplyTo != "" {
+		fmt.Fprintf(&msg, "Reply-To: %s\r\n", m.ReplyTo)
+	}
+	fmt.Fprintf(&msg, "Subject: %s\r\nDate: %s\r\n", mime.QEncoding.Encode("utf-8", m.Subject), time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&msg, "MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n", parts.Boundary())
 	msg.Write(body.Bytes())
 	if err := smtp.SendMail(s.Addr, nil, from.Address, []string{m.To}, msg.Bytes()); err != nil {

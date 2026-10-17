@@ -59,7 +59,8 @@ staff token; storefront requests take it from the API key (BR-086). Exactly four
 tenants on a request path, each through its own `SECURITY DEFINER` function that returns only
 what it must:
 
-- staff login: `id, tenant_id, password_hash, status, role`;
+- staff login: `id, tenant_id, password_hash, status, role`. Staff signup (BR-020) calls the
+  same function, for the same columns, to find an owner whose signup was never confirmed;
 - staff token refresh: `id, tenant_id, user_id, expires_at, revoked_at` (the cookie carries no
   tenant, and taking one from the request is what this rule forbids);
 - API key resolution: `id, tenant_id, allowed_origin, revoked_at`;
@@ -189,7 +190,7 @@ default rather than leaked by default.
 | Admin session (staff JWT) | 100 req/min per user | Redis sliding window |
 | API key, browser request (has `Origin`) | 120 req/min per IP, 3,000 req/min per key | Cloudflare edge + Redis |
 | API key, server request (no `Origin`) | 600 req/min per key per IP, burst 100 | Redis sliding window |
-| Login and password reset (staff and customer) | 10 per 15 min per email, 30 per 15 min per IP | Redis |
+| Login, staff signup and password reset (staff and customer) | 10 per 15 min per email, 30 per 15 min per IP | Redis |
 | Checkout | 10 per min per IP | Redis |
 | Background jobs | 10 concurrent per tenant, 1 import per channel (BR-100) | Queue depth check + lock |
 
@@ -235,7 +236,10 @@ they can only be answered if the record is written at the time.
 
 ### BR-020 Staff email is unique system-wide and determines the tenant
 A user row belongs to exactly one tenant, and its email is unique across all tenants. Staff login
-takes only email and password; the tenant is read from the user row.
+takes only email and password; the tenant is read from the user row. Anyone can open a shop by
+registering (`POST /v1/auth/register`): that creates the tenant and its `owner`, `invited` until
+the address is confirmed, so an email nobody can read is never locked to a shop for good. The
+answer never says whether the email was free (BR-021).
 
 *Why:* with the same email in two tenants, nothing in the login request could tell them apart.
 The cost is accepted: an agency running two shops needs two email addresses. Shopper accounts are
@@ -290,7 +294,8 @@ Team, API keys, Channels or Settings in the navigation; a `viewer` sees no save 
 An owner or admin invites with email, name and role. The user is `invited`, with no password,
 until they accept, set a password and become `active`. An invitation link expires after
 **7 days** and can be resent while the user is still `invited`. Once the user is `active`, every
-link ever sent to them stops working.
+link ever sent to them stops working. A signup's confirmation link is the same kind of invitation,
+to the new owner; registering again with that email resends it while they are still `invited`.
 
 ### BR-027 Disabling a user
 Users are disabled, never deleted: `created_by` and `audit_log.actor_id` elsewhere must stay
@@ -892,7 +897,8 @@ address, so linking by email cannot be assumed for every provider.
 ### BR-128 Transactional email
 Sent through Resend from `"{shop name}" <no-reply@{domain}>` with Reply-To
 set to the shop's contact email. Emails: staff invitation, customer password reset, order placed,
-payment received, order shipped (with courier and tracking). The worker sends them after the
+payment received, order shipped (with courier and tracking). A signup's confirmation comes from
+`"Belli.id"` with no Reply-To: the shop is not set up yet. The worker sends them after the
 change commits; a rare lost email is accepted, and every email's content is also visible in the
 admin or on the website.
 
