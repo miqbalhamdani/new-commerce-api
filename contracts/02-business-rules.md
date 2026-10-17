@@ -59,8 +59,9 @@ staff token; storefront requests take it from the API key (BR-086). Exactly four
 tenants on a request path, each through its own `SECURITY DEFINER` function that returns only
 what it must:
 
-- staff login: `id, tenant_id, password_hash, status, role`. Staff signup (BR-020) calls the
-  same function, for the same columns, to find an owner whose signup was never confirmed;
+- staff login: `id, tenant_id, password_hash, status, role`. Staff signup, its email code and
+  staff Google sign-in (BR-020, BR-026) call the same function, for the same columns, to find
+  the user an email or a verified Google email names;
 - staff token refresh: `id, tenant_id, user_id, expires_at, revoked_at` (the cookie carries no
   tenant, and taking one from the request is what this rule forbids);
 - API key resolution: `id, tenant_id, allowed_origin, revoked_at`;
@@ -190,7 +191,8 @@ default rather than leaked by default.
 | Admin session (staff JWT) | 100 req/min per user | Redis sliding window |
 | API key, browser request (has `Origin`) | 120 req/min per IP, 3,000 req/min per key | Cloudflare edge + Redis |
 | API key, server request (no `Origin`) | 600 req/min per key per IP, burst 100 | Redis sliding window |
-| Login, staff signup and password reset (staff and customer) | 10 per 15 min per email, 30 per 15 min per IP | Redis |
+| Login, staff signup, signup codes (check and resend) and password reset (staff and customer) | 10 per 15 min per email, 30 per 15 min per IP | Redis |
+| Staff Google sign-in and sign-up | 30 per 15 min per IP (the token names nobody until it is checked) | Redis |
 | Checkout | 10 per min per IP | Redis |
 | Background jobs | 10 concurrent per tenant, 1 import per channel (BR-100) | Queue depth check + lock |
 
@@ -235,11 +237,21 @@ they can only be answered if the record is written at the time.
 ## 2. Auth & team
 
 ### BR-020 Staff email is unique system-wide and determines the tenant
-A user row belongs to exactly one tenant, and its email is unique across all tenants. Staff login
-takes only email and password; the tenant is read from the user row. Anyone can open a shop by
-registering (`POST /v1/auth/register`): that creates the tenant and its `owner`, `invited` until
-the address is confirmed, so an email nobody can read is never locked to a shop for good. The
-answer never says whether the email was free (BR-021).
+A user row belongs to exactly one tenant, and its email is unique across all tenants. Staff sign
+in with email and password, or with Google; either way the tenant is read from the user row.
+Anyone can open a shop by registering (`POST /v1/auth/register`): that creates the tenant and its
+`owner`, `invited` until the address is confirmed, so an email nobody can read is never locked to
+a shop for good. The answer never says whether the email was free (BR-021).
+
+**Google, for staff.** One platform client ID (`GOOGLE_CLIENT_ID`), not the shop's (that one is
+for shoppers, BR-127). The token is checked as BR-127 checks it (issuer, this client ID, expiry,
+a verified email), and the user is found by that email. An `active` user is signed in; an
+`invited` one has just proved the address, so the invitation is accepted and they are signed in
+with no password; `disabled` or no user is `401`. Signing up with Google creates the tenant and an
+`active` owner with no password: Google already confirmed the email, so there is no code. A
+Google-only user signs in with Google; password sign-in refuses them like a wrong password.
+Telling a Google caller that their own email has no account names nothing they do not already
+control, so that `401` says so.
 
 *Why:* with the same email in two tenants, nothing in the login request could tell them apart.
 The cost is accepted: an agency running two shops needs two email addresses. Shopper accounts are
@@ -296,6 +308,13 @@ until they accept, set a password and become `active`. An invitation link expire
 **7 days** and can be resent while the user is still `invited`. Once the user is `active`, every
 link ever sent to them stops working. A signup's confirmation link is the same kind of invitation,
 to the new owner; registering again with that email resends it while they are still `invited`.
+
+The signup email also carries a **6-digit code**, valid for at least **30 minutes**, which
+exchanges for that same invitation token (`POST /v1/auth/verify-code`). It is not stored: it is an
+HMAC over the user, the tenant and a 15-minute window, accepted in its own window and the two
+after it, and it stops working once the owner is `active`. A code only confirms an email; it never signs
+anyone in by itself (the session still needs a password, through `accept-invite`). Guessing is
+bounded by BR-014: ten tries in 15 minutes against a million codes, three of them live.
 
 ### BR-027 Disabling a user
 Users are disabled, never deleted: `created_by` and `audit_log.actor_id` elsewhere must stay
