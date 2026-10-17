@@ -172,6 +172,10 @@ networks:
     ipam:
       config:
         - subnet: 172.30.0.0/24
+          # Containers without a fixed address are given one from here, so
+          # 172.30.0.2 -- Caddy's, which TRUSTED_PROXIES names -- is never
+          # handed to whichever service deploy.sh starts first.
+          ip_range: 172.30.0.128/25
 
 volumes:
   pgdata:
