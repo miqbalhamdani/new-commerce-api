@@ -119,8 +119,9 @@ appear (BR-025).
 
 | Screen | Main user | Purpose | Module |
 |---|---|---|---|
-| Sign in / accept invitation | All staff | Way in | M5 |
-| Register | A new owner | Shop name, name and email; the emailed link confirms the address and sets the password, then onboarding | M5 |
+| Sign in / accept invitation | All staff | Way in: email and password, or Google | M5 |
+| Register | A new owner | Shop name, name and email, then the emailed 6-digit code (or link) confirms the address and a password is set, then onboarding; or Google and a shop name | M5 |
+| Verify email | A new owner | The 6-digit code from the signup email; resend | M5 |
 | Onboarding wizard | Owner | Shop settings, brands, category tree, first product (a draft with a price). Each step shows the shop's real list and links to its page | M5 |
 | Order list | Ops | Daily workspace. Saved views, search | M1 |
 | Order detail | Ops | Status actions, ship dialog, refund record, audit trail | M1 |
@@ -489,7 +490,7 @@ The questions open at v2.0, and how they were closed (6 October 2026).
 | **Transactional email** | **Resend**, on its free plan (3,000 a month, 100 a day) until about 7–10 shops, then Pro at $20/month. Amazon SES ($0.10 per 1,000) is the cheapest at scale; switching only touches the email sender (`P1-226`). | BR-128 |
 | **Customer sign-in** | **Email + password, and Google** with the shop's own client ID. No WhatsApp, no OTP. | BR-092, BR-127 |
 | **Currency** | **IDR only.** No multi-currency, no cross-border sellers. | BR-029 |
-| **Self-service signup** (17 October 2026) | **Open to anyone**, rate-limited like login. The email is confirmed by a link that also sets the password; no CAPTCHA until abuse shows up. | BR-020, BR-026 |
+| **Self-service signup** (17 October 2026) | **Open to anyone**, rate-limited like login. The email is confirmed by a 6-digit code or a link, then a password is set; Google sign-up needs no code. No CAPTCHA until abuse shows up. | BR-020, BR-026 |
 | **Production domain** | Stays `{domain}` in every document until `P1-001`. | `05-backlog.md` |
 | **Shopee partner approval** | **Parked.** Unpark before Phase 4. | `P1-080` |
 | **Tokopedia API access** | **Parked.** Phase 5 stays conditional on it. | `P1-080`, Phase 5 |

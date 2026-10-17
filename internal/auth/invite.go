@@ -4,8 +4,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -68,4 +70,34 @@ func (s *InviteSigner) sign(payload string) []byte {
 	m := hmac.New(sha256.New, s.key)
 	m.Write([]byte("invite:" + payload))
 	return m.Sum(nil)
+}
+
+// CodeWindow is one step of a signup code's life. A code is accepted in the
+// window it was minted in and the two after it, so it works for at least 30
+// minutes (BR-026).
+const CodeWindow = 15 * time.Minute
+
+// Code is the 6-digit code a signup email carries next to its link. It is
+// never stored: an HMAC over the user, the tenant and the window (BR-026). It
+// stops working once the user is active, because the caller checks that.
+func (s *InviteSigner) Code(user, tenantID uuid.UUID, now time.Time) string {
+	return s.code(user, tenantID, window(now))
+}
+
+// CheckCode reports whether code is the user's for this window or one of the
+// two before it. Every candidate is compared, so the time taken says nothing.
+func (s *InviteSigner) CheckCode(user, tenantID uuid.UUID, code string, now time.Time) bool {
+	ok := false
+	for back := int64(0); back <= 2; back++ {
+		ok = hmac.Equal([]byte(s.code(user, tenantID, window(now)-back)), []byte(code)) || ok
+	}
+	return ok
+}
+
+func window(now time.Time) int64 { return now.Unix() / int64(CodeWindow/time.Second) }
+
+func (s *InviteSigner) code(user, tenantID uuid.UUID, w int64) string {
+	m := hmac.New(sha256.New, s.key)
+	_, _ = fmt.Fprintf(m, "code:%s:%s:%d", user, tenantID, w) // a hash never fails a write
+	return fmt.Sprintf("%06d", binary.BigEndian.Uint32(m.Sum(nil)[:4])%1_000_000)
 }

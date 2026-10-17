@@ -100,12 +100,18 @@ Limits per caller are BR-014. Every response carries `RateLimit-Limit`, `RateLim
 | `POST` | `/v1/auth/refresh` | refresh cookie | 022 |
 | `POST` | `/v1/auth/logout` | signed in | 022 |
 | `POST` | `/v1/auth/register` | none | 003, 014, 020, 026 |
+| `POST` | `/v1/auth/verify-code` | none (emailed code) | 003, 014, 026 |
+| `POST` | `/v1/auth/resend-code` | none | 003, 014, 026 |
 | `POST` | `/v1/auth/accept-invite` | none (invite token) | 026 |
+| `GET` | `/v1/auth/providers` | none | 020 |
+| `POST` | `/v1/auth/google` | none (Google ID token) | 003, 014, 020 |
+| `POST` | `/v1/auth/register/google` | none (Google ID token) | 003, 014, 020 |
 | `GET` | `/v1/me` | signed in | — |
 | `PATCH` | `/v1/me` | signed in | 009 |
 
 Anyone can open a shop with `register`; the platform team can still create one with
-`cmd/create-tenant`. Either way the owner signs in with email and password like anyone else.
+`cmd/create-tenant`. Either way the owner signs in with email and password, or with Google, like
+anyone else.
 
 ### Login
 
@@ -158,7 +164,54 @@ emails have an account (BR-021). What happens behind it depends on the email (BR
 - **Any other existing email**: nothing is sent.
 
 A malformed body is `422`; going over the login limit is `429` (BR-014). The email comes from
-"Belli.id", not the shop (BR-128): the shop is not set up yet.
+"Belli.id", not the shop (BR-128): the shop is not set up yet. It carries a 6-digit code and the
+link; either one confirms the address.
+
+### Confirming a signup with its code
+
+```json
+POST /v1/auth/verify-code
+{ "email": "budi@erigo.co.id", "code": "482913" }
+
+200 OK
+{ "token": "inv_9c2e…" }
+
+POST /v1/auth/resend-code
+{ "email": "budi@erigo.co.id" }
+
+202 Accepted   (no body)
+```
+
+The code is valid for 30 minutes (BR-026). `verify-code` answers the same invitation token the
+emailed link carries; the screen then sets a password with it through `accept-invite`, which
+signs the owner in. A wrong, expired or spent code, or an email with no unconfirmed signup, is
+`422` on `code`. `resend-code` answers `202` whatever the email and sends only to an owner still
+`invited` with no password, as registering again does. Both count against the login limit for
+that email (BR-014).
+
+### Google
+
+```json
+GET /v1/auth/providers
+200 OK
+{ "google_client_id": "1234-abc.apps.googleusercontent.com" }   ← null when Google is off
+
+POST /v1/auth/google
+{ "id_token": "eyJ…" }
+200 OK   ← Session + refresh cookie
+
+POST /v1/auth/register/google
+{ "id_token": "eyJ…", "shop_name": "Erigo" }
+201 Created   ← Session + refresh cookie
+```
+
+The ID token comes from Google's own sign-in button with the client ID `providers` returns (BR-020).
+`google` signs in the active user the verified email names, or accepts an invited user's
+invitation first; a token Google does not vouch for, a disabled user or no user is `401`, and the
+last one says "No account uses this Google email." `register/google` opens a shop as `register`
+does, with an `active` owner (named from the Google profile) and no code; an email that already
+has an account is `422` on `email`. With no client ID configured, both are `422` on `id_token`
+("Google sign-in is not set up"). Both are limited per IP (BR-014).
 
 ### Accepting an invitation
 
@@ -1507,5 +1560,5 @@ Asked for often enough to say so explicitly.
 | Courier booking through Biteship | Out of scope; rates only (BR-120) |
 | Staff password change and reset | Not scheduled |
 | Customer email change | Not scheduled |
-| WhatsApp or OTP sign-in | No; email + password and Google only (BR-092) |
+| WhatsApp or OTP sign-in | No; email + password and Google only (BR-092). A signup's emailed code only confirms the address (BR-026) |
 | Promotions, discount codes | Out of scope; manual orders have per-line discounts only |

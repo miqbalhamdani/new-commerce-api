@@ -134,6 +134,8 @@ needs them.
 | P1-083 | Settings screen | FE | 071 | Name, time zone and order prefix, per `01-product-requirements.md` §4; only `owner` sees save; a changed prefix says it applies to new orders only (BR-025, BR-029, BR-077) | review | Iqbal Hamdani |
 | P1-084 | Self-service signup: `POST /v1/auth/register` | CT/BE | 064, 226 | As §2; always `202`; a new email gets a shop and an `invited` owner whose confirmation link signs them in through `accept-invite`; registering again resends it while unconfirmed (BR-003, BR-014, BR-020, BR-026) | review | Iqbal Hamdani |
 | P1-085 | Register screen; the signup link lands on onboarding | FE | 084, 068, 079 | Shop name, name and email, then "check your inbox"; the confirmation link asks for a password and opens the onboarding wizard | review | Iqbal Hamdani |
+| P1-086 | Signup email codes and staff Google sign-in / sign-up | CT/BE | 084 | As §2: `verify-code` exchanges the emailed code for the invitation token, `resend-code` always `202`, `providers`, `google` and `register/google` (BR-003, BR-014, BR-020, BR-026) | review | Iqbal Hamdani |
+| P1-087 | Sign-in, sign-up and verify screens in the TailAdmin style, with Google | FE | 086, 085 | Split layout with a brand panel; Google's button when `providers` names a client ID; sign-up goes to a 6-digit code screen, then a password, then onboarding; Google sign-up asks only the shop name | review | Iqbal Hamdani |
 
 > **`P1-225` is blocked** on a Resend account and the sending domain (`P1-001`). The local half is
 > done: in development the worker sends to Mailpit when `SMTP_ADDR` is set (inbox at

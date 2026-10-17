@@ -1,6 +1,9 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // ResendAPIKey sends email through Resend (BR-128). Empty is development
 // only: mail goes to SMTPAddr, or to stdout without one.
@@ -29,3 +32,8 @@ func InviteSecret() (string, error) {
 	}
 	return "", errors.New("INVITE_SECRET is required when ENVIRONMENT is not \"development\"")
 }
+
+// GoogleClientID is the platform's Google client ID for staff sign-in and
+// sign-up in the admin (BR-020) -- not a shop's, which is for its shoppers
+// (BR-127). Public by design. Empty turns Google off.
+func GoogleClientID() string { return strings.TrimSpace(Getenv("GOOGLE_CLIENT_ID", "")) }

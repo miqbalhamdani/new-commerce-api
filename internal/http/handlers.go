@@ -31,6 +31,11 @@ type Server struct {
 	invites *auth.InviteSigner
 	limits  *RateLimiter
 
+	// google checks staff Google ID tokens against googleClientID, the
+	// platform's client ID; an empty ID turns Google sign-in off (BR-020).
+	google         *auth.GoogleVerifier
+	googleClientID string
+
 	// secureCookies is false only for local development over plain HTTP, where
 	// a Secure cookie would be dropped by the browser and nothing would work.
 	secureCookies bool
@@ -47,11 +52,15 @@ type Services struct {
 	Invites *auth.InviteSigner
 	// Limits counts sign-ins (BR-014); nil counts nothing.
 	Limits *RateLimiter
+	// Google and GoogleClientID are staff Google sign-in (BR-020); an empty
+	// client ID turns it off.
+	Google         *auth.GoogleVerifier
+	GoogleClientID string
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
 	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
-		limits: svc.Limits, secureCookies: secureCookies}
+		limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID, secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.
@@ -114,6 +123,10 @@ func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session auth.Session) {
+	s.writeSessionStatus(w, r, session, http.StatusOK)
+}
+
+func (s *Server) writeSessionStatus(w http.ResponseWriter, r *http.Request, session auth.Session, status int) {
 	http.SetCookie(w, s.refreshCookie(session.RefreshToken, auth.RefreshTokenTTL))
 
 	body := Session{
@@ -133,6 +146,7 @@ func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session au
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		// The status is already written; there is nothing left to tell the
 		// client. Logged by the middleware.

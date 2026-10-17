@@ -31,6 +31,10 @@ var auditExempt = map[route]string{
 	{http.MethodPost, "/v1/auth/refresh"}:                   "token rotation, not an admin write",
 	{http.MethodPost, "/v1/auth/logout"}:                    "ends the caller's own session, not an admin write",
 	{http.MethodPost, "/v1/auth/register"}:                  "audited, but in the tenant it creates, which this harness cannot name: TestRegister checks its row",
+	{http.MethodPost, "/v1/auth/verify-code"}:               "reads only: it mints a token, and accepting it is audited",
+	{http.MethodPost, "/v1/auth/resend-code"}:               "sends mail, writes nothing",
+	{http.MethodPost, "/v1/auth/google"}:                    "a sign-in; the invitation it may accept is audited as user.accept_invite, which TestGoogleAuth checks",
+	{http.MethodPost, "/v1/auth/register/google"}:           "audited in the tenant it creates, which this harness cannot name: TestGoogleAuth checks its row",
 	{http.MethodPost, "/v1/shipping/rates"}:                 "a quote: a read that takes a body, and writes nothing",
 	{http.MethodPost, "/v1/webhooks/midtrans/{webhook_id}"}: "Midtrans, not staff: the order's Transition writes its own row, with no actor",
 }

@@ -30,23 +30,11 @@ func (s *Service) Register(ctx context.Context, shopName, name, address string, 
 	if err := validSignup(shopName, name, address); err != nil {
 		return err
 	}
-	tenantID, ownerID := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
-	// The new owner is the actor of their own signup, as an invitee is of
-	// their acceptance.
-	tctx := tenant.NewActorContext(tenant.NewContext(ctx, tenantID), tenant.Actor{UserID: ownerID, IP: ip})
-	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
-		q := sqlcgen.New(tx)
-		shop, err := q.CreateTenant(tctx, sqlcgen.CreateTenantParams{Name: shopName, Slug: slugFor(shopName), OrderPrefix: prefixFor(shopName)})
-		if err != nil {
-			return err
-		}
-		if _, err := q.InviteUser(tctx, sqlcgen.InviteUserParams{ID: ownerID, Email: address, Name: name, Role: auth.RoleOwner}); err != nil {
-			return err
-		}
-		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.register", SubjectType: "tenant", SubjectID: shop.ID.String(),
-			After: map[string]any{"name": shop.Name, "slug": shop.Slug, "order_prefix": shop.OrderPrefix, "owner": address}})
+	tenantID, ownerID, err := s.openShop(ctx, shopName, address, "", ip, func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error {
+		_, err := q.InviteUser(ctx, sqlcgen.InviteUserParams{ID: id, Email: address, Name: name, Role: auth.RoleOwner})
+		return err
 	})
-	if code, constraint, ok := db.Violation(err); ok && code == "23505" && constraint == "users_email_key" {
+	if taken(err) {
 		return s.resendSignup(ctx, address)
 	}
 	if err != nil {
@@ -54,6 +42,82 @@ func (s *Service) Register(ctx context.Context, shopName, name, address string, 
 	}
 	s.sendSignup(ctx, tenantID, ownerID)
 	return nil
+}
+
+// RegisterWithGoogle opens a shop for the person a Google ID token names
+// (BR-020). Google already confirmed the email, so the owner is active, with
+// no password and no code to enter. An email that already has an account is
+// 422 on email: the caller has proved it is theirs, so saying so names nothing
+// they do not control. A token Google does not vouch for is
+// auth.ErrUnauthenticated.
+func (s *Service) RegisterWithGoogle(ctx context.Context, google *auth.GoogleVerifier, clientID, idToken, shopName string, ip netip.Addr) (tenantID, ownerID uuid.UUID, err error) {
+	shopName = strings.TrimSpace(shopName)
+	if shopName == "" || utf8.RuneCountInString(shopName) > 100 {
+		return uuid.Nil, uuid.Nil, fieldError("shop_name", "shop_name is 1 to 100 characters")
+	}
+	id, err := google.Verify(ctx, idToken, clientID)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, auth.ErrUnauthenticated
+	}
+	name := googleName(id)
+	tenantID, ownerID, err = s.openShop(ctx, shopName, id.Email, "google", ip, func(q *sqlcgen.Queries, ctx context.Context, owner uuid.UUID) error {
+		_, err := q.CreateActiveOwner(ctx, sqlcgen.CreateActiveOwnerParams{ID: owner, Email: id.Email, Name: name})
+		return err
+	})
+	if taken(err) {
+		return uuid.Nil, uuid.Nil, fieldError("email", "This Google email already has an account. Sign in instead.")
+	}
+	return tenantID, ownerID, err
+}
+
+// ResendCode sends a signup's code and link again. Like registering again, it
+// answers nothing about the email (BR-021, BR-026).
+func (s *Service) ResendCode(ctx context.Context, address string) error {
+	return s.resendSignup(ctx, strings.TrimSpace(address))
+}
+
+// openShop is one signup's transaction: the tenant, its owner (added by
+// owner) and the tenant.register audit row, with the new owner as the actor of
+// their own signup, as an invitee is of their acceptance.
+func (s *Service) openShop(ctx context.Context, shopName, address, via string, ip netip.Addr,
+	owner func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error) (tenantID, ownerID uuid.UUID, err error) {
+	tenantID, ownerID = uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	tctx := tenant.NewActorContext(tenant.NewContext(ctx, tenantID), tenant.Actor{UserID: ownerID, IP: ip})
+	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		shop, err := q.CreateTenant(tctx, sqlcgen.CreateTenantParams{Name: shopName, Slug: slugFor(shopName), OrderPrefix: prefixFor(shopName)})
+		if err != nil {
+			return err
+		}
+		if err := owner(q, tctx, ownerID); err != nil {
+			return err
+		}
+		after := map[string]any{"name": shop.Name, "slug": shop.Slug, "order_prefix": shop.OrderPrefix, "owner": address}
+		if via != "" {
+			after["via"] = via
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.register", SubjectType: "tenant", SubjectID: shop.ID.String(), After: after})
+	})
+	return tenantID, ownerID, err
+}
+
+// taken reports a signup whose email already has an account (BR-020).
+func taken(err error) bool {
+	code, constraint, ok := db.Violation(err)
+	return ok && code == "23505" && constraint == "users_email_key"
+}
+
+// googleName is the owner's name from their Google profile, or the part of
+// the email before the @ when the profile has none.
+func googleName(id auth.GoogleIdentity) string {
+	name := strings.TrimSpace(id.Name)
+	if name == "" {
+		name, _, _ = strings.Cut(id.Email, "@")
+	}
+	if r := []rune(name); len(r) > 100 {
+		name = string(r[:100])
+	}
+	return name
 }
 
 // resendSignup sends the link again to an owner whose signup was never

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.14.0
+  version: 2.15.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -35,7 +35,8 @@ servers:
     description: Local development, against the host services from `P1-000`.
 
 # Every admin endpoint requires a staff bearer token unless it opts out with `security: []`.
-# The unauthenticated ones are login, refresh, accept-invite and the Midtrans webhook. Storefront credentials live in
+# The unauthenticated ones are login, refresh, register, verify-code, resend-code, accept-invite,
+# providers, google, register/google and the Midtrans webhook. Storefront credentials live in
 # storefront.yaml, the storefront's own document.
 security:
   - bearerAuth: []
@@ -155,6 +156,144 @@ paths:
       responses:
         "202":
           description: Accepted. If the email can be used, a confirmation link is on its way.
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/verify-code:
+    post:
+      operationId: verifyCode
+      summary: Exchange a signup's emailed 6-digit code for its invitation token
+      description: |
+        The code is in the signup email, valid for 30 minutes (BR-026). The answer is the same
+        invitation token the email's link carries; `accept-invite` with it sets the password and
+        signs the owner in. A code never signs anyone in by itself. A wrong, expired or spent code,
+        or an email with no unconfirmed signup, is `422` on `code`. Counted against the login limit
+        for the email (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCodeRequest"
+      responses:
+        "200":
+          description: The code is right; here is the invitation token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteToken"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/resend-code:
+    post:
+      operationId: resendCode
+      summary: Send a signup's code and link again
+      description: |
+        Always `202`, whatever the email (BR-021). Sends only to an owner still `invited` with no
+        password, as registering again does (BR-026). Counted against the login limit (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendCodeRequest"
+      responses:
+        "202":
+          description: Accepted. If the email has an unconfirmed signup, a new email is on its way.
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/providers:
+    get:
+      operationId: authProviders
+      summary: The sign-in providers the admin offers
+      description: |
+        The platform's Google client ID for the admin's sign-in button, or null when Google is off
+        (BR-020). Public by design: a client ID is not a secret.
+      security: []
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthProviders"
+
+  /auth/google:
+    post:
+      operationId: googleSignIn
+      summary: Sign in with a Google ID token
+      description: |
+        The ID token from Google's button, issued for the client ID `providers` names (BR-020). The
+        active user the verified email names is signed in; an invited one has their invitation
+        accepted first. A token Google does not vouch for, a disabled user or no user is `401`; the
+        last says "No account uses this Google email." With Google off it is `422` on `id_token`.
+        Limited per IP (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleSignInRequest"
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              description: The refresh token, httpOnly, Secure, SameSite=Lax.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/register/google:
+    post:
+      operationId: registerWithGoogle
+      summary: Open a shop with a Google ID token
+      description: |
+        As `register`, but Google has already confirmed the email: the owner is `active` with no
+        password, named from the Google profile, and signed in straight away (BR-020). An email
+        that already has an account is `422` on `email`; a token Google does not vouch for is
+        `401`; with Google off it is `422` on `id_token`. Limited per IP (BR-014).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleRegisterRequest"
+      responses:
+        "201":
+          description: The shop is open and its owner signed in.
+          headers:
+            Set-Cookie:
+              description: The refresh token, httpOnly, Secure, SameSite=Lax.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
         "429":
@@ -2890,6 +3029,69 @@ components:
           format: email
           maxLength: 254
           examples: ["budi@erigo.co.id"]
+
+    VerifyCodeRequest:
+      type: object
+      required: [email, code]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          examples: ["482913"]
+
+    InviteToken:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          examples: ["inv_9c2e…"]
+
+    ResendCodeRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+
+    AuthProviders:
+      type: object
+      required: [google_client_id]
+      properties:
+        google_client_id:
+          type: ["string", "null"]
+          examples: ["1234-abc.apps.googleusercontent.com"]
+
+    GoogleSignInRequest:
+      type: object
+      required: [id_token]
+      additionalProperties: false
+      properties:
+        id_token:
+          type: string
+          minLength: 1
+
+    GoogleRegisterRequest:
+      type: object
+      required: [id_token, shop_name]
+      additionalProperties: false
+      properties:
+        id_token:
+          type: string
+          minLength: 1
+        shop_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          examples: ["Erigo"]
 
     AcceptInvite:
       type: object

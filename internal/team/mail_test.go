@@ -190,8 +190,15 @@ func TestSignupEmail(t *testing.T) {
 	if err != nil || m == nil {
 		t.Fatalf("render: %v %v", m, err)
 	}
-	if m.FromName != "Belli.id" || m.ReplyTo != "" || m.To != "budi-"+owner.String()+"@erigo.co.id" || !strings.Contains(m.Subject, "Erigo") {
+	if m.FromName != "Belli.id" || m.ReplyTo != "" || m.To != "budi-"+owner.String()+"@erigo.co.id" || !strings.Contains(m.Text, "Erigo") {
 		t.Errorf("message: %+v", m)
+	}
+	// P1-086: the subject leads with the 6-digit code, which the body repeats
+	// and the API accepts for this owner.
+	code, _, _ := strings.Cut(m.Subject, " ")
+	if len(code) != 6 || !strings.HasSuffix(m.Subject, " is your Belli.id code") || !strings.Contains(m.Text, code) ||
+		!invites.CheckCode(owner, tenantID, code, time.Now()) {
+		t.Errorf("code %q in %q is not this owner's", code, m.Subject)
 	}
 	_, after, found := strings.Cut(m.Text, "https://admin.example.com/accept-invite#token=")
 	token, rest, marked := strings.Cut(strings.Fields(after + " ")[0], "&")

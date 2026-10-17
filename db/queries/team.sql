@@ -53,3 +53,16 @@ RETURNING *;
 INSERT INTO tenants (id, name, slug, order_prefix)
 VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix))
 RETURNING *;
+
+-- name: CreateActiveOwner :one
+-- A Google signup (P1-086): Google confirmed the email, so the owner is active
+-- with no password (BR-020).
+INSERT INTO users (id, tenant_id, email, name, role, status)
+VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(email), sqlc.arg(name), 'owner', 'active')
+RETURNING *;
+
+-- name: ActivateInvited :one
+-- A Google sign-in by an invited user (P1-086): the verified email accepts the
+-- invitation, with no password (BR-020, BR-026).
+UPDATE users SET status = 'active' WHERE id = sqlc.arg(id) AND status = 'invited'
+RETURNING *;
