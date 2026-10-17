@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 func init() {
@@ -117,6 +119,22 @@ func TestStaffPasswordReset(t *testing.T) {
 		}
 		return emails() - before
 	}
+	// asShop changes one user the way the app would, inside its tenant: in
+	// limited-roles mode the owner connection may only read across tenants, so
+	// an UPDATE through it would quietly change nothing.
+	asShop := func(tenantID uuid.UUID, sql, address string) {
+		t.Helper()
+		tctx := tenant.NewContext(ctx, tenantID)
+		if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
+			tag, err := tx.Exec(tctx, sql, address)
+			if err == nil && tag.RowsAffected() != 1 {
+				err = fmt.Errorf("%d rows changed, want 1", tag.RowsAffected())
+			}
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	t.Run("asking is 202 for anyone, and mails only an active user", func(t *testing.T) {
 		active := seedAuthUser(ctx, t, store, uuid.Must(uuid.NewV7()))
@@ -124,10 +142,9 @@ func TestStaffPasswordReset(t *testing.T) {
 			t.Errorf("active: %d emails, want 1", n)
 		}
 		invited := seedInvited(ctx, t, store, uuid.Must(uuid.NewV7()))
-		disabled := seedAuthUser(ctx, t, store, uuid.Must(uuid.NewV7()))
-		if _, err := owner.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE email = $1`, disabled.email); err != nil {
-			t.Fatal(err)
-		}
+		disabledShop := uuid.Must(uuid.NewV7())
+		disabled := seedAuthUser(ctx, t, store, disabledShop)
+		asShop(disabledShop, `UPDATE users SET status = 'disabled' WHERE email = $1`, disabled.email)
 		for what, address := range map[string]string{
 			"unknown": "nobody-" + uuid.NewString() + "@example.com", "invited": invited.marker, "disabled": disabled.email,
 		} {
@@ -140,10 +157,11 @@ func TestStaffPasswordReset(t *testing.T) {
 	t.Run("a Google-only owner adds a password, once, and is signed out elsewhere", func(t *testing.T) {
 		tenantID := uuid.Must(uuid.NewV7())
 		s := seedAuthUser(ctx, t, store, tenantID)
-		if _, err := owner.Exec(ctx, `UPDATE users SET password_hash = NULL, role = 'owner' WHERE email = $1`, s.email); err != nil {
-			t.Fatal(err)
-		}
+		asShop(tenantID, `UPDATE users SET password_hash = NULL, role = 'owner' WHERE email = $1`, s.email)
 		u := staffUser(t, s.email)
+		if u.hash != nil {
+			t.Fatal("the owner still has a password")
+		}
 		signer, err := auth.NewSigner(isoSigningKey)
 		if err != nil {
 			t.Fatal(err)
