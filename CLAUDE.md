@@ -103,6 +103,8 @@ cmd/migrate/      Runs migrations (embedded from db/migrations) to completion, e
 cmd/lint-rls/     RLS policy guard (make lint-rls).
 cmd/dev-seed/     Demo shop + owner (make dev-seed). cmd/storage-init/: bucket + lifecycle rules
 cmd/create-tenant/ A shop + owner in production, as app_user (deploy/README.md, "A new shop")
+cmd/demo-seed/    A demo shop with every admin screen filled, through the real services; sends no
+                  email (deploy/README.md, "A demo shop")
 cmd/worker/       Redis Streams consumer (P1-060): `jobs` stream (product_import, order_export,
                   image_derivatives, customer_purge), `emails` stream (invitation,
                   password_reset, order mails), and the nightly retention sweep (P1-214).

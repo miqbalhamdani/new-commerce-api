@@ -92,6 +92,23 @@ docker compose run --rm --no-deps --entrypoint create-tenant api-1 \
 
 It prints the owner's password once. Invitations take it from there.
 
+### A demo shop
+
+A shop with every admin screen filled, for showing the product: brands, a
+category tree, products in each status with placeholder photos, customers,
+three months of orders in every state with their payments, a team in each role
+and status, settings and API keys. Nothing it does sends an email -- staff are
+inserted, not invited, and its orders carry no customer address -- except
+"Resend invite" on its invited member, whose address is `@example.com`.
+
+```bash
+(umask 077; docker compose run --rm --no-deps --entrypoint demo-seed api-1 \
+  -owner-email demo@belli.id > ~/demo-account.txt)
+```
+
+`~/demo-account.txt` has the logins and their one password. A second run with
+the same `-slug` (default `demo`) changes nothing.
+
 ### Backups (managed database)
 
 The provider's backups first; `backup.sh` keeps an encrypted copy in a

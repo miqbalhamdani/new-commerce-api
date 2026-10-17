@@ -134,7 +134,7 @@ jobs:
       # which only a superuser may; `check` runs them. TestLimitedRoleMode is
       # this mode's own. ./internal/... includes `make test-iso`.
       - run: go test ./cmd/migrate -run TestLimitedRoleMode -v
-      - run: go test ./cmd/lint-rls ./cmd/create-tenant ./internal/...
+      - run: go test ./cmd/lint-rls ./cmd/create-tenant ./cmd/demo-seed ./internal/...
 
   # Every migration in the PR applied over main's schema with seeded data
   # (01-product-requirements.md §8.6), until a restored production backup
