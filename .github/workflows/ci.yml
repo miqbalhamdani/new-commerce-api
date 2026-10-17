@@ -215,3 +215,25 @@ jobs:
             ghcr.io/${{ github.repository }}:main
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Every push to main rolls out once its image is on ghcr.io (deploy/README.md,
+  # "Auto-deploy"): the box's forced command deploys main of both repos.
+  deploy:
+    if: github.event_name == 'push'
+    needs: [image, contract-lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://admin.belli.id
+    steps:
+      - name: deploy.sh main on the box
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -o BatchMode=yes "ubuntu@$DEPLOY_HOST" "api sha-${{ github.sha }}"

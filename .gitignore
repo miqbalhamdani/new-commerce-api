@@ -2,3 +2,4 @@
 bin/
 deploy/certs/*
 !deploy/certs/.gitkeep
+deploy/.auto-deploy.lock

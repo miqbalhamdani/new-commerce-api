@@ -8,6 +8,7 @@ The production stack: one VPS, Docker Compose, Caddy in front (P1-001, P1-002;
 | `compose.yaml` | Caddy, web, api ×2, worker, migrate (one-shot), PostgreSQL 18, Redis 8 |
 | `Caddyfile` | `admin.{domain}` (the admin, and `/v1/*` to the API) and `api.{domain}` |
 | `deploy.sh <tag>` | Migrate, then roll api-1, api-2, web and the worker without dropping a request |
+| `auto-deploy.sh` | What CI runs over SSH on every push to main of either repo: pull, then `deploy.sh main` |
 | `check.sh` | What the running stack is tuned to: Postgres and Redis settings, each container's limits (P1-002) |
 | `.env.example` | Every setting; copy to `.env` on the box |
 | `compose.local.yaml`, `local.env`, `local/` | The same stack on a developer machine |
@@ -25,6 +26,36 @@ cp .env.example .env && chmod 600 .env   # fill it in
 
 `deploy.sh` takes one tag for both images, and the two repos' shas differ:
 `./deploy.sh main` deploys the newest of each.
+
+### Auto-deploy
+
+A push to main of this repo or `new-commerce-web` deploys once its `image`
+job has pushed: the `deploy` job in `ci.yml` SSHes to the box with a key that
+can run only `auto-deploy.sh`, which pulls this checkout (for changes under
+`deploy/`) and runs `./deploy.sh main`. Either repo's push brings both to
+main, so the order the two arrive in does not matter; a lock queues one behind
+the other. The output goes to the journal, not to Actions, whose logs are
+public:
+
+```bash
+journalctl -t new-commerce-deploy -e
+```
+
+Set up once, on the box, one key per repo:
+
+```bash
+ssh-keygen -t ed25519 -N '' -C gh-deploy-api -f ~/deploy-keys/gh-deploy-api   # and -web
+echo "restrict,command=\"$PWD/auto-deploy.sh\" $(cat ~/deploy-keys/gh-deploy-api.pub)" >> ~/.ssh/authorized_keys
+ssh-keyscan -t ed25519 <box ip> > ~/deploy-keys/known_hosts
+```
+
+and in each repo's Actions secrets: `DEPLOY_HOST` (the box's IP),
+`DEPLOY_KNOWN_HOSTS` (that `known_hosts`) and `DEPLOY_SSH_KEY` (that repo's
+private key, which then leaves the box). The checkout must stay on main with
+no local commits, or the pull refuses and the deploy fails.
+
+To roll back, revert on main and push. A hand-run `deploy.sh` lasts until the
+next push; to hold it, take the keys' lines out of `~/.ssh/authorized_keys`.
 
 ### Managed database
 
