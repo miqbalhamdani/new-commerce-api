@@ -1,6 +1,6 @@
 # Go-live checklist: new-commerce-api + new-commerce-web
 
-Status as of 16 Oct 2026. Source of truth: `new-commerce-contracts/05-backlog.md`, Phase 6.
+Status as of 16 Oct 2026. Source of truth: `contracts/05-backlog.md`, Phase 6.
 Go-live means **P1-070: pilot tenant live**, which depends on P1-003 (backups) and P1-212
 (reference website). Neither is done yet.
 

@@ -328,8 +328,9 @@ must not happen on storage that has never been restored from.
 >
 > **`P1-004` in practice:** the snapshot is main's schema with `dev-seed` data until production
 > exists, then a restored production backup. Contract drift is red when the generated code does
-> not match the pinned contract, or the pinned contracts commit is not on contracts `main`, so an
-> api or web PR goes green only once its contracts PR has merged (re-run it).
+> not match `contracts/`, or web's `contracts/` is not a snapshot of api `main`'s (the contract
+> lives in new-commerce-api; web mirrors it), so a web PR goes green only once the api PR carrying
+> its contract change has merged (re-run it).
 >
 > **`P1-001` needs a decision at cutover:** the production domain. Every document still says
 > `{domain}`. Caddy's default ACME challenge also cannot reach a machine behind the Cloudflare

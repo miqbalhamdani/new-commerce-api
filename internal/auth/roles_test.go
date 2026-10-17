@@ -141,13 +141,13 @@ func assertNoWrites(t *testing.T, role string) {
 }
 
 // TestMatrixMatchesContract is P1-017's acceptance: the seeded permissions
-// equal 04-api-spec.md 3. It reads the table from the pinned contract rather
+// equal 04-api-spec.md 3. It reads the table from the contract rather
 // than restating it, so bumping the contract without updating the matrix
 // fails here.
 func TestMatrixMatchesContract(t *testing.T) {
 	spec, err := os.ReadFile("../../contracts/04-api-spec.md")
 	if err != nil {
-		t.Fatalf("read contract: %v (is the submodule checked out?)", err)
+		t.Fatalf("read contract: %v", err)
 	}
 
 	roles := []string{RoleOwner, RoleAdmin, RoleOps, RoleViewer}

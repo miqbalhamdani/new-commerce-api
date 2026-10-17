@@ -8,8 +8,8 @@ Phases 0–3 (foundation, catalog, orders, storefront API) are built and mostly 
 Phase 6a (CI, the Compose stack) is under way, Phase 4 (Shopee import) is next in the backlog.
 Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2 (MinIO locally).
 
-**The contract lives in `contracts/`** (git submodule pinned to a contracts commit on `main` — CI's `drift` job enforces this; `contracts/VERSION`). A
-fresh clone has it empty -- `git submodule update --init` (`make generate` refuses otherwise):
+**The contract lives in `contracts/`** (`contracts/VERSION`). This repo owns it; `new-commerce-web`
+keeps a read-only mirror. `contracts/CLAUDE.md` says how the documents relate and are versioned:
 
 | File | What it holds |
 |---|---|
@@ -22,8 +22,8 @@ fresh clone has it empty -- `git submodule update --init` (`make generate` refus
 | `storefront.yaml` | The `/v1/storefront` contract (`internal/storefront`) |
 
 Read the relevant sections before changing anything they cover. If the code and the contract
-disagree, the code is wrong — unless the contract is, in which case change it there first, in its
-own commit.
+disagree, the code is wrong — unless the contract is, in which case change `contracts/` first, as its
+own commit in the same PR.
 
 **Workflow and "done" are `05-backlog.md`**: take the topmost `todo` item whose dependencies are
 done; an item is done only when its Acceptance is proven, with a test wherever a test is possible.
@@ -71,7 +71,7 @@ explains why); a red test with "connection refused" means start the service, not
 
 `make check` green is the bar for a PR. CI (`.github/workflows/ci.yml`, P1-004) runs it on every
 PR against PostgreSQL 18, Redis 8 and a source-built MinIO, plus the PR's migrations over main's
-seeded schema and the contract drift check; run it locally first all the same.
+seeded schema and the contract lint; run it locally first all the same.
 Tests need PostgreSQL, Redis and MinIO running on the host
 (`brew services start postgresql@18 redis minio`, then `make storage-init` once), and libvips
 for the worker's image derivatives (`brew install vips pkg-config`). Local mail goes to Mailpit
@@ -89,8 +89,8 @@ golangci-lint v2.13.2), or `make generate` / `make lint` may produce a different
 `oapi-codegen.yaml`); `contracts/storefront.yaml` → `internal/storefront/gen.go` (chi, non-strict,
 `oapi-codegen.storefront.yaml`); a copy of `storefront.yaml` into `internal/storefront/` (embedded
 and served); and `sqlc generate` (`db/migrations` + `db/queries` → `internal/db/sqlcgen`). An API
-change therefore starts with a contracts PR, then a submodule bump here, then `make generate`.
-CI's `drift` job fails if the pinned contracts commit is not on contracts `main`.
+change therefore starts in `contracts/` (its own commit), then `make generate`, in one PR. CI's
+`contract-lint` job lints both OpenAPI files; web's `drift` job then wants web's mirror refreshed.
 
 ---
 
@@ -133,7 +133,7 @@ deploy/           the production stack: Compose, Caddyfile, deploy.sh, and the s
                   developer machine (deploy/README.md). Dockerfile: one image, every binary
 db/migrations/    golang-migrate, plain SQL, up + down
 db/queries/       sqlc queries
-contracts/        submodule, pinned to a commit on contracts main — READ ONLY from here
+contracts/        the contract (docs + OpenAPI) — owned here, mirrored by new-commerce-web
 ```
 
 ### Import rules

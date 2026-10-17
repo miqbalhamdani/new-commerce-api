@@ -1,33 +1,23 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in this folder.
 
-## What this repo is
+## What this folder is
 
-The spec and contracts for Ecommerce Backoffice v2. No application code lives here. It is
-consumed as a git submodule at `contracts/` by `new-commerce-api` (Go) and `new-commerce-web`
-(Next.js admin), both of which treat it as read-only and generate code from the OpenAPI files.
+The spec and contracts for Ecommerce Backoffice v2. No application code lives here.
+`new-commerce-api/contracts/` is the source of truth; `new-commerce-web/contracts/` is a
+byte-for-byte mirror of it (`npm run contracts` refreshes it; never edit it there). Both repos
+generate code from the OpenAPI files. It used to be the `new-commerce-contracts` repo, consumed as
+a submodule; that repo now only holds the one-off `acl-migration/`.
 
 ## Commands
 
-CI (`.github/workflows/ci.yml`, P1-004) only lints both OpenAPI documents. Warnings are allowed;
-errors fail the build. Run the same locally (Node 22):
+api's CI `contract-lint` job (P1-004) lints both OpenAPI documents. Warnings are allowed; errors
+fail the build. Run the same locally (Node 22), from the repo root:
 
 ```bash
-npx -y @redocly/cli@2.62.1 lint openapi.yaml storefront.yaml
+npx -y @redocly/cli@2.62.1 lint contracts/openapi.yaml contracts/storefront.yaml
 ```
-
-ACL Cosmetics catalog migration (`acl-migration/`, one-off; stdlib Python 3.9+, run with `-I`).
-`acl-migration/RUNBOOK.md` is the full procedure (rehearsal on a local stack, backups, rollback):
-
-```bash
-cd acl-migration
-python3 -I import_acl.py --backup ~/Downloads/acl-cosm-backup --dry-run
-ACL_EMAIL=... ACL_PASSWORD=... python3 -I import_acl.py --backup ~/Downloads/acl-cosm-backup \
-  --api https://api.<domain>/v1 [--state state.local.json]
-```
-
-It resumes from `state.json` (git-ignored, tied to one API URL; use a different `--state` per API).
 
 ## How the documents relate
 
@@ -69,10 +59,11 @@ file changes; `storefront.yaml` has its own `info.version` (0.x) bumped when it 
 
 ## Cross-repo workflow
 
-1. A change the code needs goes here first, in its own commit/PR (Definition of Done item 2: if
-   the code can't match the contract, the contract changes first).
-2. After it merges to `main`, each code repo bumps its `contracts` submodule pin and runs its
-   generator (`make generate` in api, `npm run generate` in web), committing the generated output.
-3. Both code repos' CI enforce drift: `generated-diff` fails if generated code is stale, and a
-   `drift` job fails unless the pinned contracts commit is on this repo's `main`, so a code PR
-   goes green only once its contracts PR has merged.
+1. A change the code needs goes into `new-commerce-api/contracts/` first, as its own commit in
+   the api PR that consumes it (Definition of Done item 2: if the code can't match the contract,
+   the contract changes first). Backlog status-only edits may go straight to api `main`.
+2. After it merges, web runs `npm run contracts` (mirror api `main`) and `npm run generate`,
+   committing both. Web PRs never edit `contracts/` by hand.
+3. Both repos' CI enforce drift: `generated-diff` fails if generated code is stale, and web's
+   `drift` job fails unless its `contracts/` equals api's `contracts/` at some commit on api
+   `main`, so a web PR goes green only once the api PR carrying its contract change has merged.
