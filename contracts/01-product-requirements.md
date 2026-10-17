@@ -121,7 +121,7 @@ appear (BR-025).
 |---|---|---|---|
 | Sign in / accept invitation | All staff | Way in | M5 |
 | Register | A new owner | Shop name, name and email; the emailed link confirms the address and sets the password, then onboarding | M5 |
-| Onboarding wizard | Owner | Shop settings, first brand, first category tree, first API key | M5 |
+| Onboarding wizard | Owner | Shop settings, brands, category tree, first product (a draft with a price). Each step shows the shop's real list and links to its page | M5 |
 | Order list | Ops | Daily workspace. Saved views, search | M1 |
 | Order detail | Ops | Status actions, ship dialog, refund record, audit trail | M1 |
 | Manual order entry | Ops | WhatsApp orders, priced from the catalog | M1 |
