@@ -214,3 +214,59 @@ func TestSignupEmail(t *testing.T) {
 		t.Errorf("an active owner got a signup email: %v %v", m, err)
 	}
 }
+
+// TestStaffResetMail renders a staff password reset (P1-088, BR-094, BR-128):
+// from the shop, to the admin's /reset-password, with a staff token bound to
+// the user's hash as it is now -- here none, a Google-only owner's. A user
+// disabled since asking gets nothing.
+func TestStaffResetMail(t *testing.T) {
+	ctx := t.Context()
+	store, err := db.New(ctx, config.AppDatabaseURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(store.Close)
+	resets, _ := auth.NewResetTokens(strings.Repeat("k", 32))
+	tenantID, owner, disabled := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	tctx := tenant.NewContext(ctx, tenantID)
+	if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		for _, sql := range []string{
+			`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ('` + tenantID.String() + `', 'Toko ABC', 'toko-` + tenantID.String() + `', 'TKA')`,
+			`INSERT INTO users (id, tenant_id, email, name, role, status) VALUES ('` + owner.String() + `', current_setting('app.tenant_id')::uuid, 'budi-` + owner.String() + `@tokoabc.com', 'Budi', 'owner', 'active')`,
+			`INSERT INTO users (id, tenant_id, email, name, role, status) VALUES ('` + disabled.String() + `', current_setting('app.tenant_id')::uuid, 'rina-` + disabled.String() + `@example.com', 'Rina', 'ops', 'disabled')`,
+		} {
+			if _, err := tx.Exec(tctx, sql); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	t.Cleanup(func() {
+		bg := tenant.NewContext(context.WithoutCancel(ctx), tenantID)
+		_ = store.InTenantTx(bg, func(tx pgx.Tx) error {
+			_, err := tx.Exec(bg, `DELETE FROM users; DELETE FROM tenants WHERE id = $1`, tenantID)
+			return err
+		})
+	})
+	render := team.ResetMail(store, resets.Staff(), "http://admin.test")
+
+	m, err := render(ctx, email.Envelope{Kind: "staff_password_reset", TenantID: tenantID, UserID: owner})
+	if err != nil || m == nil {
+		t.Fatalf("render: %v %v", m, err)
+	}
+	if m.FromName != "Toko ABC" || !strings.HasPrefix(m.To, "budi-") || m.Subject != "Reset your Toko ABC password" {
+		t.Errorf("message %+v", m)
+	}
+	_, link, _ := strings.Cut(m.Text, "http://admin.test/reset-password#token=")
+	token, _, _ := strings.Cut(link, "\n")
+	r, err := resets.Staff().Parse(token, time.Now())
+	if err != nil || r.ID != owner || r.TenantID != tenantID || !resets.Staff().Verify(token, nil) || resets.Verify(token, nil) {
+		t.Errorf("token in the link: %+v %v", r, err)
+	}
+
+	if m, err := render(ctx, email.Envelope{Kind: "staff_password_reset", TenantID: tenantID, UserID: disabled}); err != nil || m != nil {
+		t.Errorf("a disabled user was mailed: %v %v", m, err)
+	}
+}

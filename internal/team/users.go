@@ -206,3 +206,25 @@ func notFound(err error) error {
 func fieldError(field, detail string) error {
 	return apperrors.ValidationFailed(detail).WithFields(apperrors.Field{Name: field, Detail: detail})
 }
+
+// RequestPasswordReset mails a reset link to the active user this email
+// names (P1-088, BR-094); anyone else gets nothing, and the caller answers 202
+// either way (BR-021). An invited owner confirms the signup instead (BR-026).
+// The read is the staff-login lookup (BR-003).
+func (s *Service) RequestPasswordReset(ctx context.Context, address string) error {
+	u, err := s.store.LookupUserForAuth(ctx, strings.TrimSpace(address))
+	if errors.Is(err, db.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if u.Status != "active" {
+		return nil
+	}
+	if err := email.Enqueue(ctx, s.queue, email.Envelope{Kind: "staff_password_reset", TenantID: u.TenantID, UserID: u.ID}); err != nil {
+		// Asking again sends it again; a lost email is accepted (BR-128).
+		slog.ErrorContext(ctx, "enqueue staff password reset", "error", err)
+	}
+	return nil
+}

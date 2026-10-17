@@ -16,39 +16,50 @@ import (
 const ResetTTL = 30 * time.Minute
 
 // ErrInvalidReset covers a reset token that is malformed, forged, expired or
-// already used. The customer hears one thing: ask for a new link.
+// already used. The customer or staff user hears one thing: ask for a new
+// link.
 var ErrInvalidReset = errors.New("invalid password reset")
 
-// Reset is what a reset token names: which customer, of which shop, until
-// when.
+// Reset is what a reset token names: which customer or staff user, of which
+// shop, until when.
 type Reset struct {
-	CustomerID uuid.UUID `json:"c"`
-	TenantID   uuid.UUID `json:"t"`
-	Expires    int64     `json:"e"`
+	ID       uuid.UUID `json:"c"`
+	TenantID uuid.UUID `json:"t"`
+	Expires  int64     `json:"e"`
 }
 
-// ResetTokens mint and check customer password reset tokens. Nothing is
-// stored (03-erd.md §3.5): the customer's password hash at the time of
-// minting is part of what is signed, so setting a password -- with this
-// link or any other way -- changes the hash and spends every link already
-// sent. A Google-only customer's missing hash counts as empty.
-type ResetTokens struct{ key []byte }
+// ResetTokens mint and check password reset tokens. Nothing is stored
+// (03-erd.md §3.5): the account's password hash at the time of minting is
+// part of what is signed, so setting a password -- with this link or any
+// other way -- changes the hash and spends every link already sent. A
+// Google-only account's missing hash counts as empty.
+type ResetTokens struct {
+	key   []byte
+	label string
+}
 
+// NewResetTokens is the customers' tokens; Staff is the admin's.
 func NewResetTokens(secret string) (*ResetTokens, error) {
 	if len(secret) < 32 {
 		return nil, errors.New("password reset secret must be at least 32 bytes")
 	}
-	return &ResetTokens{key: []byte(secret)}, nil
+	return &ResetTokens{key: []byte(secret), label: "reset:"}, nil
+}
+
+// Staff is the same key signing under another label, so a customer's link
+// never resets a staff password, nor a staff link a customer's (BR-094).
+func (s *ResetTokens) Staff() *ResetTokens {
+	return &ResetTokens{key: s.key, label: "staff-reset:"}
 }
 
 // Mint is "prt_<payload>.<signature>", both base64url.
-func (s *ResetTokens) Mint(customerID, tenantID uuid.UUID, passwordHash *string, now time.Time) string {
-	payload, _ := json.Marshal(Reset{CustomerID: customerID, TenantID: tenantID, Expires: now.Add(ResetTTL).Unix()})
+func (s *ResetTokens) Mint(id, tenantID uuid.UUID, passwordHash *string, now time.Time) string {
+	payload, _ := json.Marshal(Reset{ID: id, TenantID: tenantID, Expires: now.Add(ResetTTL).Unix()})
 	p := base64.RawURLEncoding.EncodeToString(payload)
 	return "prt_" + p + "." + base64.RawURLEncoding.EncodeToString(s.sign(p, passwordHash))
 }
 
-// Parse reads which customer a token names and checks it has not expired.
+// Parse reads which account a token names and checks it has not expired.
 // The signature waits for Verify, which needs that customer's current hash.
 func (s *ResetTokens) Parse(token string, now time.Time) (Reset, error) {
 	p, _, ok := split(token)
@@ -85,6 +96,6 @@ func (s *ResetTokens) sign(payload string, passwordHash *string) []byte {
 		hash = *passwordHash
 	}
 	m := hmac.New(sha256.New, s.key)
-	m.Write([]byte("reset:" + payload + "\x00" + hash))
+	m.Write([]byte(s.label + payload + "\x00" + hash))
 	return m.Sum(nil)
 }

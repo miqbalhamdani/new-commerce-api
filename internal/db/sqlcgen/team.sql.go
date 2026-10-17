@@ -270,6 +270,28 @@ func (q *Queries) OtherActiveOwners(ctx context.Context, id uuid.UUID) (int32, e
 	return column_1, err
 }
 
+const setUserPassword = `-- name: SetUserPassword :execrows
+UPDATE users SET password_hash = $1
+WHERE id = $2 AND status = 'active' AND password_hash IS NOT DISTINCT FROM $3
+`
+
+type SetUserPasswordParams struct {
+	NewHash *string
+	ID      uuid.UUID
+	OldHash *string
+}
+
+// A staff password reset (P1-088): only an active user, and only while the
+// hash is still the one the link was minted against, so of two confirms racing
+// on one link exactly one sets it (BR-094).
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserPassword, arg.NewHash, arg.ID, arg.OldHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setUserRole = `-- name: SetUserRole :one
 UPDATE users SET role = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
 `

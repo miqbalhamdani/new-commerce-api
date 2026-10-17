@@ -29,6 +29,7 @@ type Server struct {
 	team    *team.Service
 	orders  *orders.Service
 	invites *auth.InviteSigner
+	resets  *auth.ResetTokens // staff password reset links (BR-094)
 	limits  *RateLimiter
 
 	// google checks staff Google ID tokens against googleClientID, the
@@ -50,6 +51,8 @@ type Services struct {
 	Team    *team.Service
 	Orders  *orders.Service
 	Invites *auth.InviteSigner
+	// Resets are the staff reset tokens (auth.ResetTokens.Staff, BR-094).
+	Resets *auth.ResetTokens
 	// Limits counts sign-ins (BR-014); nil counts nothing.
 	Limits *RateLimiter
 	// Google and GoogleClientID are staff Google sign-in (BR-020); an empty
@@ -60,7 +63,7 @@ type Services struct {
 
 func NewServer(svc Services, secureCookies bool) *Server {
 	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
-		limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID, secureCookies: secureCookies}
+		resets: svc.Resets, limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID, secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.

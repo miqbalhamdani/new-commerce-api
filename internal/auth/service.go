@@ -318,6 +318,55 @@ func (s *Service) AcceptInvite(ctx context.Context, invites *InviteSigner, token
 	return s.issue(ctx, inv.TenantID, inv.UserID, role, nil)
 }
 
+// ResetPassword sets a staff user's password with a reset token, signs them
+// out everywhere and signs them in afresh (P1-088, BR-094). resets must be the
+// staff tokens, so a customer's link never gets here. A Google-only user adds a
+// password this way. Any failure is ErrInvalidReset: the client can only ask
+// for a new link.
+func (s *Service) ResetPassword(ctx context.Context, resets *ResetTokens, token, password string) (Session, error) {
+	r, err := resets.Parse(token, s.now())
+	if err != nil {
+		return Session{}, ErrInvalidReset
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return Session{}, err
+	}
+	tctx := tenant.NewActorContext(tenant.NewContext(ctx, r.TenantID), tenant.Actor{UserID: r.ID})
+	var role string
+	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		u, err := q.GetUser(tctx, r.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidReset
+		}
+		if err != nil {
+			return err
+		}
+		if !resets.Verify(token, u.PasswordHash) {
+			return ErrInvalidReset
+		}
+		// Guarded on the old hash and on active: a link sets a password once,
+		// and never for a user disabled since it was sent.
+		n, err := q.SetUserPassword(tctx, sqlcgen.SetUserPasswordParams{ID: u.ID, NewHash: &hash, OldHash: u.PasswordHash})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrInvalidReset
+		}
+		if _, err := q.RevokeAllUserTokens(tctx, u.ID); err != nil {
+			return err
+		}
+		role = u.Role
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.password_reset", SubjectType: "user", SubjectID: u.ID.String()})
+	})
+	if err != nil {
+		return Session{}, err
+	}
+	return s.issue(ctx, r.TenantID, r.ID, role, nil)
+}
+
 // VerifyCode exchanges a signup's emailed code for the invitation token its
 // link carries (BR-026). The code only confirms the address: the session still
 // needs a password, through AcceptInvite. The user is found through the

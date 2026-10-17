@@ -56,7 +56,7 @@ func (s *Service) ConfirmReset(ctx context.Context, token, password string) erro
 		return err
 	}
 	return s.tx(ctx, func(q *sqlcgen.Queries) error {
-		c, err := q.LockCustomer(ctx, r.CustomerID)
+		c, err := q.LockCustomer(ctx, r.ID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return invalidReset()
 		}

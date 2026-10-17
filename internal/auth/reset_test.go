@@ -19,7 +19,7 @@ func TestResetTokens(t *testing.T) {
 	tok := resets.Mint(customer, shop, &old, now)
 
 	r, err := resets.Parse(tok, now)
-	if err != nil || r.CustomerID != customer || r.TenantID != shop || !resets.Verify(tok, &old) {
+	if err != nil || r.ID != customer || r.TenantID != shop || !resets.Verify(tok, &old) {
 		t.Fatalf("own token: %+v %v", r, err)
 	}
 	changed := "$argon2id$new"
@@ -41,10 +41,16 @@ func TestResetTokens(t *testing.T) {
 		"garbage":     "prt_x.y",
 		"empty":       "",
 		"other key's": mustResets(t, "another-reset-key-at-least-32-bytes!").Mint(customer, shop, &old, now),
+		"staff":       resets.Staff().Mint(customer, shop, &old, now),
 	} {
 		if resets.Verify(bad, &old) {
 			t.Errorf("%s token verifies", what)
 		}
+	}
+	// And the other way: a customer's link never resets a staff password.
+	staff := resets.Staff()
+	if staff.Verify(tok, &old) || !staff.Verify(staff.Mint(customer, shop, &old, now), &old) {
+		t.Error("staff tokens do not stand apart from customers'")
 	}
 }
 

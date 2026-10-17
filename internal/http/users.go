@@ -235,7 +235,7 @@ func (s *Server) googleOn(w http.ResponseWriter, r *http.Request) bool {
 		writeError(w, r, fieldErr("id_token", "Google sign-in is not set up."))
 		return false
 	}
-	return s.limits == nil || s.limits.checkGoogle(w, r)
+	return s.limits == nil || s.limits.checkLoginIP(w, r)
 }
 
 // AcceptInvite handles POST /auth/accept-invite: unauthenticated, the token
@@ -252,6 +252,50 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	session, err := s.auth.AcceptInvite(r.Context(), s.invites, body.Token, body.Password)
 	if errors.Is(err, auth.ErrInvalidInvite) {
 		writeError(w, r, fieldErr("token", "This invitation link has expired or was already used. Ask for a new invitation."))
+		return
+	}
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	s.writeSession(w, r, session)
+}
+
+// RequestStaffPasswordReset handles POST /auth/password-reset (P1-088): 202
+// whatever the email (BR-021); only an active user gets mail (BR-094).
+func (s *Server) RequestStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body StaffPasswordResetRequest
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if s.limits != nil && !s.limits.checkLogin(w, r, "reset", string(body.Email)) {
+		return
+	}
+	if err := s.team.RequestPasswordReset(r.Context(), string(body.Email)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// ConfirmStaffPasswordReset handles POST /auth/password-reset/confirm
+// (P1-088): the token is the credential; the user is signed in with the new
+// password, and out everywhere else (BR-094).
+func (s *Server) ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var body StaffPasswordResetConfirm
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if s.limits != nil && !s.limits.checkLoginIP(w, r) {
+		return
+	}
+	if len(body.Password) < 8 {
+		writeError(w, r, fieldErr("password", "password is at least 8 characters"))
+		return
+	}
+	session, err := s.auth.ResetPassword(r.Context(), s.resets, body.Token, body.Password)
+	if errors.Is(err, auth.ErrInvalidReset) {
+		writeError(w, r, fieldErr("token", "This reset link has expired or was already used. Ask for a new one."))
 		return
 	}
 	if err != nil {
