@@ -66,3 +66,10 @@ RETURNING *;
 -- invitation, with no password (BR-020, BR-026).
 UPDATE users SET status = 'active' WHERE id = sqlc.arg(id) AND status = 'invited'
 RETURNING *;
+
+-- name: SetUserPassword :execrows
+-- A staff password reset (P1-088): only an active user, and only while the
+-- hash is still the one the link was minted against, so of two confirms racing
+-- on one link exactly one sets it (BR-094).
+UPDATE users SET password_hash = sqlc.arg(new_hash)
+WHERE id = sqlc.arg(id) AND status = 'active' AND password_hash IS NOT DISTINCT FROM sqlc.narg(old_hash);

@@ -11,6 +11,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 )
 
 func init() {
@@ -80,7 +81,9 @@ func TestAuditLog(t *testing.T) {
 		}
 	})
 	t.Run("date filters are midnight WIB; an offset-less time is 422", func(t *testing.T) {
-		tomorrow := time.Now().Add(24 * time.Hour).Format(time.DateOnly)
+		// Tomorrow in WIB, as the API reads the date: the machine's own zone
+		// (UTC in CI) is a day behind from midnight to 07:00 WIB.
+		tomorrow := time.Now().In(config.WIB).Add(24 * time.Hour).Format(time.DateOnly)
 		_, p := do("GET", "/v1/audit-log?from="+tomorrow, nil)
 		if len(p["data"].([]any)) != 0 {
 			t.Errorf("from tomorrow: %v", p)

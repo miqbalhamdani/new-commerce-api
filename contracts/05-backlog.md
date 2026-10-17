@@ -136,6 +136,8 @@ needs them.
 | P1-085 | Register screen; the signup link lands on onboarding | FE | 084, 068, 079 | Shop name, name and email, then "check your inbox"; the confirmation link asks for a password and opens the onboarding wizard | review | Iqbal Hamdani |
 | P1-086 | Signup email codes and staff Google sign-in / sign-up | CT/BE | 084 | As §2: `verify-code` exchanges the emailed code for the invitation token, `resend-code` always `202`, `providers`, `google` and `register/google` (BR-003, BR-014, BR-020, BR-026) | review | Iqbal Hamdani |
 | P1-087 | Sign-in, sign-up and verify screens in the TailAdmin style, with Google | FE | 086, 085 | Split layout with a brand panel; Google's button when `providers` names a client ID; sign-up goes to a 6-digit code screen, then a password, then onboarding; Google sign-up asks only the shop name | review | Iqbal Hamdani |
+| P1-088 | Staff password reset | CT/BE | 086 | As §2: `password-reset` always `202` and mails only an `active` user; `password-reset/confirm` sets the password once, revokes every refresh token, audits and signs in; a customer's reset token is `422`; a Google-only owner adds a password this way (BR-003, BR-014, BR-094) | review | Iqbal Hamdani |
+| P1-089 | Forgot and reset password screens | FE | 088, 087 | "Forgot password?" on sign-in; an email form, then "check your inbox"; the link's page asks for the password twice and signs in; an expired link says to ask for a new one (BR-094) | review | Iqbal Hamdani |
 
 > **`P1-225` is blocked** on a Resend account and the sending domain (`P1-001`). The local half is
 > done: in development the worker sends to Mailpit when `SMTP_ADDR` is set (inbox at

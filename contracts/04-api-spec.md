@@ -103,6 +103,8 @@ Limits per caller are BR-014. Every response carries `RateLimit-Limit`, `RateLim
 | `POST` | `/v1/auth/verify-code` | none (emailed code) | 003, 014, 026 |
 | `POST` | `/v1/auth/resend-code` | none | 003, 014, 026 |
 | `POST` | `/v1/auth/accept-invite` | none (invite token) | 026 |
+| `POST` | `/v1/auth/password-reset` | none | 003, 014, 021, 094 |
+| `POST` | `/v1/auth/password-reset/confirm` | none (reset token) | 014, 094 |
 | `GET` | `/v1/auth/providers` | none | 020 |
 | `POST` | `/v1/auth/google` | none (Google ID token) | 003, 014, 020 |
 | `POST` | `/v1/auth/register/google` | none (Google ID token) | 003, 014, 020 |
@@ -224,6 +226,29 @@ POST /v1/auth/accept-invite
 
 An expired or already-used token is `422` on `token` (BR-026).
 
+### Password reset
+
+```json
+POST /v1/auth/password-reset
+{ "email": "budi@erigo.co.id" }
+
+202 Accepted   (no body)
+
+POST /v1/auth/password-reset/confirm
+{ "token": "prt_…", "password": "at-least-8-chars" }
+
+200 OK   ← Session + refresh cookie
+```
+
+The request answers `202` whatever the email (BR-021) and emails a link only to an `active` user:
+an `invited` owner confirms their signup instead (`resend-code`), and a disabled or unknown email
+gets nothing. The link is `{admin}/reset-password#token=prt_…`, valid 30 minutes and single use
+(BR-094). `confirm` sets the password, revokes every refresh token the user has, and signs them in
+with a new session. An expired, used or forged token, or a customer's reset token, is `422` on
+`token`; a password under 8 characters is `422` on `password`. A Google-only user adds a password
+this way. The request counts against the login limit for that email, `confirm` against the
+per-IP limit (BR-014).
+
 ### Me
 
 ```json
@@ -238,7 +263,8 @@ PATCH /v1/me
 200 OK   ← same body as GET /v1/me
 ```
 
-`name` is the only editable field. Staff password change and reset are not in v2.
+`name` is the only editable field. Changing a password while signed in is not in v2; a reset sets
+one (BR-094).
 
 ---
 
@@ -1558,7 +1584,7 @@ Asked for often enough to say so explicitly.
 | `Idempotency-Key` header | Replaced by cart idempotency (BR-088) |
 | Payment gateways other than Midtrans | Not scheduled; another gateway would be a new caller of Transition (BR-074) |
 | Courier booking through Biteship | Out of scope; rates only (BR-120) |
-| Staff password change and reset | Not scheduled |
+| Staff password change while signed in | Not scheduled; a reset sets one (BR-094) |
 | Customer email change | Not scheduled |
 | WhatsApp or OTP sign-in | No; email + password and Google only (BR-092). A signup's emailed code only confirms the address (BR-026) |
 | Promotions, discount codes | Out of scope; manual orders have per-line discounts only |

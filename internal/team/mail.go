@@ -61,6 +61,46 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 	}
 }
 
+// ResetMail renders a staff password reset (P1-088, BR-094, BR-128): from the
+// shop, with its Reply-To. The worker mints the token here, against the hash
+// as it is now, so it never travels through Redis. A user no longer active
+// gets nothing: the link would not work anyway.
+func ResetMail(store *db.Store, resets *auth.ResetTokens, adminURL string) email.Render {
+	return func(ctx context.Context, e email.Envelope) (*email.Message, error) {
+		tctx := tenant.NewContext(ctx, e.TenantID)
+		var user sqlcgen.User
+		var shop sqlcgen.Tenant
+		var replyTo *string
+		err := store.InTenantTx(tctx, func(tx pgx.Tx) (err error) {
+			q := sqlcgen.New(tx)
+			if user, err = q.GetUser(tctx, e.UserID); err != nil {
+				return err
+			}
+			if replyTo, err = ContactEmail(tctx, q); err != nil {
+				return err
+			}
+			shop, err = q.GetTenant(tctx, e.TenantID)
+			return err
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if user.Status != "active" {
+			return nil, nil
+		}
+		link := adminURL + "/reset-password#token=" + resets.Mint(user.ID, user.TenantID, user.PasswordHash, time.Now())
+		subject, text, html := email.PasswordReset(shop.Name, user.Name, link)
+		msg := &email.Message{FromName: shop.Name, To: string(user.Email), Subject: subject, Text: text, HTML: html}
+		if replyTo != nil {
+			msg.ReplyTo = *replyTo
+		}
+		return msg, nil
+	}
+}
+
 // ContactEmail is the shop's Reply-To for every email it sends (BR-128), or
 // nil when it has none -- including a shop whose settings row does not exist
 // yet.

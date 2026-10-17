@@ -164,6 +164,7 @@ func run() error {
 			Team:           teamSvc,
 			Orders:         ordersSvc,
 			Invites:        invites,
+			Resets:         resets.Staff(),
 			Google:         google,
 			GoogleClientID: config.GoogleClientID(),
 			Limits:         adminLimits,

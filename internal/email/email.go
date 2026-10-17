@@ -53,7 +53,7 @@ type Sender interface {
 
 // Envelope is what a service enqueues: which email, about whom.
 type Envelope struct {
-	Kind     string    `json:"kind"` // "invitation", "password_reset", "order_placed", "payment_received", "order_shipped"
+	Kind     string    `json:"kind"` // "invitation", "signup", "password_reset", "staff_password_reset", "order_placed", "payment_received", "order_shipped"
 	TenantID uuid.UUID `json:"tenant_id"`
 	UserID   uuid.UUID `json:"user_id"`
 	ActorID  uuid.UUID `json:"actor_id"`

@@ -108,6 +108,8 @@ func run() error {
 		"invitation":     team.InvitationMail(pool, invites, config.AdminURL()),
 		"signup":         team.SignupMail(pool, invites, config.AdminURL()),
 		"password_reset": customers.ResetMail(pool, resets),
+		// P1-088: a staff reset, signed apart from a customer's.
+		"staff_password_reset": team.ResetMail(pool, resets.Staff(), config.AdminURL()),
 		// P1-228: one renderer, three events.
 		"order_placed":     orders.OrderMail(pool),
 		"payment_received": orders.OrderMail(pool),

@@ -35,6 +35,7 @@ var auditExempt = map[route]string{
 	{http.MethodPost, "/v1/auth/resend-code"}:               "sends mail, writes nothing",
 	{http.MethodPost, "/v1/auth/google"}:                    "a sign-in; the invitation it may accept is audited as user.accept_invite, which TestGoogleAuth checks",
 	{http.MethodPost, "/v1/auth/register/google"}:           "audited in the tenant it creates, which this harness cannot name: TestGoogleAuth checks its row",
+	{http.MethodPost, "/v1/auth/password-reset"}:            "sends mail, writes nothing",
 	{http.MethodPost, "/v1/shipping/rates"}:                 "a quote: a read that takes a body, and writes nothing",
 	{http.MethodPost, "/v1/webhooks/midtrans/{webhook_id}"}: "Midtrans, not staff: the order's Transition writes its own row, with no actor",
 }

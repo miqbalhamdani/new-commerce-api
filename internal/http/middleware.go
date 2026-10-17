@@ -64,7 +64,8 @@ func unauthenticated(r *http.Request) bool {
 	}
 	switch r.URL.Path {
 	case "/v1/auth/login", "/v1/auth/refresh", "/v1/auth/register", "/v1/auth/accept-invite",
-		"/v1/auth/verify-code", "/v1/auth/resend-code", "/v1/auth/google", "/v1/auth/register/google":
+		"/v1/auth/verify-code", "/v1/auth/resend-code", "/v1/auth/google", "/v1/auth/register/google",
+		"/v1/auth/password-reset", "/v1/auth/password-reset/confirm":
 		return true
 	}
 	// Midtrans has no token: the webhook id names the shop and the

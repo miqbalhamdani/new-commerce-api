@@ -365,6 +365,7 @@ var newServer = func(t *testing.T) http.Handler {
 		Team:    team.NewService(store, redis, testBox(t)),
 		Orders:  ordersSvc,
 		Invites: testInvites(t),
+		Resets:  testResets(t).Staff(),
 	}, false), signer,
 		httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
 }

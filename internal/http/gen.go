@@ -1781,6 +1781,19 @@ type ShippingRatesRequest struct {
 	} `json:"lines"`
 }
 
+// StaffPasswordResetConfirm defines model for StaffPasswordResetConfirm.
+type StaffPasswordResetConfirm struct {
+	Password string `json:"password"`
+
+	// Token Examples: prt_…
+	Token string `json:"token"`
+}
+
+// StaffPasswordResetRequest defines model for StaffPasswordResetRequest.
+type StaffPasswordResetRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
 // StorefrontSettings defines model for StorefrontSettings.
 type StorefrontSettings struct {
 	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
@@ -2238,6 +2251,12 @@ type GoogleSignInJSONRequestBody = GoogleSignInRequest
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// RequestStaffPasswordResetJSONRequestBody defines body for RequestStaffPasswordReset for application/json ContentType.
+type RequestStaffPasswordResetJSONRequestBody = StaffPasswordResetRequest
+
+// ConfirmStaffPasswordResetJSONRequestBody defines body for ConfirmStaffPasswordReset for application/json ContentType.
+type ConfirmStaffPasswordResetJSONRequestBody = StaffPasswordResetConfirm
+
 // RegisterJSONRequestBody defines body for Register for application/json ContentType.
 type RegisterJSONRequestBody = RegisterRequest
 
@@ -2576,6 +2595,12 @@ type ServerInterface interface {
 	// Logout Revoke the current refresh token
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// RequestStaffPasswordReset Email a password reset link
+	// (POST /auth/password-reset)
+	RequestStaffPasswordReset(w http.ResponseWriter, r *http.Request)
+	// ConfirmStaffPasswordReset Set a new password from a reset link and sign in
+	// (POST /auth/password-reset/confirm)
+	ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Request)
 	// AuthProviders The sign-in providers the admin offers
 	// (GET /auth/providers)
 	AuthProviders(w http.ResponseWriter, r *http.Request)
@@ -2813,6 +2838,18 @@ func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
 // Logout Revoke the current refresh token
 // (POST /auth/logout)
 func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// RequestStaffPasswordReset Email a password reset link
+// (POST /auth/password-reset)
+func (_ Unimplemented) RequestStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ConfirmStaffPasswordReset Set a new password from a reset link and sign in
+// (POST /auth/password-reset/confirm)
+func (_ Unimplemented) ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3423,6 +3460,34 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RequestStaffPasswordReset operation middleware
+func (siw *ServerInterfaceWrapper) RequestStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestStaffPasswordReset(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmStaffPasswordReset operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmStaffPasswordReset(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5367,6 +5432,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/accept-invite", wrapper.AcceptInvite)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/password-reset", wrapper.RequestStaffPasswordReset)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/auth/password-reset/confirm", wrapper.ConfirmStaffPasswordReset)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/roles", wrapper.ListRoles)
 	})
 	r.Group(func(r chi.Router) {
@@ -6184,6 +6255,142 @@ func (response Logout401ApplicationProblemPlusJSONResponse) VisitLogoutResponse(
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestStaffPasswordResetRequestObject struct {
+	Body *RequestStaffPasswordResetJSONRequestBody
+}
+
+type RequestStaffPasswordResetResponseObject interface {
+	VisitRequestStaffPasswordResetResponse(w http.ResponseWriter) error
+}
+
+type RequestStaffPasswordReset202Response struct {
+}
+
+func (response RequestStaffPasswordReset202Response) VisitRequestStaffPasswordResetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RequestStaffPasswordReset422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response RequestStaffPasswordReset422ApplicationProblemPlusJSONResponse) VisitRequestStaffPasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestStaffPasswordReset429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response RequestStaffPasswordReset429ApplicationProblemPlusJSONResponse) VisitRequestStaffPasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmStaffPasswordResetRequestObject struct {
+	Body *ConfirmStaffPasswordResetJSONRequestBody
+}
+
+type ConfirmStaffPasswordResetResponseObject interface {
+	VisitConfirmStaffPasswordResetResponse(w http.ResponseWriter) error
+}
+
+type ConfirmStaffPasswordReset200ResponseHeaders struct {
+	SetCookie *string
+}
+
+type ConfirmStaffPasswordReset200JSONResponse struct {
+	Body    Session
+	Headers ConfirmStaffPasswordReset200ResponseHeaders
+}
+
+func (response ConfirmStaffPasswordReset200JSONResponse) VisitConfirmStaffPasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmStaffPasswordReset422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmStaffPasswordReset422ApplicationProblemPlusJSONResponse) VisitConfirmStaffPasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmStaffPasswordReset429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmStaffPasswordReset429ApplicationProblemPlusJSONResponse) VisitConfirmStaffPasswordResetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RateLimitLimit != nil {
+		w.Header().Set("RateLimit-Limit", fmt.Sprint(*response.Headers.RateLimitLimit))
+	}
+	if response.Headers.RateLimitRemaining != nil {
+		w.Header().Set("RateLimit-Remaining", fmt.Sprint(*response.Headers.RateLimitRemaining))
+	}
+	if response.Headers.RateLimitReset != nil {
+		w.Header().Set("RateLimit-Reset", fmt.Sprint(*response.Headers.RateLimitReset))
+	}
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10693,6 +10900,12 @@ type StrictServerInterface interface {
 	// Logout Revoke the current refresh token
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// RequestStaffPasswordReset Email a password reset link
+	// (POST /auth/password-reset)
+	RequestStaffPasswordReset(ctx context.Context, request RequestStaffPasswordResetRequestObject) (RequestStaffPasswordResetResponseObject, error)
+	// ConfirmStaffPasswordReset Set a new password from a reset link and sign in
+	// (POST /auth/password-reset/confirm)
+	ConfirmStaffPasswordReset(ctx context.Context, request ConfirmStaffPasswordResetRequestObject) (ConfirmStaffPasswordResetResponseObject, error)
 	// AuthProviders The sign-in providers the admin offers
 	// (GET /auth/providers)
 	AuthProviders(ctx context.Context, request AuthProvidersRequestObject) (AuthProvidersResponseObject, error)
@@ -11164,6 +11377,68 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(LogoutResponseObject); ok {
 		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestStaffPasswordReset operation middleware
+func (sh *strictHandler) RequestStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var request RequestStaffPasswordResetRequestObject
+
+	var body RequestStaffPasswordResetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestStaffPasswordReset(ctx, request.(RequestStaffPasswordResetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestStaffPasswordReset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestStaffPasswordResetResponseObject); ok {
+		if err := validResponse.VisitRequestStaffPasswordResetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfirmStaffPasswordReset operation middleware
+func (sh *strictHandler) ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Request) {
+	var request ConfirmStaffPasswordResetRequestObject
+
+	var body ConfirmStaffPasswordResetJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmStaffPasswordReset(ctx, request.(ConfirmStaffPasswordResetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmStaffPasswordReset")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmStaffPasswordResetResponseObject); ok {
+		if err := validResponse.VisitConfirmStaffPasswordResetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
