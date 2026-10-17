@@ -67,7 +67,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	// Counted before the password is checked, so guessing costs attempts
 	// whether or not a guess is right (BR-014, BR-021).
-	if s.limits != nil && !s.limits.checkLogin(w, r, string(body.Email)) {
+	if s.limits != nil && !s.limits.checkLogin(w, r, "staff", string(body.Email)) {
 		return
 	}
 

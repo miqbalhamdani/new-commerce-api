@@ -74,3 +74,37 @@ func ContactEmail(ctx context.Context, q *sqlcgen.Queries) (*string, error) {
 	}
 	return st.ContactEmail, nil
 }
+
+// SignupMail renders a signup's confirmation (P1-084, BR-026, BR-128): an
+// invitation to the new owner, from Belli.id with no Reply-To, because the
+// shop is not set up yet. Once the owner is active the link would not work,
+// so nothing is sent.
+func SignupMail(store *db.Store, invites *auth.InviteSigner, adminURL string) email.Render {
+	return func(ctx context.Context, e email.Envelope) (*email.Message, error) {
+		tctx := tenant.NewContext(ctx, e.TenantID)
+		var user sqlcgen.User
+		var shop sqlcgen.Tenant
+		err := store.InTenantTx(tctx, func(tx pgx.Tx) (err error) {
+			q := sqlcgen.New(tx)
+			if user, err = q.GetUser(tctx, e.UserID); err != nil {
+				return err
+			}
+			shop, err = q.GetTenant(tctx, e.TenantID)
+			return err
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if user.Status != "invited" {
+			return nil, nil
+		}
+		// signup=1 tells the screen to say "confirm your email" and open
+		// onboarding afterwards.
+		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now()) + "&signup=1"
+		subject, text, html := email.Signup(shop.Name, user.Name, link)
+		return &email.Message{FromName: "Belli.id", To: string(user.Email), Subject: subject, Text: text, HTML: html}, nil
+	}
+}

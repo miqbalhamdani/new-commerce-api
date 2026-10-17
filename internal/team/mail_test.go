@@ -153,3 +153,57 @@ func TestInvitationReplyTo(t *testing.T) {
 		t.Errorf("with a contact email: %+v %v", m, err)
 	}
 }
+
+// TestSignupEmail is P1-084 at the worker: a signup's confirmation comes from
+// Belli.id with no Reply-To, and its link is an invitation the API accepts,
+// marked signup=1; once the owner is active nothing is sent (BR-026, BR-128).
+func TestSignupEmail(t *testing.T) {
+	ctx := t.Context()
+	store, err := db.New(ctx, config.AppDatabaseURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(store.Close)
+	invites, _ := auth.NewInviteSigner(strings.Repeat("k", 32))
+
+	tenantID, owner := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
+	tctx := tenant.NewContext(ctx, tenantID)
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if err := store.InTenantTx(tctx, func(tx pgx.Tx) error { _, err := tx.Exec(tctx, sql, args...); return err }); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	exec(`INSERT INTO tenants (id, name, slug, order_prefix) VALUES ($1, 'Erigo', $2, 'ERI')`, tenantID, "erigo-"+tenantID.String())
+	exec(`INSERT INTO users (id, tenant_id, email, name, role, status) VALUES ($1, $2, $3, 'Budi', 'owner', 'invited')`,
+		owner, tenantID, "budi-"+owner.String()+"@erigo.co.id")
+	t.Cleanup(func() {
+		bg := tenant.NewContext(context.WithoutCancel(ctx), tenantID)
+		_ = store.InTenantTx(bg, func(tx pgx.Tx) error {
+			_, err := tx.Exec(bg, `DELETE FROM users; DELETE FROM tenants WHERE id = $1`, tenantID)
+			return err
+		})
+	})
+
+	render := team.SignupMail(store, invites, "https://admin.example.com")
+	m, err := render(ctx, email.Envelope{Kind: "signup", TenantID: tenantID, UserID: owner})
+	if err != nil || m == nil {
+		t.Fatalf("render: %v %v", m, err)
+	}
+	if m.FromName != "Belli.id" || m.ReplyTo != "" || m.To != "budi-"+owner.String()+"@erigo.co.id" || !strings.Contains(m.Subject, "Erigo") {
+		t.Errorf("message: %+v", m)
+	}
+	_, after, found := strings.Cut(m.Text, "https://admin.example.com/accept-invite#token=")
+	token, rest, marked := strings.Cut(strings.Fields(after + " ")[0], "&")
+	if !found || !marked || rest != "signup=1" {
+		t.Fatalf("link not found in %q", m.Text)
+	}
+	if inv, err := invites.Parse(token, time.Now()); err != nil || inv.UserID != owner || inv.TenantID != tenantID {
+		t.Errorf("token: %+v %v", inv, err)
+	}
+
+	exec(`UPDATE users SET status = 'active' WHERE id = $1`, owner)
+	if m, err := render(ctx, email.Envelope{Kind: "signup", TenantID: tenantID, UserID: owner}); m != nil || err != nil {
+		t.Errorf("an active owner got a signup email: %v %v", m, err)
+	}
+}

@@ -52,10 +52,11 @@ func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// checkLogin counts a staff sign-in against BR-014's login limits, writing
-// the headers, and reports whether it may go ahead.
-func (l *RateLimiter) checkLogin(w http.ResponseWriter, r *http.Request, email string) bool {
-	res := l.limits.Check(r.Context(), ratelimit.Login("staff", strings.ToLower(strings.TrimSpace(email)), clientIP(r).String())...)
+// checkLogin counts a staff sign-in ("staff") or signup ("signup") against
+// BR-014's login limits, writing the headers, and reports whether it may go
+// ahead.
+func (l *RateLimiter) checkLogin(w http.ResponseWriter, r *http.Request, scope, email string) bool {
+	res := l.limits.Check(r.Context(), ratelimit.Login(scope, strings.ToLower(strings.TrimSpace(email)), clientIP(r).String())...)
 	res.Write(w.Header())
 	if !res.Allowed {
 		writeError(w, r, apperrors.RateLimited())

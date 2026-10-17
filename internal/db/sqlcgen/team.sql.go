@@ -42,6 +42,35 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 	return i, err
 }
 
+const createTenant = `-- name: CreateTenant :one
+INSERT INTO tenants (id, name, slug, order_prefix)
+VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
+RETURNING id, name, slug, timezone, status, created_at, order_prefix
+`
+
+type CreateTenantParams struct {
+	Name        string
+	Slug        string
+	OrderPrefix string
+}
+
+// Signup (P1-084). tenants has no RLS; the id is the one the transaction set
+// as app.tenant_id, so the owner inserted next lands in this tenant.
+func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error) {
+	row := q.db.QueryRow(ctx, createTenant, arg.Name, arg.Slug, arg.OrderPrefix)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Timezone,
+		&i.Status,
+		&i.CreatedAt,
+		&i.OrderPrefix,
+	)
+	return i, err
+}
+
 const getTenant = `-- name: GetTenant :one
 SELECT id, name, slug, timezone, status, created_at, order_prefix FROM tenants WHERE id = $1
 `

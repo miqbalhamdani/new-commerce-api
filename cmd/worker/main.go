@@ -106,6 +106,7 @@ func run() error {
 	}
 	renders := map[string]email.Render{
 		"invitation":     team.InvitationMail(pool, invites, config.AdminURL()),
+		"signup":         team.SignupMail(pool, invites, config.AdminURL()),
 		"password_reset": customers.ResetMail(pool, resets),
 		// P1-228: one renderer, three events.
 		"order_placed":     orders.OrderMail(pool),
