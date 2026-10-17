@@ -99,12 +99,13 @@ Limits per caller are BR-014. Every response carries `RateLimit-Limit`, `RateLim
 | `POST` | `/v1/auth/login` | none | 020, 021, 022 |
 | `POST` | `/v1/auth/refresh` | refresh cookie | 022 |
 | `POST` | `/v1/auth/logout` | signed in | 022 |
+| `POST` | `/v1/auth/register` | none | 003, 014, 020, 026 |
 | `POST` | `/v1/auth/accept-invite` | none (invite token) | 026 |
 | `GET` | `/v1/me` | signed in | — |
 | `PATCH` | `/v1/me` | signed in | 009 |
 
-Tenants are created by the platform team, not through this API. The owner then accepts an
-invitation like anyone else.
+Anyone can open a shop with `register`; the platform team can still create one with
+`cmd/create-tenant`. Either way the owner signs in with email and password like anyone else.
 
 ### Login
 
@@ -133,6 +134,31 @@ POST /v1/auth/logout       (no body; reads the cookie)  → 204, cookie cleared
 Every `refresh` rotates; reusing a rotated token revokes the whole chain (BR-022). `refresh` needs
 no access token because it is called *after* the access token expires. `logout` is idempotent: a
 second call, or one with no cookie, is still `204`.
+
+### Registering a shop
+
+```json
+POST /v1/auth/register
+{ "shop_name": "Erigo", "name": "Budi", "email": "budi@erigo.co.id" }
+
+202 Accepted   (no body)
+```
+
+The answer is `202` whether or not the email is free, so the route never tells anyone which
+emails have an account (BR-021). What happens behind it depends on the email (BR-020):
+
+- **New email**: one transaction creates the tenant (`slug` and `order_prefix` derived from
+  `shop_name`; the owner changes the prefix in onboarding) and an `owner` who is `invited`, with no
+  password, then emails a link to confirm the address. The link is an invitation token (BR-026):
+  opening it and choosing a password through `accept-invite` verifies the email and signs the
+  owner in.
+- **An owner still `invited` with no password** (a signup never confirmed): the link is sent
+  again. Registering again is how a lost email is recovered, since nobody else in that shop can
+  resend it. It reads the user through the staff-login lookup (BR-003).
+- **Any other existing email**: nothing is sent.
+
+A malformed body is `422`; going over the login limit is `429` (BR-014). The email comes from
+"Belli.id", not the shop (BR-128): the shop is not set up yet.
 
 ### Accepting an invitation
 
