@@ -18,7 +18,15 @@ WHERE (sqlc.narg(q)::text IS NULL
        OR c.phone ILIKE '%' || sqlc.narg(q) || '%')
   AND (sqlc.narg(before_id)::uuid IS NULL OR c.id < sqlc.narg(before_id)::uuid)
 ORDER BY c.id DESC
-LIMIT sqlc.arg(lim);
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: CountCustomers :one
+-- ListCustomers' total, with its q filter and no keyset (P1-231).
+SELECT count(*) FROM customers c
+WHERE (sqlc.narg(q)::text IS NULL
+       OR c.name ILIKE '%' || sqlc.narg(q) || '%'
+       OR c.email ILIKE '%' || sqlc.narg(q) || '%'
+       OR c.phone ILIKE '%' || sqlc.narg(q) || '%');
 
 -- Purge (P1-215, BR-097): one customer's personal data, in one transaction.
 -- Every statement is safe to run again.

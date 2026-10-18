@@ -13,6 +13,7 @@ var (
 	encodeCursor = httpkit.EncodeCursor
 	decodeCursor = httpkit.DecodeCursor
 	pageLimit    = httpkit.PageLimit
+	pageNumber   = httpkit.PageNumber
 	bearerToken  = httpkit.BearerToken
 	clientIP     = httpkit.ClientIP
 	tracing      = httpkit.Tracing

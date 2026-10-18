@@ -339,8 +339,9 @@ and §3.7 (trigger) have the DDL; a move beneath a descendant is `422` on `paren
   Brands, categories, settings, users, media and API keys have no `version`: last save wins.
 - **Cursor pagination only**: `?limit=` 1–200 and `?cursor=`, answered `{data, next_cursor}`,
   `null` on the last page. No `offset`. Unpaginated lists omit `next_cursor`; `GET /v1/roles` is
-  the one bare array. The one exception is storefront `GET /products`, which also takes `?page=`
-  and answers `total` for a shop website's numbered pager (P1-230, 04 §11.4); do not spread it.
+  the one bare array. The exceptions take `?page=` and answer `total` for a numbered pager:
+  storefront `GET /products` (P1-230, 04 §11.4) and admin `GET /products`, `/orders`, `/customers`
+  (P1-231); add `page` to another list only with a contract change.
 - **Rate limits** (BR-014): admin is 100 req/min per user on a Redis sliding window, per-process
   when Redis errors. `RateLimit-*` headers on every response; over the limit is
   `429 rate_limited` with `Retry-After`. Storefront limits (browser per IP and key, server per

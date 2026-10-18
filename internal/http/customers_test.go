@@ -124,6 +124,11 @@ func TestCustomers(t *testing.T) {
 		}
 	})
 
+	t.Run("numbered pages and total (P1-231)", func(t *testing.T) {
+		assertNumberedPages(t, do, "/v1/customers", 2)
+		assertNumberedPages(t, do, "/v1/customers?q=rina", 1)
+	})
+
 	t.Run("cursor pages cover every row once", func(t *testing.T) {
 		var seen []string
 		path := "/v1/customers?limit=1"

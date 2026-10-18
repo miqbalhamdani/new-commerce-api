@@ -224,6 +224,10 @@ func (s *Server) ListOrders(w http.ResponseWriter, r *http.Request, params ListO
 			writeError(w, r, err)
 			return
 		}
+		if f.Page, err = pageNumber(params.Page, params.Cursor); err != nil {
+			writeError(w, r, err)
+			return
+		}
 		if params.Cursor != nil {
 			f.After = &orders.Cursor{}
 			if err := decodeCursor(params.Cursor, f.After); err != nil {
@@ -231,17 +235,17 @@ func (s *Server) ListOrders(w http.ResponseWriter, r *http.Request, params ListO
 				return
 			}
 		}
-		rows, next, err := s.orders.List(r.Context(), f)
+		list, err := s.orders.List(r.Context(), f)
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
-		page := OrderPage{Data: make([]OrderListRow, 0, len(rows))}
-		for _, o := range rows {
+		page := OrderPage{Data: make([]OrderListRow, 0, len(list.Rows)), Total: int(list.Total)}
+		for _, o := range list.Rows {
 			page.Data = append(page.Data, orderRowOut(o))
 		}
-		if next != nil {
-			page.NextCursor = encodeCursor(next)
+		if list.Next != nil {
+			page.NextCursor = encodeCursor(list.Next)
 		}
 		writeJSON(w, http.StatusOK, page)
 	})(w, r)

@@ -116,6 +116,13 @@ func TestProductList(t *testing.T) {
 		code, p := do("GET", "/v1/products?sort=price", nil)
 		assertProblem(t, code, p, 422, "validation_failed", "sort")
 	})
+	t.Run("numbered pages and total (P1-231)", func(t *testing.T) {
+		for _, sort := range []string{"title", "-created_at", "-updated_at"} {
+			assertNumberedPages(t, do, "/v1/products?sort="+sort, 3)
+		}
+		assertNumberedPages(t, do, "/v1/products?sort=title&status=active", 1)
+		assertNumberedPages(t, do, "/v1/products?category_id="+apparel, 1)
+	})
 }
 
 // TestProductListP95 is P1-030's acceptance: p95 under 600 ms with 10,000

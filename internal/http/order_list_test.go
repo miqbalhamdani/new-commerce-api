@@ -150,6 +150,14 @@ func TestOrderList(t *testing.T) {
 		}
 	})
 
+	t.Run("numbered pages and total (P1-231)", func(t *testing.T) {
+		for _, sort := range []string{"-placed_at", "placed_at"} {
+			assertNumberedPages(t, do, "/v1/orders?sort="+sort, 6)
+		}
+		assertNumberedPages(t, do, "/v1/orders?status=paid&status=processing", 2)
+		assertNumberedPages(t, do, "/v1/orders?q=rina", 1)
+	})
+
 	t.Run("limit=0 is clamped, not a panic", func(t *testing.T) {
 		code, p := do("GET", "/v1/orders?limit=0", nil)
 		if code != 200 || len(p["data"].([]any)) != 1 {

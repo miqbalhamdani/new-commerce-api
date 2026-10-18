@@ -21,7 +21,16 @@ type ProductFilter struct {
 	Q          *string
 	Sort       string // "-created_at" (default), "-updated_at" or "title"
 	After      *ProductCursor
+	Page       int // 1-based; 0 means keyset paging with After (P1-231)
 	Limit      int
+}
+
+// ProductList is one page of the catalog list: the rows, the keyset position
+// after them (nil on the last page), and how many products match in all.
+type ProductList struct {
+	Rows  []ProductRow
+	Next  *ProductCursor
+	Total int64
 }
 
 // ProductCursor is the keyset position after a page: the sort column's value
@@ -60,8 +69,9 @@ type CategoryBrief struct {
 //
 // q matches the title by trigram (gin_trgm_ops serves ILIKE) or a variant's
 // SKU exactly; category_id includes its descendants; categories on each row
-// are the main tree only, by path.
-func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductRow, *ProductCursor, error) {
+// are the main tree only, by path. f.Page pages by offset for a numbered pager
+// instead of by keyset; the total is counted either way (P1-231).
+func (s *Service) ListProducts(ctx context.Context, f ProductFilter) (ProductList, error) {
 	var (
 		where []string
 		args  []any
@@ -90,6 +100,13 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 		exact := arg(strings.TrimSpace(*f.Q))
 		where = append(where, "(p.title ILIKE '%' || "+arg(*q)+" || '%' OR EXISTS (SELECT 1 FROM variants sv WHERE sv.product_id = p.id AND sv.sku = "+exact+"))")
 	}
+	// The count takes the filters only (not the keyset), so it cannot drift
+	// from the list's WHERE.
+	countSQL := "SELECT count(*) FROM products p WHERE " + strings.Join(where, " AND ")
+	countArgs := append([]any(nil), args...)
+	if f.Page > 0 {
+		f.After = nil
+	}
 
 	order := "p.created_at DESC, p.id DESC"
 	switch f.Sort {
@@ -109,13 +126,18 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 		}
 	}
 
+	limit := "LIMIT " + arg(f.Limit+1)
+	if f.Page > 0 {
+		limit += " OFFSET " + arg(int64(f.Page-1)*int64(f.Limit))
+	}
+
 	// The page is chosen first; the per-row aggregates then run for those
 	// rows only, not for every row that matches the filter.
 	sql := `WITH page AS (
 	  SELECT p.* FROM products p
 	   WHERE ` + strings.Join(where, " AND ") + `
 	   ORDER BY ` + order + `
-	   LIMIT ` + arg(f.Limit+1) + `)
+	   ` + limit + `)
 	SELECT p.id, p.version, p.title, p.slug, p.status, p.brand_id, b.name, p.created_at, p.updated_at,
 	  coalesce((SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'path', c.path::text) ORDER BY c.path)
 	              FROM product_categories pc JOIN categories c ON c.id = pc.category_id
@@ -127,8 +149,14 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 	                     FROM variants x WHERE x.product_id = p.id AND x.archived_at IS NULL) v ON true
 	ORDER BY ` + order
 
-	var out []ProductRow
+	var (
+		out   []ProductRow
+		total int64
+	)
 	err := s.tx(ctx, func(_ *sqlcgen.Queries, tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+			return err
+		}
 		rows, err := tx.Query(ctx, sql, args...)
 		if err != nil {
 			return err
@@ -150,8 +178,11 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 		}
 		return rows.Err()
 	})
-	if err != nil || len(out) <= f.Limit {
-		return out, nil, err
+	if err != nil {
+		return ProductList{}, err
+	}
+	if len(out) <= f.Limit {
+		return ProductList{Rows: out, Total: total}, nil
 	}
 	out = out[:f.Limit]
 	last := out[f.Limit-1]
@@ -164,7 +195,7 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) ([]ProductR
 	default:
 		next.At = &last.CreatedAt
 	}
-	return out, next, nil
+	return ProductList{Rows: out, Next: next, Total: total}, nil
 }
 
 // coverURLSQL selects the key of a product's cover thumbnail: the first

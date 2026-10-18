@@ -28,7 +28,16 @@ type Filter struct {
 	// are the list's own.
 	Sort  string  `json:"-"` // "-placed_at" (default) or "placed_at"
 	After *Cursor `json:"-"`
+	Page  int     `json:"-"` // 1-based; 0 means keyset paging with After (P1-231)
 	Limit int     `json:"-"`
+}
+
+// ListPage is one page of the order list: the rows, the keyset position after
+// them (nil on the last page), and how many orders match in all.
+type ListPage struct {
+	Rows  []Row
+	Next  *Cursor
+	Total int64
 }
 
 // sqlArgs numbers placeholders as it collects their values.
@@ -102,10 +111,18 @@ type Row struct {
 // decides both ORDER BY and the keyset predicate. q is a plain ILIKE over the
 // order number and the customer snapshot -- no index on purpose (03-erd.md
 // §3.6); the saved views ride the three orders indexes, refund_owed its
-// partial one.
-func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
+// partial one. f.Page pages by offset for a numbered pager instead of by
+// keyset; the total is counted either way (P1-231).
+func (s *Service) List(ctx context.Context, f Filter) (ListPage, error) {
 	a := &sqlArgs{}
 	where := filterSQL(f, a)
+	// The count takes the filters only (not the keyset), so it cannot drift
+	// from the list's WHERE.
+	countSQL := "SELECT count(*) FROM orders o WHERE " + strings.Join(where, " AND ")
+	countArgs := append([]any(nil), a.args...)
+	if f.Page > 0 {
+		f.After = nil
+	}
 
 	order := "o.placed_at DESC, o.id DESC"
 	if f.Sort == "placed_at" {
@@ -117,21 +134,32 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
 		where = append(where, "(o.placed_at, o.id) < ("+a.add(f.After.At)+", "+a.add(f.After.ID)+")")
 	}
 
+	limit := "LIMIT " + a.add(f.Limit+1)
+	if f.Page > 0 {
+		limit += " OFFSET " + a.add(int64(f.Page-1)*int64(f.Limit))
+	}
+
 	// The page is chosen first; the line aggregate then runs for those rows
 	// only, not for every row the filter matches.
 	sql := `WITH page AS (
 	  SELECT o.* FROM orders o
 	   WHERE ` + strings.Join(where, " AND ") + `
 	   ORDER BY ` + order + `
-	   LIMIT ` + a.add(f.Limit+1) + `)
+	   ` + limit + `)
 	SELECT o.id, o.order_number, o.source, o.status, o.version, o.customer,
 	       coalesce(l.n, 0), o.total_amount, o.placed_at, o.paid_at, o.refunded_at
 	FROM page o
 	LEFT JOIN LATERAL (SELECT sum(x.qty)::int AS n FROM order_lines x WHERE x.order_id = o.id) l ON true
 	ORDER BY ` + order
 
-	var out []Row
+	var (
+		out   []Row
+		total int64
+	)
 	err := s.tx(ctx, func(_ *sqlcgen.Queries, tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+			return err
+		}
 		rows, err := tx.Query(ctx, sql, a.args...)
 		if err != nil {
 			return err
@@ -147,10 +175,13 @@ func (s *Service) List(ctx context.Context, f Filter) ([]Row, *Cursor, error) {
 		}
 		return rows.Err()
 	})
-	if err != nil || len(out) <= f.Limit {
-		return out, nil, err
+	if err != nil {
+		return ListPage{}, err
+	}
+	if len(out) <= f.Limit {
+		return ListPage{Rows: out, Total: total}, nil
 	}
 	out = out[:f.Limit]
 	last := out[f.Limit-1]
-	return out, &Cursor{At: last.PlacedAt, ID: last.ID}, nil
+	return ListPage{Rows: out, Next: &Cursor{At: last.PlacedAt, ID: last.ID}, Total: total}, nil
 }
