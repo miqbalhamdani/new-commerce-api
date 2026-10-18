@@ -574,7 +574,7 @@ The dashboard counts an order once it is paid and until it is cancelled: placed 
   before the period, and **new** otherwise. A guest order with neither email nor phone (one whose
   customer was purged, BR-097) is left out.
 - **Top products** rank by sales, a line being worth its quantity times its unit price less its
-  discount.
+  discount, and name their main-tree categories as the product list does.
 - **Needs action** is the shop now, not the period: pending orders by payment method, and the
   order list's saved views (`04-api-spec.md` §5.1).
 

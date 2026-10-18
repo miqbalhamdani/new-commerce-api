@@ -3654,13 +3654,18 @@ components:
 
     DashboardProduct:
       type: object
-      required: [product_id, title, items_sold, sales]
+      required: [product_id, title, categories, items_sold, sales]
       properties:
         product_id:
           type: string
           format: uuid
         title:
           type: string
+        categories:
+          type: array
+          description: Main-tree categories only (`kind = category`), by path, as on the product list.
+          items:
+            $ref: "#/components/schemas/CategoryBrief"
         items_sold:
           type: integer
         sales:
