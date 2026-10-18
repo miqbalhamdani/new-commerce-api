@@ -3609,7 +3609,7 @@ components:
 
     DashboardDay:
       type: object
-      required: [date, sales, orders]
+      required: [date, sales, orders, items_sold]
       properties:
         date:
           type: string
@@ -3618,6 +3618,8 @@ components:
         sales:
           $ref: "#/components/schemas/Money"
         orders:
+          type: integer
+        items_sold:
           type: integer
 
     DashboardSourceSales:

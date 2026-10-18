@@ -686,7 +686,7 @@ GET /v1/dashboard?from=2026-09-18&to=2026-10-18
                     "shipped": 6, "refund_owed": 1 },
   "current":  { "sales": 1254000000, "orders": 41, "average_order_value": 30585365, "items_sold": 77 },
   "previous": { "sales": 1032000000, "orders": 36, "average_order_value": 28666666, "items_sold": 64 },
-  "daily": [ { "date": "2026-09-18", "sales": 39800000, "orders": 1 }, … ],
+  "daily": [ { "date": "2026-09-18", "sales": 39800000, "orders": 1, "items_sold": 2 }, … ],
   "by_source": [ { "source": "manual", "sales": 802000000, "orders": 27 },
                  { "source": "storefront", "sales": 452000000, "orders": 14 } ],
   "by_payment_method": [ { "payment_method": "bank_transfer", "sales": 902000000, "orders": 31 },
