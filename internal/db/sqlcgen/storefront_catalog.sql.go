@@ -83,6 +83,48 @@ func (q *Queries) StorefrontCategories(ctx context.Context, kind *string) ([]Sto
 	return items, nil
 }
 
+const storefrontCategoriesOfProducts = `-- name: StorefrontCategoriesOfProducts :many
+SELECT pc.product_id, c.kind, c.name, c.path::text AS path
+FROM product_categories pc
+JOIN categories c ON c.id = pc.category_id
+WHERE pc.product_id = ANY($1::uuid[]) AND c.archived_at IS NULL
+ORDER BY pc.product_id, c.kind, c.path
+`
+
+type StorefrontCategoriesOfProductsRow struct {
+	ProductID uuid.UUID
+	Kind      string
+	Name      string
+	Path      string
+}
+
+// The product list's categories for one page of products, in
+// StorefrontProductCategories' order (P1-230).
+func (q *Queries) StorefrontCategoriesOfProducts(ctx context.Context, productIds []uuid.UUID) ([]StorefrontCategoriesOfProductsRow, error) {
+	rows, err := q.db.Query(ctx, storefrontCategoriesOfProducts, productIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StorefrontCategoriesOfProductsRow
+	for rows.Next() {
+		var i StorefrontCategoriesOfProductsRow
+		if err := rows.Scan(
+			&i.ProductID,
+			&i.Kind,
+			&i.Name,
+			&i.Path,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const storefrontProductBySlug = `-- name: StorefrontProductBySlug :one
 
 SELECT sp.id, sp.slug, sp.title, sp.description, sp.attributes, sp.option_names, sp.updated_at,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -430,6 +431,68 @@ func TestStorefrontCatalog(t *testing.T) {
 		code, body, raw := newShop(t, store, keyB).get(t, "/v1/storefront/products")
 		if code != 200 || !slices.Equal(slugs(body), []string{"secret-tee"}) || strings.Contains(raw, "basic-tee") {
 			t.Errorf("tenant B: %d %s", code, raw)
+		}
+	})
+
+	// P1-230 (04-api-spec.md §11.4). Last, because it changes the seed.
+	t.Run("numbered pages, total, categories and weight", func(t *testing.T) {
+		for _, sort := range []string{"-updated_at", "price_min", "-price_min", "title"} {
+			_, body, _ := a.get(t, "/v1/storefront/products?sort="+sort)
+			want := slugs(body)
+			for page, slug := range append(want, "") {
+				path := fmt.Sprintf("/v1/storefront/products?limit=1&sort=%s&page=%d", sort, page+1)
+				code, body, raw := a.get(t, path)
+				got := slugs(body)
+				if code != 200 || body["total"] != float64(2) || (slug == "" && len(got) != 0) || (slug != "" && !slices.Equal(got, []string{slug})) {
+					t.Errorf("%s: %d %s, want %q of %v and total 2", path, code, raw, slug, want)
+				}
+				if slug == "" && body["next_cursor"] != nil {
+					t.Errorf("%s: next_cursor %v past the last page", path, body["next_cursor"])
+				}
+			}
+		}
+		for path, want := range map[string]float64{
+			"/v1/storefront/products":                         2,
+			"/v1/storefront/products?brand=erigo":             1,
+			"/v1/storefront/products?brand=old":               0,
+			"/v1/storefront/products?category=apparel&page=1": 1,
+			"/v1/storefront/products?q=tee&limit=1":           1,
+		} {
+			if code, body, raw := a.get(t, path); code != 200 || body["total"] != want {
+				t.Errorf("%s: %d %s, want total %v", path, code, raw, want)
+			}
+		}
+		for _, path := range []string{
+			"/v1/storefront/products?page=0",
+			"/v1/storefront/products?page=1&cursor=not-a-cursor",
+		} {
+			code, body, _ := a.get(t, path)
+			if errs, _ := body["errors"].([]any); code != 422 || len(errs) == 0 || errs[0].(map[string]any)["field"] != "page" {
+				t.Errorf("%s: %d %v, want 422 on page", path, code, body)
+			}
+		}
+
+		execTenant(t, store, tenantA,
+			`UPDATE variants SET weight_grams = 200 WHERE sku = 'TS-BLK-S'`,
+			`UPDATE variants SET weight_grams = 250 WHERE sku = 'TS-BLK-M'`,
+			`UPDATE variants SET weight_grams = 9000 WHERE sku = 'TS-GONE'`,
+			`INSERT INTO categories (id, tenant_id, name, archived_at) VALUES (gen_random_uuid(), `+tid+`, 'Retired', now())`,
+			`INSERT INTO product_categories (tenant_id, product_id, category_id)
+			   SELECT `+tid+`, '{ida001}', id FROM categories WHERE name = 'Retired'`)
+		_, detail, _ := a.get(t, "/v1/storefront/products/basic-tee")
+		code, body, raw := a.get(t, "/v1/storefront/products?sort=title")
+		if code != 200 || strings.Contains(raw, "Retired") {
+			t.Fatalf("list: %d %s, an archived category must not appear", code, raw)
+		}
+		tee, hoodie := body["data"].([]any)[0].(map[string]any), body["data"].([]any)[1].(map[string]any)
+		if got, want := fmt.Sprint(tee["categories"]), fmt.Sprint(detail["categories"]); got != want {
+			t.Errorf("list categories %s, detail %s", got, want)
+		}
+		if tee["weight_grams_min"] != float64(200) || tee["weight_grams_max"] != float64(250) {
+			t.Errorf("tee weight %v-%v: want 200-250, the archived variant ignored", tee["weight_grams_min"], tee["weight_grams_max"])
+		}
+		if cats, ok := hoodie["categories"].([]any); !ok || len(cats) != 0 || hoodie["weight_grams_min"] != float64(0) {
+			t.Errorf("hoodie %v: want [] categories and weight 0", hoodie)
 		}
 	})
 }

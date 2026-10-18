@@ -666,7 +666,10 @@ type ProductImage struct {
 // ProductListItem defines model for ProductListItem.
 type ProductListItem struct {
 	Brand *BrandRef `json:"brand"`
-	Image *Image    `json:"image"`
+
+	// Categories The product's unarchived categories, ordered as on `GET /products/{slug}`.
+	Categories []ProductCategory `json:"categories"`
+	Image      *Image            `json:"image"`
 
 	// PriceMax Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
@@ -679,12 +682,27 @@ type ProductListItem struct {
 	PriceMin Money  `json:"price_min"`
 	Slug     string `json:"slug"`
 	Title    string `json:"title"`
+
+	// WeightGramsMax The heaviest visible variant's `weight_grams`.
+	//
+	// Examples: 2000
+	WeightGramsMax int `json:"weight_grams_max"`
+
+	// WeightGramsMin The lightest visible variant's `weight_grams`.
+	//
+	// Examples: 200
+	WeightGramsMin int `json:"weight_grams_min"`
 }
 
 // ProductPage defines model for ProductPage.
 type ProductPage struct {
 	Data       []ProductListItem `json:"data"`
 	NextCursor *string           `json:"next_cursor"`
+
+	// Total Visible products matching the filters, across every page (P1-230).
+	//
+	// Examples: 115
+	Total int `json:"total"`
 }
 
 // ProductVariant defines model for ProductVariant.
@@ -843,7 +861,7 @@ type ListCategoriesParams struct {
 
 // ListMyOrdersParams defines parameters for ListMyOrders.
 type ListMyOrdersParams struct {
-	// Limit Page size. Pairs with `cursor`; there is no `offset`.
+	// Limit Page size. Pairs with `cursor` (or, on `GET /products` only, `page`); there is no `offset`.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Cursor The previous page's `next_cursor`, opaque.
@@ -857,11 +875,15 @@ type ListProductsParams struct {
 	Q        *string                 `form:"q,omitempty" json:"q,omitempty"`
 	Sort     *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset`.
+	// Limit Page size. Pairs with `cursor` (or, on `GET /products` only, `page`); there is no `offset`.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Cursor The previous page's `next_cursor`, opaque.
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Page 1-based page number, for a numbered pager: the alternative to `cursor`. Sending both,
+	// or a page below 1, is `422` on `page`.
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
 }
 
 // ListProductsParamsSort defines parameters for ListProducts.
@@ -1726,6 +1748,19 @@ func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
 		}
 		return
 	}

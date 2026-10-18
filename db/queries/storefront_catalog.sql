@@ -23,6 +23,15 @@ JOIN categories c ON c.id = pc.category_id
 WHERE pc.product_id = $1 AND c.archived_at IS NULL
 ORDER BY c.kind, c.path;
 
+-- name: StorefrontCategoriesOfProducts :many
+-- The product list's categories for one page of products, in
+-- StorefrontProductCategories' order (P1-230).
+SELECT pc.product_id, c.kind, c.name, c.path::text AS path
+FROM product_categories pc
+JOIN categories c ON c.id = pc.category_id
+WHERE pc.product_id = ANY(@product_ids::uuid[]) AND c.archived_at IS NULL
+ORDER BY pc.product_id, c.kind, c.path;
+
 -- name: StorefrontProductImages :many
 -- An image tied to a variant the views hide keeps its place but loses the
 -- variant's id: no hidden id escapes (BR-081).
