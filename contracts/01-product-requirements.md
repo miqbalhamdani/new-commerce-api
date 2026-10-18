@@ -124,6 +124,7 @@ appear (BR-025).
 | Verify email | A new owner | The 6-digit code from the signup email; resend | M5 |
 | Forgot / reset password | All staff | An email for a reset link; the link sets a new password and signs in. A Google-only user adds a password this way | M5 |
 | Onboarding wizard | Owner | Shop settings, brands, category tree, first product (a draft with a price). Each step shows the shop's real list and links to its page | M5 |
+| Dashboard | All staff | The home screen: what needs action now; the period's sales, orders, average order value and items sold against the period before; sales by day, channel and payment method; new and returning customers; top products; the latest orders (BR-066) | M1 |
 | Order list | Ops | Daily workspace. Saved views, search | M1 |
 | Order detail | Ops | Status actions, ship dialog, refund record, audit trail | M1 |
 | Manual order entry | Ops | WhatsApp orders, priced from the catalog | M1 |

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.17.0
+  version: 2.18.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -2027,6 +2027,48 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: The dashboard's figures for a period
+      description: |
+        BR-066's figures for orders placed in `[from, to)`: paid and not cancelled. `previous` is
+        the same span just before `from`; `daily` has every WIB day, zero-filled; `by_source` and
+        `by_payment_method` list every value; `top_products` has at most five, by sales.
+        `needs_action` is the shop now, whatever the period. `from` and `to` are each a date
+        (midnight WIB) or an RFC 3339 time with an offset (BR-007); `to` must be after `from` and
+        at most 366 days later. Requires `orders:read`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+          examples:
+            date:
+              value: "2026-09-18"
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+          examples:
+            date:
+              value: "2026-10-18"
+      responses:
+        "200":
+          description: The figures.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
   /customers:
     get:
       operationId: listCustomers
@@ -3509,6 +3551,134 @@ components:
     OrderSource:
       type: string
       enum: [storefront, manual]
+
+    Dashboard:
+      type: object
+      required: [from, to, needs_action, current, previous, daily, by_source, by_payment_method, customers, top_products]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        needs_action:
+          $ref: "#/components/schemas/DashboardNeedsAction"
+        current:
+          $ref: "#/components/schemas/DashboardFigures"
+        previous:
+          $ref: "#/components/schemas/DashboardFigures"
+        daily:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDay"
+        by_source:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardSourceSales"
+        by_payment_method:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardPaymentSales"
+        customers:
+          $ref: "#/components/schemas/DashboardCustomers"
+        top_products:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/DashboardProduct"
+
+    DashboardNeedsAction:
+      type: object
+      description: The shop now, whatever the period (BR-066).
+      required: [awaiting_payment, transfers_to_confirm, ready_to_ship, shipped, refund_owed]
+      properties:
+        awaiting_payment:
+          type: integer
+          description: Pending orders paid through Midtrans.
+        transfers_to_confirm:
+          type: integer
+          description: Pending bank-transfer orders.
+        ready_to_ship:
+          type: integer
+          description: Paid and processing orders.
+        shipped:
+          type: integer
+        refund_owed:
+          type: integer
+
+    DashboardDay:
+      type: object
+      required: [date, sales, orders]
+      properties:
+        date:
+          type: string
+          format: date
+          description: A WIB calendar day.
+        sales:
+          $ref: "#/components/schemas/Money"
+        orders:
+          type: integer
+
+    DashboardSourceSales:
+      type: object
+      required: [source, sales, orders]
+      properties:
+        source:
+          $ref: "#/components/schemas/OrderSource"
+        sales:
+          $ref: "#/components/schemas/Money"
+        orders:
+          type: integer
+
+    DashboardPaymentSales:
+      type: object
+      required: [payment_method, sales, orders]
+      properties:
+        payment_method:
+          type: string
+          enum: [bank_transfer, midtrans]
+        sales:
+          $ref: "#/components/schemas/Money"
+        orders:
+          type: integer
+
+    DashboardCustomers:
+      type: object
+      required: [new, returning]
+      properties:
+        new:
+          type: integer
+        returning:
+          type: integer
+
+    DashboardProduct:
+      type: object
+      required: [product_id, title, items_sold, sales]
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        items_sold:
+          type: integer
+        sales:
+          $ref: "#/components/schemas/Money"
+
+    DashboardFigures:
+      type: object
+      description: BR-066's figures for one period.
+      required: [sales, orders, average_order_value, items_sold]
+      properties:
+        sales:
+          $ref: "#/components/schemas/Money"
+        orders:
+          type: integer
+        average_order_value:
+          $ref: "#/components/schemas/Money"
+        items_sold:
+          type: integer
 
     OrderCustomerSnapshot:
       type: object
