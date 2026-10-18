@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.16.0
+  version: 2.17.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -675,7 +675,7 @@ paths:
   /products:
     get:
       operationId: listProducts
-      summary: Products, filtered and cursor-paginated
+      summary: Products, filtered and paginated
       description: |
         `q` is a trigram match on the title, and an exact SKU also matches. `category_id`
         includes its descendants. Archived products appear only with `status=archived`. Each
@@ -683,6 +683,8 @@ paths:
         means it cannot be published (BR-038). `price_min` and `price_max` come from
         `variant_price()` over live variants (BR-046), `null` when there are none. Target: p95
         under 600 ms at 10k products (P1-030). Requires `products:read`.
+        Page with `cursor`, or with `page` for a numbered pager; `total` counts every match
+        either way (P1-231).
       parameters:
         - name: status
           in: query
@@ -715,6 +717,7 @@ paths:
             default: "-created_at"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Page"
       responses:
         "200":
           description: A page of products.
@@ -1652,7 +1655,7 @@ paths:
   /orders:
     get:
       operationId: listOrders
-      summary: Orders, filtered and cursor-paginated
+      summary: Orders, filtered and paginated
       description: |
         The ops workspace (BR-075). `status` repeats to OR values; the saved views are plain
         filters — To confirm payment `status=pending`, To ship `status=paid&status=processing`,
@@ -1661,6 +1664,8 @@ paths:
         the customer's name, email and phone. `placed_from` and `placed_to` take an RFC 3339 time
         with an offset, or a date, which means midnight WIB (BR-007). `item_count` is the summed
         `qty`. Target: p95 first byte under 800 ms at 10k orders (P1-103). Requires `orders:read`.
+        Page with `cursor`, or with `page` for a numbered pager; `total` counts every match
+        either way (P1-231).
       parameters:
         - name: status
           in: query
@@ -1709,6 +1714,7 @@ paths:
             default: "-placed_at"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Page"
       responses:
         "200":
           description: A page of orders.
@@ -2024,10 +2030,12 @@ paths:
   /customers:
     get:
       operationId: listCustomers
-      summary: Customers, searched and cursor-paginated
+      summary: Customers, searched and paginated
       description: |
         Read-only: staff never create accounts, set passwords or see password hashes (BR-092).
         `q` matches name, email and phone. Requires `customers:read`.
+        Page with `cursor`, or with `page` for a numbered pager; `total` counts every match
+        either way (P1-231).
       parameters:
         - name: q
           in: query
@@ -2036,6 +2044,7 @@ paths:
             type: string
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Page"
       responses:
         "200":
           description: A page of customers.
@@ -2130,7 +2139,7 @@ components:
       name: limit
       in: query
       required: false
-      description: Page size. Pairs with `cursor`; there is no `offset` in this API.
+      description: Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
       schema:
         type: integer
         minimum: 1
@@ -2142,10 +2151,23 @@ components:
       in: query
       required: false
       description: |
-        Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-        table is a sequential scan, so the parameter does not exist.
+        Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+        large table is a sequential scan, so the parameter does not exist; the product, order and
+        customer lists also take `page` (P1-231).
       schema:
         type: string
+
+    Page:
+      name: page
+      in: query
+      required: false
+      description: |
+        1-based page number, for a numbered pager: the alternative to `cursor` on the product, order
+        and customer lists (P1-231). Sending both, or a page below 1, is `422` on `page`; a page
+        past the last answers an empty `data`.
+      schema:
+        type: integer
+        minimum: 1
 
     IfMatch:
       name: If-Match
@@ -2740,7 +2762,7 @@ components:
 
     ProductPage:
       type: object
-      required: [data, next_cursor]
+      required: [data, next_cursor, total]
       properties:
         data:
           type: array
@@ -2748,6 +2770,9 @@ components:
             $ref: "#/components/schemas/ProductListItem"
         next_cursor:
           type: [string, "null"]
+        total:
+          description: Rows matching the filters, across every page (P1-231).
+          type: integer
 
     JobKind:
       type: string
@@ -3923,7 +3948,7 @@ components:
 
     OrderPage:
       type: object
-      required: [data, next_cursor]
+      required: [data, next_cursor, total]
       properties:
         data:
           type: array
@@ -3931,6 +3956,9 @@ components:
             $ref: "#/components/schemas/OrderListRow"
         next_cursor:
           type: [string, "null"]
+        total:
+          description: Rows matching the filters, across every page (P1-231).
+          type: integer
 
     OrderExportRequest:
       type: object
@@ -3982,7 +4010,7 @@ components:
 
     CustomerPage:
       type: object
-      required: [data, next_cursor]
+      required: [data, next_cursor, total]
       properties:
         data:
           type: array
@@ -3990,6 +4018,9 @@ components:
             $ref: "#/components/schemas/Customer"
         next_cursor:
           type: [string, "null"]
+        total:
+          description: Rows matching the filters, across every page (P1-231).
+          type: integer
 
     CustomerDetail:
       allOf:
