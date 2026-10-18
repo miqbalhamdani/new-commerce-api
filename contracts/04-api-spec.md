@@ -498,6 +498,7 @@ GET /v1/audit-log?subject_type=order&subject_id=0192…
 | `POST` | `/v1/orders/{id}/cancel` | `orders:write` | 070, 071, 073 |
 | `POST` | `/v1/orders/{id}/refund` | `orders:write` | 075 |
 | `POST` | `/v1/orders/export` | `exports:read` | 060, 063, 064, 065 |
+| `GET` | `/v1/dashboard?from=&to=` | `orders:read` | 007, 066 |
 | `POST` | `/v1/shipping/rates` | `orders:write` | 120 |
 | `GET` | `/v1/customers?q=&limit=&cursor=&page=` | `customers:read` | 092 |
 | `GET` | `/v1/customers/{id}` | `customers:read` | 092 |
@@ -674,6 +675,36 @@ POST /v1/orders/export
 ```
 
 Filters match §5.1. One CSV row per order line (BR-065). Poll `GET /v1/jobs/{id}` (§9).
+
+### 5.7 Dashboard
+
+```json
+GET /v1/dashboard?from=2026-09-18&to=2026-10-18
+200 OK
+{ "from": "2026-09-18T00:00:00+07:00", "to": "2026-10-18T00:00:00+07:00",
+  "needs_action": { "awaiting_payment": 2, "transfers_to_confirm": 3, "ready_to_ship": 4,
+                    "shipped": 6, "refund_owed": 1 },
+  "current":  { "sales": 1254000000, "orders": 41, "average_order_value": 30585365, "items_sold": 77 },
+  "previous": { "sales": 1032000000, "orders": 36, "average_order_value": 28666666, "items_sold": 64 },
+  "daily": [ { "date": "2026-09-18", "sales": 39800000, "orders": 1, "items_sold": 2 }, … ],
+  "by_source": [ { "source": "manual", "sales": 802000000, "orders": 27 },
+                 { "source": "storefront", "sales": 452000000, "orders": 14 } ],
+  "by_payment_method": [ { "payment_method": "bank_transfer", "sales": 902000000, "orders": 31 },
+                         { "payment_method": "midtrans", "sales": 352000000, "orders": 10 } ],
+  "customers": { "new": 12, "returning": 19 },
+  "top_products": [ { "product_id": "0192…", "title": "Erigo Basic Tee",
+                      "categories": [ { "id": "0192…", "name": "Tees", "path": "apparel.tees" } ],
+                      "items_sold": 18, "sales": 359000000 } ] }
+```
+
+The figures are BR-066's. `from` and `to` are each a date (midnight WIB) or an RFC 3339 time with
+an offset (BR-007); both are required, `to` is exclusive and after `from`, and the span is at
+most 366 days, or `422` on the field. `daily` has one entry per WIB day from `from`, zero-filled;
+`by_source` and `by_payment_method` list every value, zero-filled; `top_products` has at most five,
+by sales, each with its main-tree categories (`kind = category`) by path, as on the product list
+(§7.1). `needs_action` is the shop as it is now, whatever the period: `awaiting_payment` is
+pending Midtrans orders, `transfers_to_confirm` pending bank transfers, and the other three are the
+§5.1 saved views. Every amount is minor units (BR-006).
 
 ---
 

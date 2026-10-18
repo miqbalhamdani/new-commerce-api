@@ -8,7 +8,7 @@ A rule says what must be true, followed by a short note on why. The mechanism th
 lives in the ERD or the API spec.
 
 Ids are grouped by area and never reused: `001–019` platform · `020–029` auth & team ·
-`030–049` catalog · `050–059` media · `060–069` jobs & export · `070–079` orders ·
+`030–049` catalog · `050–059` media · `060–069` jobs, export & reporting · `070–079` orders ·
 `080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email. A rule that no longer applies is marked
 **retired** and keeps its number.
 
@@ -536,7 +536,7 @@ lifecycle rules: `jobs/` expires after 30 days, `exports/` after 7.
 
 ---
 
-## 5. Jobs & export
+## 5. Jobs, export & reporting
 
 ### BR-060 Long work runs as a job
 CSV import, order export, marketplace import and image derivatives run asynchronously: the request
@@ -559,6 +559,28 @@ Amounts are written so a comma-decimal locale does not corrupt them, and the fil
 ### BR-065 Order export
 Order export takes the same filters as the order list (`04-api-spec.md` §5.1) and produces one row
 per order line, with order fields repeated. It is the accounting integration for v1.
+
+### BR-066 Dashboard figures
+The dashboard counts an order once it is paid and until it is cancelled: placed in the period
+(`from` inclusive, `to` exclusive) with status `paid`, `processing`, `shipped` or `completed`.
+
+- **Sales** is the sum of those orders' totals; **orders** is how many; **average order value** is
+  sales divided by orders, rounded down, and `0` with no orders; **items sold** is the sum of their
+  lines' quantities.
+- **The previous period** is the same length, ending where this one starts.
+- **Days** are WIB calendar days (BR-007).
+- **Customers** are the distinct people behind those orders: the customer account, or else the
+  order's email, or else its phone. One is **returning** when they have a counted order placed
+  before the period, and **new** otherwise. A guest order with neither email nor phone (one whose
+  customer was purged, BR-097) is left out.
+- **Top products** rank by sales, a line being worth its quantity times its unit price less its
+  discount, and name their main-tree categories as the product list does.
+- **Needs action** is the shop now, not the period: pending orders by payment method, and the
+  order list's saved views (`04-api-spec.md` §5.1).
+
+*Why:* an unpaid order is not a sale yet and a cancelled one is no longer one, and both already
+have their own counts under needs action. Counting by the day an order was placed matches the
+order list and its filters, so a figure can always be traced to the orders behind it.
 
 ---
 

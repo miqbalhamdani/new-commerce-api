@@ -150,6 +150,24 @@ func (e CourierCode) Valid() bool {
 	}
 }
 
+// Defines values for DashboardPaymentSalesPaymentMethod.
+const (
+	DashboardPaymentSalesPaymentMethodBankTransfer DashboardPaymentSalesPaymentMethod = "bank_transfer"
+	DashboardPaymentSalesPaymentMethodMidtrans     DashboardPaymentSalesPaymentMethod = "midtrans"
+)
+
+// Valid indicates whether the value is a known member of the DashboardPaymentSalesPaymentMethod enum.
+func (e DashboardPaymentSalesPaymentMethod) Valid() bool {
+	switch e {
+	case DashboardPaymentSalesPaymentMethodBankTransfer:
+		return true
+	case DashboardPaymentSalesPaymentMethodMidtrans:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ErrorCode.
 const (
 	ErrorCodeCategoryInUse            ErrorCode = "category_in_use"
@@ -320,16 +338,16 @@ func (e JobKind) Valid() bool {
 
 // Defines values for OrderPaymentMethod.
 const (
-	BankTransfer OrderPaymentMethod = "bank_transfer"
-	Midtrans     OrderPaymentMethod = "midtrans"
+	OrderPaymentMethodBankTransfer OrderPaymentMethod = "bank_transfer"
+	OrderPaymentMethodMidtrans     OrderPaymentMethod = "midtrans"
 )
 
 // Valid indicates whether the value is a known member of the OrderPaymentMethod enum.
 func (e OrderPaymentMethod) Valid() bool {
 	switch e {
-	case BankTransfer:
+	case OrderPaymentMethodBankTransfer:
 		return true
-	case Midtrans:
+	case OrderPaymentMethodMidtrans:
 		return true
 	default:
 		return false
@@ -1098,6 +1116,131 @@ type CustomerPage struct {
 
 	// Total Rows matching the filters, across every page (P1-231).
 	Total int `json:"total"`
+}
+
+// Dashboard defines model for Dashboard.
+type Dashboard struct {
+	ByPaymentMethod []DashboardPaymentSales `json:"by_payment_method"`
+	BySource        []DashboardSourceSales  `json:"by_source"`
+
+	// Current BR-066's figures for one period.
+	Current   DashboardFigures   `json:"current"`
+	Customers DashboardCustomers `json:"customers"`
+	Daily     []DashboardDay     `json:"daily"`
+	From      time.Time          `json:"from"`
+
+	// NeedsAction The shop now, whatever the period (BR-066).
+	NeedsAction DashboardNeedsAction `json:"needs_action"`
+
+	// Previous BR-066's figures for one period.
+	Previous    DashboardFigures   `json:"previous"`
+	To          time.Time          `json:"to"`
+	TopProducts []DashboardProduct `json:"top_products"`
+}
+
+// DashboardCustomers defines model for DashboardCustomers.
+type DashboardCustomers struct {
+	New       int `json:"new"`
+	Returning int `json:"returning"`
+}
+
+// DashboardDay defines model for DashboardDay.
+type DashboardDay struct {
+	// Date A WIB calendar day.
+	Date      openapi_types.Date `json:"date"`
+	ItemsSold int                `json:"items_sold"`
+	Orders    int                `json:"orders"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales Money `json:"sales"`
+}
+
+// DashboardFigures BR-066's figures for one period.
+type DashboardFigures struct {
+	// AverageOrderValue An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	AverageOrderValue Money `json:"average_order_value"`
+	ItemsSold         int   `json:"items_sold"`
+	Orders            int   `json:"orders"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales Money `json:"sales"`
+}
+
+// DashboardNeedsAction The shop now, whatever the period (BR-066).
+type DashboardNeedsAction struct {
+	// AwaitingPayment Pending orders paid through Midtrans.
+	AwaitingPayment int `json:"awaiting_payment"`
+
+	// ReadyToShip Paid and processing orders.
+	ReadyToShip int `json:"ready_to_ship"`
+	RefundOwed  int `json:"refund_owed"`
+	Shipped     int `json:"shipped"`
+
+	// TransfersToConfirm Pending bank-transfer orders.
+	TransfersToConfirm int `json:"transfers_to_confirm"`
+}
+
+// DashboardPaymentSales defines model for DashboardPaymentSales.
+type DashboardPaymentSales struct {
+	Orders        int                                `json:"orders"`
+	PaymentMethod DashboardPaymentSalesPaymentMethod `json:"payment_method"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales Money `json:"sales"`
+}
+
+// DashboardPaymentSalesPaymentMethod defines model for DashboardPaymentSales.PaymentMethod.
+type DashboardPaymentSalesPaymentMethod string
+
+// DashboardProduct defines model for DashboardProduct.
+type DashboardProduct struct {
+	// Categories Main-tree categories only (`kind = category`), by path, as on the product list.
+	Categories []CategoryBrief    `json:"categories"`
+	ItemsSold  int                `json:"items_sold"`
+	ProductId  openapi_types.UUID `json:"product_id"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales Money  `json:"sales"`
+	Title string `json:"title"`
+}
+
+// DashboardSourceSales defines model for DashboardSourceSales.
+type DashboardSourceSales struct {
+	Orders int `json:"orders"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales  Money       `json:"sales"`
+	Source OrderSource `json:"source"`
 }
 
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
@@ -2151,6 +2294,12 @@ type ListCustomersParams struct {
 	Page *Page `form:"page,omitempty" json:"page,omitempty"`
 }
 
+// GetDashboardParams defines parameters for GetDashboard.
+type GetDashboardParams struct {
+	From string `form:"from" json:"from"`
+	To   string `form:"to" json:"to"`
+}
+
 // ListOrdersParams defines parameters for ListOrders.
 type ListOrdersParams struct {
 	Status     *[]OrderStatus        `form:"status,omitempty" json:"status,omitempty"`
@@ -2691,6 +2840,9 @@ type ServerInterface interface {
 	// PurgeCustomer Erase a customer's personal data as a background job
 	// (POST /customers/{id}/purge)
 	PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id)
+	// GetDashboard The dashboard's figures for a period
+	// (GET /dashboard)
+	GetDashboard(w http.ResponseWriter, r *http.Request, params GetDashboardParams)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(w http.ResponseWriter, r *http.Request, id Id)
@@ -2997,6 +3149,12 @@ func (_ Unimplemented) GetCustomer(w http.ResponseWriter, r *http.Request, id Id
 // PurgeCustomer Erase a customer's personal data as a background job
 // (POST /customers/{id}/purge)
 func (_ Unimplemented) PurgeCustomer(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetDashboard The dashboard's figures for a period
+// (GET /dashboard)
+func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request, params GetDashboardParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4044,6 +4202,52 @@ func (siw *ServerInterfaceWrapper) PurgeCustomer(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PurgeCustomer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDashboard operation middleware
+func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDashboardParams
+
+	// ------------- Required query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDashboard(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5676,6 +5880,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/orders/export", wrapper.ExportOrders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
@@ -7757,6 +7964,76 @@ func (response PurgeCustomer404ApplicationProblemPlusJSONResponse) VisitPurgeCus
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDashboardRequestObject struct {
+	Params GetDashboardParams
+}
+
+type GetDashboardResponseObject interface {
+	VisitGetDashboardResponse(w http.ResponseWriter) error
+}
+
+type GetDashboard200JSONResponse Dashboard
+
+func (response GetDashboard200JSONResponse) VisitGetDashboardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDashboard401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetDashboard401ApplicationProblemPlusJSONResponse) VisitGetDashboardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDashboard403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetDashboard403ApplicationProblemPlusJSONResponse) VisitGetDashboardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDashboard422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response GetDashboard422ApplicationProblemPlusJSONResponse) VisitGetDashboardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11035,6 +11312,9 @@ type StrictServerInterface interface {
 	// PurgeCustomer Erase a customer's personal data as a background job
 	// (POST /customers/{id}/purge)
 	PurgeCustomer(ctx context.Context, request PurgeCustomerRequestObject) (PurgeCustomerResponseObject, error)
+	// GetDashboard The dashboard's figures for a period
+	// (GET /dashboard)
+	GetDashboard(ctx context.Context, request GetDashboardRequestObject) (GetDashboardResponseObject, error)
 	// GetJob A background job's progress and result
 	// (GET /jobs/{id})
 	GetJob(ctx context.Context, request GetJobRequestObject) (GetJobResponseObject, error)
@@ -12045,6 +12325,32 @@ func (sh *strictHandler) PurgeCustomer(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PurgeCustomerResponseObject); ok {
 		if err := validResponse.VisitPurgeCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDashboard operation middleware
+func (sh *strictHandler) GetDashboard(w http.ResponseWriter, r *http.Request, params GetDashboardParams) {
+	var request GetDashboardRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDashboard(ctx, request.(GetDashboardRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDashboard")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDashboardResponseObject); ok {
+		if err := validResponse.VisitGetDashboardResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
