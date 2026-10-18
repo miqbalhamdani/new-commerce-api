@@ -477,8 +477,9 @@ func TestStorefrontCatalog(t *testing.T) {
 			`UPDATE variants SET weight_grams = 250 WHERE sku = 'TS-BLK-M'`,
 			`UPDATE variants SET weight_grams = 9000 WHERE sku = 'TS-GONE'`,
 			`INSERT INTO categories (id, tenant_id, name, archived_at) VALUES (gen_random_uuid(), `+tid+`, 'Retired', now())`,
+			// Placeholders are per execTenant call, so the product is found by slug.
 			`INSERT INTO product_categories (tenant_id, product_id, category_id)
-			   SELECT `+tid+`, '{ida001}', id FROM categories WHERE name = 'Retired'`)
+			   SELECT `+tid+`, p.id, c.id FROM products p, categories c WHERE p.slug = 'basic-tee' AND c.name = 'Retired'`)
 		_, detail, _ := a.get(t, "/v1/storefront/products/basic-tee")
 		code, body, raw := a.get(t, "/v1/storefront/products?sort=title")
 		if code != 200 || strings.Contains(raw, "Retired") {
