@@ -704,7 +704,7 @@ an offset (BR-007); both are required, `to` is exclusive and after `from`, and t
 most 366 days, or `422` on the field. `daily` has one entry per WIB day from `from`, zero-filled;
 `by_source` and `by_payment_method` list every value, zero-filled; `top_products` has at most five,
 by sales, each with its main-tree categories (`kind = category`) by path, as on the product list
-(§7.1); `top_customers` has at most five, by sales, each named as on their latest order in the
+(§7.1); `top_customers` has at most three, by sales, each named as on their latest order in the
 period, with `customer_id` when they have an account and `null` for a guest. `needs_action` is the shop as it is now, whatever the period: `awaiting_payment` is
 pending Midtrans orders, `transfers_to_confirm` pending bank transfers, and the other three are the
 §5.1 saved views. Every amount is minor units (BR-006).

@@ -3589,7 +3589,7 @@ components:
             $ref: "#/components/schemas/DashboardProduct"
         top_customers:
           type: array
-          maxItems: 5
+          maxItems: 3
           items:
             $ref: "#/components/schemas/DashboardTopCustomer"
 
