@@ -17,8 +17,9 @@ import (
 )
 
 func init() {
-	// P1-113: the marker is a product title, which only reaches the answer
-	// through top_products -- so tenant B's own sale must not be there.
+	// P1-113, P1-115: the marker is a product title and a buyer's name, which
+	// reach the answer only through top_products and top_customers -- so
+	// tenant B's own sale must be in neither.
 	isolationCases = append(isolationCases,
 		isolationCase{route: route{"GET", "/v1/dashboard"}, seed: seedDashboardSale,
 			request: func(t *testing.T, s seeded) *http.Request {
@@ -29,13 +30,13 @@ func init() {
 }
 
 // seedDashboardSale is a signed-in admin plus one completed order, placed
-// now, of a product whose title is the marker.
+// now, of a product whose title is the marker, to a buyer of the same name.
 func seedDashboardSale(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID) seeded {
 	t.Helper()
 	s := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleAdmin)
 	s.marker = "Dashboard Tee " + tenantID.String()
 	tee, _ := dashProduct(ctx, t, store, tenantID, s.marker)
-	dashOrder(ctx, t, store, tenantID, dashSeed{status: "completed", placed: time.Now(), email: "iso@example.com",
+	dashOrder(ctx, t, store, tenantID, dashSeed{status: "completed", placed: time.Now(), name: s.marker, email: "iso@example.com",
 		lines: []dashLine{{tee, 1, 10000, 0}}})
 	return s
 }
@@ -49,7 +50,8 @@ type dashLine struct {
 type dashSeed struct {
 	status, source, method string // source defaults to manual, method to bank_transfer
 	placed                 time.Time
-	email, phone           string
+	name, email, phone     string // name defaults to Buyer
+	customer               *uuid.UUID
 	lines                  []dashLine
 }
 
@@ -123,13 +125,15 @@ func dashOrder(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid
 	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO orders
 			(id, tenant_id, source, order_number, status, placed_at, customer, payment_method,
-			 subtotal_amount, discount_amount, total_amount, courier, tracking_number, paid_at, cancelled_at)
+			 subtotal_amount, discount_amount, total_amount, courier, tracking_number, paid_at, cancelled_at,
+			 customer_id)
 			VALUES ($1, $2, $3, $4, $5, $6,
-			        jsonb_build_object('name', 'Buyer', 'email', nullif($7::text, ''), 'phone', nullif($8::text, '')), $9,
+			        jsonb_build_object('name', coalesce(nullif($15::text, ''), 'Buyer'),
+			                           'email', nullif($7::text, ''), 'phone', nullif($8::text, '')), $9,
 			        $10::bigint, $11::bigint, $10::bigint - $11::bigint, $12, $13, CASE WHEN $14 THEN $6::timestamptz END,
-			        CASE WHEN $5 = 'cancelled' THEN $6::timestamptz END)`,
+			        CASE WHEN $5 = 'cancelled' THEN $6::timestamptz END, $16)`,
 			id, tenantID, o.source, fmt.Sprintf("DSH-%06d", orderSeq.Add(1)), o.status, o.placed,
-			o.email, o.phone, o.method, subtotal, discount, courier, tracking, paid); err != nil {
+			o.email, o.phone, o.method, subtotal, discount, courier, tracking, paid, o.name, o.customer); err != nil {
 			return err
 		}
 		for _, l := range o.lines {
@@ -171,13 +175,13 @@ func TestDashboard(t *testing.T) {
 	for _, o := range []dashSeed{
 		// The period, 1-7 September. 00:30 WIB on the 1st is still 31 August
 		// in UTC: it must count, on the 1st.
-		{status: "paid", placed: wib("2026-09-01 00:30"), email: "Rina@Example.com",
+		{status: "paid", placed: wib("2026-09-01 00:30"), name: "Rina", email: "Rina@Example.com",
 			lines: []dashLine{{tee, 2, 10000, 0}, {hat, 1, 10000, 0}}},
-		{status: "shipped", placed: wib("2026-09-03 10:00"), phone: "+62811",
+		{status: "shipped", placed: wib("2026-09-03 10:00"), name: "Sari", phone: "+62811",
 			lines: []dashLine{{hat, 2, 12000, 4000}}},
-		{status: "processing", placed: wib("2026-09-05 12:00"), email: "rina@example.com",
+		{status: "processing", placed: wib("2026-09-05 12:00"), name: "Rina Wati", email: "rina@example.com",
 			lines: []dashLine{{tee, 1, 10000, 0}}},
-		{status: "completed", source: "storefront", method: "midtrans", placed: wib("2026-09-07 23:30"), email: "dewi@example.com",
+		{status: "completed", source: "storefront", method: "midtrans", placed: wib("2026-09-07 23:30"), name: "Dewi", email: "dewi@example.com",
 			lines: []dashLine{{tee, 5, 10000, 0}}},
 		// In the period but not counted: unpaid, or cancelled.
 		{status: "pending", source: "storefront", method: "midtrans", placed: wib("2026-09-02 09:00"), email: "a@example.com",
@@ -266,6 +270,42 @@ func TestDashboard(t *testing.T) {
 	if cats, ok := top[1].(map[string]any)["categories"].([]any); !ok || len(cats) != 0 {
 		t.Errorf("Hat's categories %v, want []", top[1].(map[string]any)["categories"])
 	}
+	// Dewi 50000; Rina 30000 + 10000, by email whatever its case, named as on
+	// her latest order; Sari 20000 by phone. The purged guest is no one.
+	buyers, _ := d["top_customers"].([]any)
+	if len(buyers) != 3 {
+		t.Fatalf("top_customers: %v", buyers)
+	}
+	equal("top_customers[0]", buyers[0], map[string]any{"name": "Dewi", "sales": n(50000), "orders": n(1), "customer_id": nil})
+	equal("top_customers[1]", buyers[1], map[string]any{"name": "Rina Wati", "sales": n(40000), "orders": n(2)})
+	equal("top_customers[2]", buyers[2], map[string]any{"name": "Sari", "sales": n(20000), "orders": n(1)})
+
+	t.Run("a customer with an account is named and linked by it", func(t *testing.T) {
+		account := uuid.Must(uuid.NewV7())
+		if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO customers (id, tenant_id, email, name) VALUES ($1, $2, $3, 'Budi Santoso')`,
+				account, tenantID, "budi-"+account.String()+"@example.com")
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		// Two orders on the account under different snapshot emails still are
+		// one customer.
+		dashOrder(ctx, t, store, tenantID, dashSeed{status: "completed", placed: wib("2021-03-01 10:00"), name: "Budi",
+			email: "old@example.com", customer: &account, lines: []dashLine{{tee, 1, 10000, 0}}})
+		dashOrder(ctx, t, store, tenantID, dashSeed{status: "paid", placed: wib("2021-03-02 10:00"), name: "Budi Santoso",
+			email: "new@example.com", customer: &account, lines: []dashLine{{tee, 2, 10000, 0}}})
+		code, d := do("GET", "/v1/dashboard?from=2021-03-01&to=2021-03-08", nil)
+		if code != 200 {
+			t.Fatalf("%d %v", code, d)
+		}
+		buyers, _ := d["top_customers"].([]any)
+		if len(buyers) != 1 {
+			t.Fatalf("top_customers: %v", buyers)
+		}
+		equal("top_customers[0]", buyers[0], map[string]any{"name": "Budi Santoso", "sales": n(30000), "orders": n(2),
+			"customer_id": account.String()})
+	})
 
 	t.Run("an empty period is zeros, every day and every split still listed", func(t *testing.T) {
 		code, d := do("GET", "/v1/dashboard?from=2020-01-01T00:00:00%2B07:00&to=2020-01-03T00:00:00%2B07:00", nil)
@@ -281,6 +321,9 @@ func TestDashboard(t *testing.T) {
 		}
 		if top, _ := d["top_products"].([]any); top == nil || len(top) != 0 {
 			t.Errorf("top_products %v, want []", d["top_products"])
+		}
+		if buyers, _ := d["top_customers"].([]any); buyers == nil || len(buyers) != 0 {
+			t.Errorf("top_customers %v, want []", d["top_customers"])
 		}
 	})
 	t.Run("a bad period is 422 on the field", func(t *testing.T) {

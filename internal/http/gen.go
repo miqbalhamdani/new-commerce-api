@@ -1133,9 +1133,10 @@ type Dashboard struct {
 	NeedsAction DashboardNeedsAction `json:"needs_action"`
 
 	// Previous BR-066's figures for one period.
-	Previous    DashboardFigures   `json:"previous"`
-	To          time.Time          `json:"to"`
-	TopProducts []DashboardProduct `json:"top_products"`
+	Previous     DashboardFigures       `json:"previous"`
+	To           time.Time              `json:"to"`
+	TopCustomers []DashboardTopCustomer `json:"top_customers"`
+	TopProducts  []DashboardProduct     `json:"top_products"`
 }
 
 // DashboardCustomers defines model for DashboardCustomers.
@@ -1241,6 +1242,24 @@ type DashboardSourceSales struct {
 	// Examples: 19900000
 	Sales  Money       `json:"sales"`
 	Source OrderSource `json:"source"`
+}
+
+// DashboardTopCustomer One of the period's best customers by sales (BR-066).
+type DashboardTopCustomer struct {
+	// CustomerId `null` for a guest, found by the email or phone on their orders.
+	CustomerId *openapi_types.UUID `json:"customer_id"`
+
+	// Name As on their latest order in the period.
+	Name   string `json:"name"`
+	Orders int    `json:"orders"`
+
+	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
+	// a float, a decimal string or an object; there is no currency field because there is only
+	// one currency (BR-006, BR-029). Clients divide by 100 to display.
+	//
+	//
+	// Examples: 19900000
+	Sales Money `json:"sales"`
 }
 
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.

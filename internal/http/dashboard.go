@@ -62,6 +62,7 @@ func dashboardOut(d orders.Dashboard) Dashboard {
 		ByPaymentMethod: make([]DashboardPaymentSales, 0, len(d.ByPaymentMethod)),
 		Customers:       DashboardCustomers{New: d.New, Returning: d.Returning},
 		TopProducts:     make([]DashboardProduct, 0, len(d.TopProducts)),
+		TopCustomers:    make([]DashboardTopCustomer, 0, len(d.TopCustomers)),
 	}
 	for _, day := range d.Daily {
 		date, _ := time.Parse(time.DateOnly, day.Date)
@@ -82,6 +83,10 @@ func dashboardOut(d orders.Dashboard) Dashboard {
 		}
 		out.TopProducts = append(out.TopProducts, DashboardProduct{ProductId: p.ProductID, Title: p.Title,
 			Categories: cats, ItemsSold: int(p.ItemsSold), Sales: p.Sales})
+	}
+	for _, c := range d.TopCustomers {
+		out.TopCustomers = append(out.TopCustomers,
+			DashboardTopCustomer{CustomerId: c.CustomerID, Name: c.Name, Sales: c.Sales, Orders: int(c.Orders)})
 	}
 	return out
 }
