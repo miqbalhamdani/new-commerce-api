@@ -34,7 +34,7 @@ func seedDashboardSale(ctx context.Context, t *testing.T, store *db.Store, tenan
 	t.Helper()
 	s := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleAdmin)
 	s.marker = "Dashboard Tee " + tenantID.String()
-	tee := dashProduct(ctx, t, store, tenantID, s.marker)
+	tee, _ := dashProduct(ctx, t, store, tenantID, s.marker)
 	dashOrder(ctx, t, store, tenantID, dashSeed{status: "completed", placed: time.Now(), email: "iso@example.com",
 		lines: []dashLine{{tee, 1, 10000, 0}}})
 	return s
@@ -53,8 +53,9 @@ type dashSeed struct {
 	lines                  []dashLine
 }
 
-// dashProduct seeds a product with one variant and returns the variant.
-func dashProduct(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID, title string) uuid.UUID {
+// dashProduct seeds a product with one variant and returns the variant and
+// the product.
+func dashProduct(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID, title string) (variant, product uuid.UUID) {
 	t.Helper()
 	productID, variantID := uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
 	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
@@ -68,7 +69,30 @@ func dashProduct(ctx context.Context, t *testing.T, store *db.Store, tenantID uu
 	}); err != nil {
 		t.Fatalf("seed product: %v", err)
 	}
-	return variantID
+	return variantID, productID
+}
+
+// dashCategory seeds a category of kind under parent (uuid.Nil for a root)
+// and files product in it.
+func dashCategory(ctx context.Context, t *testing.T, store *db.Store, tenantID, parent, product uuid.UUID, kind, name string) uuid.UUID {
+	t.Helper()
+	id := uuid.Must(uuid.NewV7())
+	var parentID *uuid.UUID
+	if parent != uuid.Nil {
+		parentID = &parent
+	}
+	if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO categories (id, tenant_id, parent_id, kind, name) VALUES ($1, $2, $3, $4, $5)`,
+			id, tenantID, parentID, kind, name); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO product_categories (tenant_id, product_id, category_id) VALUES ($1, $2, $3)`,
+			tenantID, product, id)
+		return err
+	}); err != nil {
+		t.Fatalf("seed category: %v", err)
+	}
+	return id
 }
 
 // dashOrder seeds one order at its status with its lines; the total is the
@@ -137,8 +161,13 @@ func TestDashboard(t *testing.T) {
 		}
 		return at
 	}
-	tee := dashProduct(ctx, t, store, tenantID, "Tee")
-	hat := dashProduct(ctx, t, store, tenantID, "Hat")
+	tee, teeProduct := dashProduct(ctx, t, store, tenantID, "Tee")
+	hat, _ := dashProduct(ctx, t, store, tenantID, "Hat")
+	// Tee sits under Apparel > Tees in the main tree and in a collection,
+	// which the dashboard leaves out as the product list does; Hat is in none.
+	apparel := dashCategory(ctx, t, store, tenantID, uuid.Nil, teeProduct, "category", "Apparel")
+	dashCategory(ctx, t, store, tenantID, apparel, teeProduct, "category", "Tees")
+	dashCategory(ctx, t, store, tenantID, uuid.Nil, teeProduct, "collection", "Summer")
 	for _, o := range []dashSeed{
 		// The period, 1-7 September. 00:30 WIB on the 1st is still 31 August
 		// in UTC: it must count, on the 1st.
@@ -223,6 +252,20 @@ func TestDashboard(t *testing.T) {
 	// Tee 2+1+5 at 10000; Hat 1 at 10000, 2 at 12000 less 4000, and 1 at 6000.
 	equal("top_products[0]", top[0], map[string]any{"title": "Tee", "items_sold": n(8), "sales": n(80000)})
 	equal("top_products[1]", top[1], map[string]any{"title": "Hat", "items_sold": n(4), "sales": n(36000)})
+	names := func(p any) []string {
+		var out []string
+		for _, c := range p.(map[string]any)["categories"].([]any) {
+			c := c.(map[string]any)
+			out = append(out, c["name"].(string)+"@"+c["path"].(string))
+		}
+		return out
+	}
+	if got := names(top[0]); fmt.Sprint(got) != "[Apparel@apparel Tees@apparel.tees]" {
+		t.Errorf("Tee's categories %v, want the main tree by path", got)
+	}
+	if cats, ok := top[1].(map[string]any)["categories"].([]any); !ok || len(cats) != 0 {
+		t.Errorf("Hat's categories %v, want []", top[1].(map[string]any)["categories"])
+	}
 
 	t.Run("an empty period is zeros, every day and every split still listed", func(t *testing.T) {
 		code, d := do("GET", "/v1/dashboard?from=2020-01-01T00:00:00%2B07:00&to=2020-01-03T00:00:00%2B07:00", nil)

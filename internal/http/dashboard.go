@@ -75,8 +75,12 @@ func dashboardOut(d orders.Dashboard) Dashboard {
 			DashboardPaymentSales{PaymentMethod: DashboardPaymentSalesPaymentMethod(m.Key), Sales: m.Sales, Orders: m.Orders})
 	}
 	for _, p := range d.TopProducts {
-		out.TopProducts = append(out.TopProducts,
-			DashboardProduct{ProductId: p.ProductID, Title: p.Title, ItemsSold: int(p.ItemsSold), Sales: p.Sales})
+		cats := make([]CategoryBrief, 0, len(p.Categories))
+		for _, c := range p.Categories {
+			cats = append(cats, CategoryBrief{Id: c.ID, Name: c.Name, Path: c.Path})
+		}
+		out.TopProducts = append(out.TopProducts, DashboardProduct{ProductId: p.ProductID, Title: p.Title,
+			Categories: cats, ItemsSold: int(p.ItemsSold), Sales: p.Sales})
 	}
 	return out
 }

@@ -71,3 +71,12 @@ WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
 GROUP BY p.id, p.title
 ORDER BY sales DESC, p.title
 LIMIT 5;
+
+-- name: DashboardProductCategories :many
+-- The top products' main-tree categories by path, the list the product list
+-- shows for each product (04-api-spec.md §7.1).
+SELECT pc.product_id, c.id, c.name, c.path::text AS path
+FROM product_categories pc
+JOIN categories c ON c.id = pc.category_id
+WHERE pc.product_id = ANY(sqlc.arg(product_ids)::uuid[]) AND c.kind = 'category'
+ORDER BY pc.product_id, c.path;

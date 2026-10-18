@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
@@ -28,7 +29,14 @@ type Dashboard struct {
 	BySource        []Split
 	ByPaymentMethod []Split
 	New, Returning  int
-	TopProducts     []sqlcgen.DashboardTopProductsRow
+	TopProducts     []TopProduct
+}
+
+// TopProduct is one of the period's best sellers with its main-tree
+// categories, by path.
+type TopProduct struct {
+	sqlcgen.DashboardTopProductsRow
+	Categories []sqlcgen.DashboardProductCategoriesRow
 }
 
 // Figures are one period's totals.
@@ -110,8 +118,27 @@ func (s *Service) Dashboard(ctx context.Context, from, to time.Time) (Dashboard,
 				d.New++
 			}
 		}
-		d.TopProducts, err = q.DashboardTopProducts(ctx, sqlcgen.DashboardTopProductsParams(period))
-		return err
+		top, err := q.DashboardTopProducts(ctx, sqlcgen.DashboardTopProductsParams(period))
+		if err != nil {
+			return err
+		}
+		ids := make([]uuid.UUID, len(top))
+		for i, p := range top {
+			ids[i] = p.ProductID
+		}
+		cats, err := q.DashboardProductCategories(ctx, ids)
+		if err != nil {
+			return err
+		}
+		byProduct := map[uuid.UUID][]sqlcgen.DashboardProductCategoriesRow{}
+		for _, c := range cats {
+			byProduct[c.ProductID] = append(byProduct[c.ProductID], c)
+		}
+		d.TopProducts = make([]TopProduct, len(top))
+		for i, p := range top {
+			d.TopProducts[i] = TopProduct{DashboardTopProductsRow: p, Categories: byProduct[p.ProductID]}
+		}
+		return nil
 	})
 	return d, err
 }

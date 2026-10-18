@@ -235,6 +235,48 @@ func (q *Queries) DashboardNeedsAction(ctx context.Context) (DashboardNeedsActio
 	return i, err
 }
 
+const dashboardProductCategories = `-- name: DashboardProductCategories :many
+SELECT pc.product_id, c.id, c.name, c.path::text AS path
+FROM product_categories pc
+JOIN categories c ON c.id = pc.category_id
+WHERE pc.product_id = ANY($1::uuid[]) AND c.kind = 'category'
+ORDER BY pc.product_id, c.path
+`
+
+type DashboardProductCategoriesRow struct {
+	ProductID uuid.UUID
+	ID        uuid.UUID
+	Name      string
+	Path      string
+}
+
+// The top products' main-tree categories by path, the list the product list
+// shows for each product (04-api-spec.md §7.1).
+func (q *Queries) DashboardProductCategories(ctx context.Context, productIds []uuid.UUID) ([]DashboardProductCategoriesRow, error) {
+	rows, err := q.db.Query(ctx, dashboardProductCategories, productIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DashboardProductCategoriesRow
+	for rows.Next() {
+		var i DashboardProductCategoriesRow
+		if err := rows.Scan(
+			&i.ProductID,
+			&i.ID,
+			&i.Name,
+			&i.Path,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const dashboardTopProducts = `-- name: DashboardTopProducts :many
 SELECT p.id                                                   AS product_id,
        p.title,
