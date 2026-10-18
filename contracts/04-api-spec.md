@@ -34,7 +34,7 @@ the other, in the same commit.
 | Idempotency | No `Idempotency-Key` header. Checkout is idempotent per cart (BR-088); transitions are idempotent because moving to the current status is a no-op (BR-071) |
 | Responses | Every field is always present; an empty optional field is `null`. References expand to `{id, name}` |
 | Collections | `{ "data": [...], "next_cursor": "…" }`; `next_cursor` is `null` on the last page. Unpaginated collections omit it. `GET /v1/roles` is the one bare array |
-| Pagination | Cursor only: `?limit=50&cursor=<opaque>`, `limit` 1–200. No `offset` |
+| Pagination | Cursor only: `?limit=50&cursor=<opaque>`, `limit` 1–200. No `offset`. One exception: storefront `GET /v1/storefront/products` also takes `?page=` and answers `total`, for a shop website's numbered pager (§11.4, P1-230) |
 | Sorting | `?sort=-placed_at` (leading `-` for descending), allow-listed per endpoint |
 | Filtering | Explicit query parameters, not a query DSL |
 | Delete | Catalog `DELETE` archives and returns `204` (BR-012) |
@@ -1233,7 +1233,7 @@ headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
 
 | Method | Path | Credential | BR |
 |---|---|---|---|
-| `GET` | `/v1/storefront/products?category=&brand=&q=&sort=&limit=&cursor=` | key | 080, 081 |
+| `GET` | `/v1/storefront/products?category=&brand=&q=&sort=&limit=&cursor=&page=` | key | 080, 081 |
 | `GET` | `/v1/storefront/products/{slug}` | key | 080, 081 |
 | `GET` | `/v1/storefront/categories?kind=` | key | 031 |
 | `GET` | `/v1/storefront/brands` | key | — |
@@ -1266,17 +1266,26 @@ GET /v1/storefront/products?category=apparel.tees&sort=-updated_at&limit=24
 { "data": [
     { "slug": "erigo-basic-tee", "title": "Erigo Basic Tee",
       "brand": { "slug": "erigo", "name": "Erigo" },
+      "categories": [ { "kind": "category", "name": "Tees", "path": "apparel.tees" } ],
       "price_min": 19900000,
       "price_max": 21900000,
+      "weight_grams_min": 200,
+      "weight_grams_max": 250,
       "image": { "url": "https://img.{domain}/…/800.webp",
                  "sizes": { "1600": "…", "800": "…", "200": "…" } } } ],
-  "next_cursor": "eyJ…" }
+  "next_cursor": "eyJ…",
+  "total": 57 }
 ```
 
 - `category` takes a category `path` and includes descendants; `brand` takes a brand slug; `q` is
   a trigram match on title.
 - `sort`: `-updated_at` (default), `price_min`, `-price_min`, `title`.
 - `price_min`/`price_max` are the prices shoppers pay right now, sales included (BR-046).
+- `categories` are the product's unarchived categories, ordered as on the product below;
+  `weight_grams_min`/`weight_grams_max` span its visible variants (P1-230).
+- Paging: `cursor` as everywhere, or `page` (1-based) for a numbered pager, the one exception to
+  §1's cursor-only rule. Both together, or `page` below 1, is `422` on `page`; a page past the
+  last answers `"data": []`. `total` counts every matching product on every page (P1-230).
 - Only visible products appear (BR-080). p95 under 300 ms.
 
 ```json

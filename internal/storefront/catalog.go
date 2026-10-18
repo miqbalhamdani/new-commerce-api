@@ -26,6 +26,17 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 		}
 		f.Sort = string(*params.Sort)
 	}
+	if params.Page != nil {
+		if params.Cursor != nil {
+			httpkit.WriteError(w, r, fieldError("page", "page and cursor are alternatives; send one"))
+			return
+		}
+		if *params.Page < 1 {
+			httpkit.WriteError(w, r, fieldError("page", "page is 1 or more"))
+			return
+		}
+		f.Page = *params.Page
+	}
 	if params.Cursor != nil {
 		f.After = &catalog.ShopCursor{}
 		if err := httpkit.DecodeCursor(params.Cursor, f.After); err != nil {
@@ -33,14 +44,19 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 			return
 		}
 	}
-	rows, next, err := s.catalog.ShopProducts(r.Context(), f)
+	res, err := s.catalog.ShopProducts(r.Context(), f)
 	if err != nil {
 		httpkit.WriteError(w, r, err)
 		return
 	}
-	page := ProductPage{Data: make([]ProductListItem, 0, len(rows))}
-	for _, p := range rows {
-		item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax}
+	page := ProductPage{Data: make([]ProductListItem, 0, len(res.Products)), Total: int(res.Total)}
+	for _, p := range res.Products {
+		item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax,
+			WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax),
+			Categories: make([]ProductCategory, 0, len(p.Categories))}
+		for _, c := range p.Categories {
+			item.Categories = append(item.Categories, ProductCategory{Kind: CategoryKind(c.Kind), Name: c.Name, Path: c.Path})
+		}
 		if p.Brand != nil {
 			item.Brand = &BrandRef{Slug: p.Brand.Slug, Name: p.Brand.Name}
 		}
@@ -49,8 +65,8 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 		}
 		page.Data = append(page.Data, item)
 	}
-	if next != nil {
-		page.NextCursor = httpkit.EncodeCursor(next)
+	if res.Next != nil {
+		page.NextCursor = httpkit.EncodeCursor(res.Next)
 	}
 	httpkit.WriteJSON(w, http.StatusOK, page)
 }

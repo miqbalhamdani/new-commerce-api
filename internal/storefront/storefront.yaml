@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.9.2
+  version: 0.10.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -32,7 +32,8 @@ info:
     The admin API's conventions hold here (`04-api-spec.md` §1): money is an integer of minor
     units, times are RFC 3339 in `+07:00`, errors are RFC 9457 `application/problem+json` with
     a `trace_id`, a field the route does not define is `422 unknown_field` — a price field on a
-    cart or checkout route above all (BR-089) — and lists are cursor-paginated.
+    cart or checkout route above all (BR-089) — and lists are cursor-paginated. The one exception is
+    `GET /products`, which also takes `page` and answers `total` for a numbered pager (P1-230).
 
     ## Rate limits (BR-014)
 
@@ -88,6 +89,11 @@ paths:
         price. `price_min` and `price_max` are what a shopper pays right now, sales included
         (BR-046). `category` is a category `path` and includes its descendants; `brand` is a
         brand slug; `q` matches the title. `image` is the first image, or `null`.
+
+        Page with `cursor`, or with `page` for a numbered pager; `total` counts every matching
+        product either way (P1-230). A `page` past the last answers an empty `data`.
+        `categories` are the product's unarchived categories, as on the product. `weight_grams_min`
+        and `weight_grams_max` span its visible variants.
       parameters:
         - name: category
           in: query
@@ -115,6 +121,15 @@ paths:
             default: "-updated_at"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
+        - name: page
+          in: query
+          required: false
+          description: |
+            1-based page number, for a numbered pager: the alternative to `cursor`. Sending both,
+            or a page below 1, is `422` on `page`.
+          schema:
+            type: integer
+            minimum: 1
       responses:
         "200":
           description: A page of products.
@@ -832,7 +847,7 @@ components:
       name: limit
       in: query
       required: false
-      description: Page size. Pairs with `cursor`; there is no `offset`.
+      description: Page size. Pairs with `cursor` (or, on `GET /products` only, `page`); there is no `offset`.
       schema:
         type: integer
         minimum: 1
@@ -902,7 +917,7 @@ components:
 
     ProductListItem:
       type: object
-      required: [slug, title, brand, price_min, price_max, image]
+      required: [slug, title, brand, categories, price_min, price_max, weight_grams_min, weight_grams_max, image]
       properties:
         slug:
           type: string
@@ -912,10 +927,23 @@ components:
           oneOf:
             - $ref: "#/components/schemas/BrandRef"
             - type: "null"
+        categories:
+          description: The product's unarchived categories, ordered as on `GET /products/{slug}`.
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductCategory"
         price_min:
           $ref: "#/components/schemas/Money"
         price_max:
           $ref: "#/components/schemas/Money"
+        weight_grams_min:
+          description: The lightest visible variant's `weight_grams`.
+          type: integer
+          examples: [200]
+        weight_grams_max:
+          description: The heaviest visible variant's `weight_grams`.
+          type: integer
+          examples: [2000]
         image:
           oneOf:
             - $ref: "#/components/schemas/Image"
@@ -923,7 +951,7 @@ components:
 
     ProductPage:
       type: object
-      required: [data, next_cursor]
+      required: [data, next_cursor, total]
       properties:
         data:
           type: array
@@ -931,6 +959,10 @@ components:
             $ref: "#/components/schemas/ProductListItem"
         next_cursor:
           type: [string, "null"]
+        total:
+          description: Visible products matching the filters, across every page (P1-230).
+          type: integer
+          examples: [115]
 
     ProductImage:
       type: object
