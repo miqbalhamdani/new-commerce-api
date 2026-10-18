@@ -24,7 +24,8 @@ WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
 -- WIB days (BR-007), named explicitly rather than trusting the session's zone.
 SELECT (o.placed_at AT TIME ZONE 'Asia/Jakarta')::date AS day,
        sum(o.total_amount)::bigint                     AS sales,
-       count(*)::int                                   AS orders
+       count(*)::int                                   AS orders,
+       coalesce(sum((SELECT sum(l.qty) FROM order_lines l WHERE l.order_id = o.id)), 0)::bigint AS items_sold
 FROM orders o
 WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
   AND o.placed_at >= sqlc.arg(period_from) AND o.placed_at < sqlc.arg(period_to)

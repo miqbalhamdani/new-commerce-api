@@ -1147,8 +1147,9 @@ type DashboardCustomers struct {
 // DashboardDay defines model for DashboardDay.
 type DashboardDay struct {
 	// Date A WIB calendar day.
-	Date   openapi_types.Date `json:"date"`
-	Orders int                `json:"orders"`
+	Date      openapi_types.Date `json:"date"`
+	ItemsSold int                `json:"items_sold"`
+	Orders    int                `json:"orders"`
 
 	// Sales An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only

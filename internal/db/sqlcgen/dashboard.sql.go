@@ -132,7 +132,8 @@ func (q *Queries) DashboardBySource(ctx context.Context, arg DashboardBySourcePa
 const dashboardDaily = `-- name: DashboardDaily :many
 SELECT (o.placed_at AT TIME ZONE 'Asia/Jakarta')::date AS day,
        sum(o.total_amount)::bigint                     AS sales,
-       count(*)::int                                   AS orders
+       count(*)::int                                   AS orders,
+       coalesce(sum((SELECT sum(l.qty) FROM order_lines l WHERE l.order_id = o.id)), 0)::bigint AS items_sold
 FROM orders o
 WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
   AND o.placed_at >= $1 AND o.placed_at < $2
@@ -146,9 +147,10 @@ type DashboardDailyParams struct {
 }
 
 type DashboardDailyRow struct {
-	Day    pgtype.Date
-	Sales  int64
-	Orders int32
+	Day       pgtype.Date
+	Sales     int64
+	Orders    int32
+	ItemsSold int64
 }
 
 // WIB days (BR-007), named explicitly rather than trusting the session's zone.
@@ -161,7 +163,12 @@ func (q *Queries) DashboardDaily(ctx context.Context, arg DashboardDailyParams) 
 	var items []DashboardDailyRow
 	for rows.Next() {
 		var i DashboardDailyRow
-		if err := rows.Scan(&i.Day, &i.Sales, &i.Orders); err != nil {
+		if err := rows.Scan(
+			&i.Day,
+			&i.Sales,
+			&i.Orders,
+			&i.ItemsSold,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

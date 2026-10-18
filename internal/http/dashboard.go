@@ -65,7 +65,8 @@ func dashboardOut(d orders.Dashboard) Dashboard {
 	}
 	for _, day := range d.Daily {
 		date, _ := time.Parse(time.DateOnly, day.Date)
-		out.Daily = append(out.Daily, DashboardDay{Date: openapi_types.Date{Time: date}, Sales: day.Sales, Orders: day.Orders})
+		out.Daily = append(out.Daily, DashboardDay{Date: openapi_types.Date{Time: date}, Sales: day.Sales, Orders: day.Orders,
+			ItemsSold: int(day.ItemsSold)})
 	}
 	for _, s := range d.BySource {
 		out.BySource = append(out.BySource, DashboardSourceSales{Source: OrderSource(s.Key), Sales: s.Sales, Orders: s.Orders})

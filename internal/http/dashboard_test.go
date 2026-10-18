@@ -223,13 +223,13 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("%d days, want 7: %v", len(days), days)
 	}
 	for i, want := range []map[string]any{
-		{"date": "2026-09-01", "sales": n(30000), "orders": n(1)},
-		{"date": "2026-09-02", "sales": n(0), "orders": n(0)},
-		{"date": "2026-09-03", "sales": n(20000), "orders": n(1)},
+		{"date": "2026-09-01", "sales": n(30000), "orders": n(1), "items_sold": n(3)},
+		{"date": "2026-09-02", "sales": n(0), "orders": n(0), "items_sold": n(0)},
+		{"date": "2026-09-03", "sales": n(20000), "orders": n(1), "items_sold": n(2)},
 		{"date": "2026-09-04", "sales": n(0), "orders": n(0)},
-		{"date": "2026-09-05", "sales": n(10000), "orders": n(1)},
-		{"date": "2026-09-06", "sales": n(6000), "orders": n(1)},
-		{"date": "2026-09-07", "sales": n(50000), "orders": n(1)},
+		{"date": "2026-09-05", "sales": n(10000), "orders": n(1), "items_sold": n(1)},
+		{"date": "2026-09-06", "sales": n(6000), "orders": n(1), "items_sold": n(1)},
+		{"date": "2026-09-07", "sales": n(50000), "orders": n(1), "items_sold": n(5)},
 	} {
 		equal(fmt.Sprintf("daily[%d]", i), days[i], want)
 	}

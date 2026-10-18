@@ -49,9 +49,10 @@ type Figures struct {
 
 // Day is one WIB calendar day, as "2006-01-02".
 type Day struct {
-	Date   string
-	Sales  int64
-	Orders int
+	Date      string
+	Sales     int64
+	Orders    int
+	ItemsSold int64
 }
 
 // Split is the sales and orders of one source or payment method.
@@ -169,7 +170,7 @@ func everyDay(from, to time.Time, rows []sqlcgen.DashboardDailyRow) []Day {
 	var out []Day
 	for ; !day.After(end); day = day.AddDate(0, 0, 1) {
 		key := day.Format(time.DateOnly)
-		out = append(out, Day{Date: key, Sales: got[key].Sales, Orders: int(got[key].Orders)})
+		out = append(out, Day{Date: key, Sales: got[key].Sales, Orders: int(got[key].Orders), ItemsSold: got[key].ItemsSold})
 	}
 	return out
 }
