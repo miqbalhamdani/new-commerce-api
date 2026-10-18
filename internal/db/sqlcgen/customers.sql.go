@@ -12,6 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const countCustomers = `-- name: CountCustomers :one
+SELECT count(*) FROM customers c
+WHERE ($1::text IS NULL
+       OR c.name ILIKE '%' || $1 || '%'
+       OR c.email ILIKE '%' || $1 || '%'
+       OR c.phone ILIKE '%' || $1 || '%')
+`
+
+// ListCustomers' total, with its q filter and no keyset (P1-231).
+func (q *Queries) CountCustomers(ctx context.Context, q_ *string) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomers, q_)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteCustomerIdentities = `-- name: DeleteCustomerIdentities :exec
 DELETE FROM customer_identities WHERE customer_id = $1
 `
@@ -84,12 +100,13 @@ WHERE ($1::text IS NULL
        OR c.phone ILIKE '%' || $1 || '%')
   AND ($2::uuid IS NULL OR c.id < $2::uuid)
 ORDER BY c.id DESC
-LIMIT $3
+LIMIT $4 OFFSET $3
 `
 
 type ListCustomersParams struct {
 	Q        *string
 	BeforeID *uuid.UUID
+	Off      int32
 	Lim      int32
 }
 
@@ -105,7 +122,12 @@ type ListCustomersRow struct {
 
 // Keyset on id DESC: v7 ids are time-ordered, so newest first.
 func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([]ListCustomersRow, error) {
-	rows, err := q.db.Query(ctx, listCustomers, arg.Q, arg.BeforeID, arg.Lim)
+	rows, err := q.db.Query(ctx, listCustomers,
+		arg.Q,
+		arg.BeforeID,
+		arg.Off,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}

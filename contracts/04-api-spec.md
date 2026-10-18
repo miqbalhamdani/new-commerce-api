@@ -34,7 +34,7 @@ the other, in the same commit.
 | Idempotency | No `Idempotency-Key` header. Checkout is idempotent per cart (BR-088); transitions are idempotent because moving to the current status is a no-op (BR-071) |
 | Responses | Every field is always present; an empty optional field is `null`. References expand to `{id, name}` |
 | Collections | `{ "data": [...], "next_cursor": "…" }`; `next_cursor` is `null` on the last page. Unpaginated collections omit it. `GET /v1/roles` is the one bare array |
-| Pagination | Cursor only: `?limit=50&cursor=<opaque>`, `limit` 1–200. No `offset`. One exception: storefront `GET /v1/storefront/products` also takes `?page=` and answers `total`, for a shop website's numbered pager (§11.4, P1-230) |
+| Pagination | Cursor only: `?limit=50&cursor=<opaque>`, `limit` 1–200. No `offset`. Exceptions, for a numbered pager: storefront `GET /v1/storefront/products` (§11.4, P1-230) and admin `GET /v1/products`, `/v1/orders` and `/v1/customers` (§7.1, §5.1, §5.5, P1-231) also take `?page=` (1-based, the alternative to `cursor`) and answer `total` |
 | Sorting | `?sort=-placed_at` (leading `-` for descending), allow-listed per endpoint |
 | Filtering | Explicit query parameters, not a query DSL |
 | Delete | Catalog `DELETE` archives and returns `204` (BR-012) |
@@ -487,7 +487,7 @@ GET /v1/audit-log?subject_type=order&subject_id=0192…
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `GET` | `/v1/orders?status=&source=&customer_id=&refund_owed=&placed_from=&placed_to=&q=&sort=&limit=&cursor=` | `orders:read` | 075 |
+| `GET` | `/v1/orders?status=&source=&customer_id=&refund_owed=&placed_from=&placed_to=&q=&sort=&limit=&cursor=&page=` | `orders:read` | 075 |
 | `POST` | `/v1/orders` | `orders:write` | 076, 077, 078 |
 | `GET` | `/v1/orders/{id}` | `orders:read` | — |
 | `PATCH` | `/v1/orders/{id}` | `orders:write` | 009, 010, 079 |
@@ -499,7 +499,7 @@ GET /v1/audit-log?subject_type=order&subject_id=0192…
 | `POST` | `/v1/orders/{id}/refund` | `orders:write` | 075 |
 | `POST` | `/v1/orders/export` | `exports:read` | 060, 063, 064, 065 |
 | `POST` | `/v1/shipping/rates` | `orders:write` | 120 |
-| `GET` | `/v1/customers?q=&limit=&cursor=` | `customers:read` | 092 |
+| `GET` | `/v1/customers?q=&limit=&cursor=&page=` | `customers:read` | 092 |
 | `GET` | `/v1/customers/{id}` | `customers:read` | 092 |
 | `POST` | `/v1/customers/{id}/purge` | `customers:purge` | 060, 097 |
 
@@ -516,7 +516,8 @@ GET /v1/orders?status=paid&status=processing&sort=-placed_at
       "total": 39800000,
       "placed_at": "2026-10-06T16:15:00+07:00", "paid_at": "2026-10-06T17:02:00+07:00",
       "refunded_at": null } ],
-  "next_cursor": "eyJ…" }
+  "next_cursor": "eyJ…",
+  "total": 128 }
 ```
 
 - `status` repeats to OR values. The admin's saved views are plain filters:
@@ -524,6 +525,9 @@ GET /v1/orders?status=paid&status=processing&sort=-placed_at
   **Shipped** `status=shipped` · **Cancelled, refund owed** `refund_owed=true` (BR-075).
 - `q` matches `order_number`, customer name, email and phone.
 - `sort` accepts `-placed_at` (default) and `placed_at`.
+- Paging: `cursor`, or `page` (1-based) for a numbered pager; both together, or `page` below 1,
+  is `422` on `page`, and a page past the last answers `"data": []`. `total` counts every
+  matching row on every page (P1-231).
 - p95 first byte under 800 ms with 10,000 orders in the tenant.
 
 ### 5.2 Order detail and edit
@@ -637,7 +641,10 @@ GET /v1/customers?q=rina
 { "data": [ { "id": "0192…", "name": "Rina", "email": "rina@example.com",
               "phone": "+6281234567890", "order_count": 3,
               "created_at": "2026-10-06T16:15:00+07:00" } ],
-  "next_cursor": null }
+  "next_cursor": null,
+  "total": 1 }
+
+`q` matches name, email and phone. Paging as §5.1: `cursor`, or `page` with `total` (P1-231).
 
 GET /v1/customers/{id}
 200 OK   ← Customer + "orders": [ …order list rows, newest first, up to 50… ]
@@ -762,7 +769,7 @@ DELETE /v1/categories/{id}
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `GET` | `/v1/products?status=&brand_id=&category_id=&q=&sort=&limit=&cursor=` | `products:read` | — |
+| `GET` | `/v1/products?status=&brand_id=&category_id=&q=&sort=&limit=&cursor=&page=` | `products:read` | — |
 | `POST` | `/v1/products` | `products:write` | 009, 037, 042 |
 | `GET` | `/v1/products/{id}` | `products:read` | — |
 | `PATCH` | `/v1/products/{id}` | `products:write` | 009, 010, 037, 038, 042 |
@@ -846,7 +853,8 @@ GET /v1/products?status=active&category_id=0192-apparel&q=tee&sort=-updated_at
       "price_max": 21900000,
       "cover_url": "https://img.{domain}/…/200.webp",
       "updated_at": "2026-10-06T16:15:00+07:00" } ],
-  "next_cursor": "eyJ…" }
+  "next_cursor": "eyJ…",
+  "total": 57 }
 ```
 
 - `categories` lists only the product's categories of kind `category` (the main tree), as
@@ -857,6 +865,9 @@ GET /v1/products?status=active&category_id=0192-apparel&q=tee&sort=-updated_at
 - `q` is a trigram match on `title`; an exact SKU also matches.
 - `sort` accepts `-created_at` (default), `-updated_at` or `title`.
 - Archived products appear only with `status=archived`.
+- Paging: `cursor`, or `page` (1-based) for a numbered pager; both together, or `page` below 1,
+  is `422` on `page`, and a page past the last answers `"data": []`. `total` counts every
+  matching row on every page (P1-231).
 - p95 under 600 ms with 10k products.
 
 ### 7.2 Variants

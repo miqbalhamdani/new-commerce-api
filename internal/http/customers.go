@@ -13,6 +13,11 @@ import (
 
 func (s *Server) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
 	requirePermission(auth.PermCustomersRead, func(w http.ResponseWriter, r *http.Request) {
+		pageNo, err := pageNumber(params.Page, params.Cursor)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
 		var after *orders.CustomerCursor
 		if params.Cursor != nil {
 			after = &orders.CustomerCursor{}
@@ -21,17 +26,17 @@ func (s *Server) ListCustomers(w http.ResponseWriter, r *http.Request, params Li
 				return
 			}
 		}
-		rows, next, err := s.orders.ListCustomers(r.Context(), params.Q, after, pageLimit(params.Limit))
+		list, err := s.orders.ListCustomers(r.Context(), params.Q, after, pageNo, pageLimit(params.Limit))
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
-		page := CustomerPage{Data: make([]Customer, 0, len(rows))}
-		for _, c := range rows {
+		page := CustomerPage{Data: make([]Customer, 0, len(list.Rows)), Total: int(list.Total)}
+		for _, c := range list.Rows {
 			page.Data = append(page.Data, customerOut(c))
 		}
-		if next != nil {
-			page.NextCursor = encodeCursor(next)
+		if list.Next != nil {
+			page.NextCursor = encodeCursor(list.Next)
 		}
 		writeJSON(w, http.StatusOK, page)
 	})(w, r)

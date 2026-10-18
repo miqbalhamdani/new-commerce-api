@@ -1095,6 +1095,9 @@ type CustomerDetail struct {
 type CustomerPage struct {
 	Data       []Customer `json:"data"`
 	NextCursor *string    `json:"next_cursor"`
+
+	// Total Rows matching the filters, across every page (P1-231).
+	Total int `json:"total"`
 }
 
 // ErrorCode The canonical error codes, listed with their status and rule in `04-api-spec.md` §1.1.
@@ -1432,6 +1435,9 @@ type OrderListRow struct {
 type OrderPage struct {
 	Data       []OrderListRow `json:"data"`
 	NextCursor *string        `json:"next_cursor"`
+
+	// Total Rows matching the filters, across every page (P1-231).
+	Total int `json:"total"`
 }
 
 // OrderPayment One Midtrans Snap attempt, newest first (BR-123): `ERG-000123`, then `ERG-000123-2`, ….
@@ -1602,6 +1608,9 @@ type ProductListItem struct {
 type ProductPage struct {
 	Data       []ProductListItem `json:"data"`
 	NextCursor *string           `json:"next_cursor"`
+
+	// Total Rows matching the filters, across every page (P1-231).
+	Total int `json:"total"`
 }
 
 // ProductStatus defines model for ProductStatus.
@@ -2035,6 +2044,9 @@ type IfMatch = int
 // Limit defines model for Limit.
 type Limit = int
 
+// Page defines model for Page.
+type Page = int
+
 // BadGateway RFC 9457 `application/problem+json`. Every error response in this API uses it.
 //
 // `trace_id` is the OpenTelemetry trace id — a support ticket quoting it goes straight to
@@ -2091,11 +2103,12 @@ type ListAuditLogParams struct {
 	From        *string             `form:"from,omitempty" json:"from,omitempty"`
 	To          *string             `form:"to,omitempty" json:"to,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -2104,11 +2117,12 @@ type ListBrandsParams struct {
 	Q        *string `form:"q,omitempty" json:"q,omitempty"`
 	Archived *bool   `form:"archived,omitempty" json:"archived,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -2123,12 +2137,18 @@ type ListCategoriesParams struct {
 type ListCustomersParams struct {
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Page 1-based page number, for a numbered pager: the alternative to `cursor` on the product, order
+	// and customer lists (P1-231). Sending both, or a page below 1, is `422` on `page`; a page
+	// past the last answers an empty `data`.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
 }
 
 // ListOrdersParams defines parameters for ListOrders.
@@ -2142,12 +2162,18 @@ type ListOrdersParams struct {
 	Q          *string               `form:"q,omitempty" json:"q,omitempty"`
 	Sort       *ListOrdersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Page 1-based page number, for a numbered pager: the alternative to `cursor` on the product, order
+	// and customer lists (P1-231). Sending both, or a page below 1, is `422` on `page`; a page
+	// past the last answers an empty `data`.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
 }
 
 // ListOrdersParamsSort defines parameters for ListOrders.
@@ -2171,12 +2197,18 @@ type ListProductsParams struct {
 	Q          *string                 `form:"q,omitempty" json:"q,omitempty"`
 	Sort       *ListProductsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Page 1-based page number, for a numbered pager: the alternative to `cursor` on the product, order
+	// and customer lists (P1-231). Sending both, or a page below 1, is `422` on `page`; a page
+	// past the last answers an empty `data`.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
 }
 
 // ListProductsParamsSort defines parameters for ListProducts.
@@ -2212,11 +2244,12 @@ type ListUsersParams struct {
 	Status *ListUsersParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 	Role   *ListUsersParamsRole   `form:"role,omitempty" json:"role,omitempty"`
 
-	// Limit Page size. Pairs with `cursor`; there is no `offset` in this API.
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
-	// Cursor Opaque cursor from the previous page. Cursor pagination only — a deep `offset` on a large
-	// table is a sequential scan, so the parameter does not exist.
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
@@ -2649,7 +2682,7 @@ type ServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id Id)
-	// ListCustomers Customers, searched and cursor-paginated
+	// ListCustomers Customers, searched and paginated
 	// (GET /customers)
 	ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams)
 	// GetCustomer One customer and their latest orders
@@ -2673,7 +2706,7 @@ type ServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(w http.ResponseWriter, r *http.Request, id Id)
-	// ListOrders Orders, filtered and cursor-paginated
+	// ListOrders Orders, filtered and paginated
 	// (GET /orders)
 	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
 	// CreateOrder Enter a manual (WhatsApp) order
@@ -2706,7 +2739,7 @@ type ServerInterface interface {
 	// ShipOrder Record the courier and tracking number and mark shipped
 	// (POST /orders/{id}/ship)
 	ShipOrder(w http.ResponseWriter, r *http.Request, id Id)
-	// ListProducts Products, filtered and cursor-paginated
+	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
 	// CreateProduct Create a product
@@ -2949,7 +2982,7 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListCustomers Customers, searched and cursor-paginated
+// ListCustomers Customers, searched and paginated
 // (GET /customers)
 func (_ Unimplemented) ListCustomers(w http.ResponseWriter, r *http.Request, params ListCustomersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -2997,7 +3030,7 @@ func (_ Unimplemented) UpdateMedia(w http.ResponseWriter, r *http.Request, id Id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListOrders Orders, filtered and cursor-paginated
+// ListOrders Orders, filtered and paginated
 // (GET /orders)
 func (_ Unimplemented) ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -3063,7 +3096,7 @@ func (_ Unimplemented) ShipOrder(w http.ResponseWriter, r *http.Request, id Id) 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// ListProducts Products, filtered and cursor-paginated
+// ListProducts Products, filtered and paginated
 // (GET /products)
 func (_ Unimplemented) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -3944,6 +3977,19 @@ func (siw *ServerInterfaceWrapper) ListCustomers(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCustomers(w, r, params)
 	}))
@@ -4248,6 +4294,19 @@ func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Req
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
 		}
 		return
 	}
@@ -4623,6 +4682,19 @@ func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
 		}
 		return
 	}
@@ -10954,7 +11026,7 @@ type StrictServerInterface interface {
 	// UpdateCategory Rename, relabel or move a category
 	// (PATCH /categories/{id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
-	// ListCustomers Customers, searched and cursor-paginated
+	// ListCustomers Customers, searched and paginated
 	// (GET /customers)
 	ListCustomers(ctx context.Context, request ListCustomersRequestObject) (ListCustomersResponseObject, error)
 	// GetCustomer One customer and their latest orders
@@ -10978,7 +11050,7 @@ type StrictServerInterface interface {
 	// UpdateMedia Attach an image to a variant, or back to the product
 	// (PATCH /media/{id})
 	UpdateMedia(ctx context.Context, request UpdateMediaRequestObject) (UpdateMediaResponseObject, error)
-	// ListOrders Orders, filtered and cursor-paginated
+	// ListOrders Orders, filtered and paginated
 	// (GET /orders)
 	ListOrders(ctx context.Context, request ListOrdersRequestObject) (ListOrdersResponseObject, error)
 	// CreateOrder Enter a manual (WhatsApp) order
@@ -11011,7 +11083,7 @@ type StrictServerInterface interface {
 	// ShipOrder Record the courier and tracking number and mark shipped
 	// (POST /orders/{id}/ship)
 	ShipOrder(ctx context.Context, request ShipOrderRequestObject) (ShipOrderResponseObject, error)
-	// ListProducts Products, filtered and cursor-paginated
+	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
 	// CreateProduct Create a product

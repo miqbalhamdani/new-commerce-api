@@ -229,6 +229,24 @@ func PageLimit(l *int) int {
 	return *l
 }
 
+// PageNumber is a numbered pager's 1-based `page`, the alternative to `cursor`
+// on the lists that take it (P1-230, P1-231); 0 when absent. Both together, or
+// a page below 1, is 422 on `page`.
+func PageNumber(page *int, cursor *string) (int, error) {
+	if page == nil {
+		return 0, nil
+	}
+	if cursor != nil {
+		return 0, apperrors.ValidationFailed("page and cursor are alternatives; send one").
+			WithFields(apperrors.Field{Name: "page", Detail: "page and cursor are alternatives; send one"})
+	}
+	if *page < 1 {
+		return 0, apperrors.ValidationFailed("page is 1 or more").
+			WithFields(apperrors.Field{Name: "page", Detail: "page is 1 or more"})
+	}
+	return *page, nil
+}
+
 // BearerToken is the token in an Authorization: Bearer header.
 func BearerToken(r *http.Request) (string, bool) {
 	header := r.Header.Get("Authorization")

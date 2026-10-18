@@ -167,6 +167,11 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 			}
 			f.Sort = string(*params.Sort)
 		}
+		var err error
+		if f.Page, err = pageNumber(params.Page, params.Cursor); err != nil {
+			writeError(w, r, err)
+			return
+		}
 		if params.Cursor != nil {
 			f.After = &catalog.ProductCursor{}
 			if err := decodeCursor(params.Cursor, f.After); err != nil {
@@ -174,13 +179,13 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 				return
 			}
 		}
-		rows, next, err := s.catalog.ListProducts(r.Context(), f)
+		list, err := s.catalog.ListProducts(r.Context(), f)
 		if err != nil {
 			writeError(w, r, err)
 			return
 		}
-		page := ProductPage{Data: make([]ProductListItem, 0, len(rows))}
-		for _, p := range rows {
+		page := ProductPage{Data: make([]ProductListItem, 0, len(list.Rows)), Total: int(list.Total)}
+		for _, p := range list.Rows {
 			item := ProductListItem{Id: p.ID, Version: p.Version, Title: p.Title, Slug: p.Slug,
 				Status: ProductStatus(p.Status), VariantCount: p.VariantCount, PriceMin: p.PriceMin,
 				PriceMax: p.PriceMax, CoverUrl: p.CoverURL, UpdatedAt: p.UpdatedAt}
@@ -193,8 +198,8 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 			}
 			page.Data = append(page.Data, item)
 		}
-		if next != nil {
-			page.NextCursor = encodeCursor(next)
+		if list.Next != nil {
+			page.NextCursor = encodeCursor(list.Next)
 		}
 		writeJSON(w, http.StatusOK, page)
 	})(w, r)

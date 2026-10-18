@@ -26,16 +26,10 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 		}
 		f.Sort = string(*params.Sort)
 	}
-	if params.Page != nil {
-		if params.Cursor != nil {
-			httpkit.WriteError(w, r, fieldError("page", "page and cursor are alternatives; send one"))
-			return
-		}
-		if *params.Page < 1 {
-			httpkit.WriteError(w, r, fieldError("page", "page is 1 or more"))
-			return
-		}
-		f.Page = *params.Page
+	var err error
+	if f.Page, err = httpkit.PageNumber(params.Page, params.Cursor); err != nil {
+		httpkit.WriteError(w, r, err)
+		return
 	}
 	if params.Cursor != nil {
 		f.After = &catalog.ShopCursor{}
