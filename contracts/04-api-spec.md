@@ -694,7 +694,9 @@ GET /v1/dashboard?from=2026-09-18&to=2026-10-18
   "customers": { "new": 12, "returning": 19 },
   "top_products": [ { "product_id": "0192…", "title": "Erigo Basic Tee",
                       "categories": [ { "id": "0192…", "name": "Tees", "path": "apparel.tees" } ],
-                      "items_sold": 18, "sales": 359000000 } ] }
+                      "items_sold": 18, "sales": 359000000 } ],
+  "top_customers": [ { "customer_id": "0192…", "name": "Rina Wati", "sales": 159200000,
+                       "orders": 3 } ] }
 ```
 
 The figures are BR-066's. `from` and `to` are each a date (midnight WIB) or an RFC 3339 time with
@@ -702,7 +704,8 @@ an offset (BR-007); both are required, `to` is exclusive and after `from`, and t
 most 366 days, or `422` on the field. `daily` has one entry per WIB day from `from`, zero-filled;
 `by_source` and `by_payment_method` list every value, zero-filled; `top_products` has at most five,
 by sales, each with its main-tree categories (`kind = category`) by path, as on the product list
-(§7.1). `needs_action` is the shop as it is now, whatever the period: `awaiting_payment` is
+(§7.1); `top_customers` has at most three, by sales, each named as on their latest order in the
+period, with `customer_id` when they have an account and `null` for a guest. `needs_action` is the shop as it is now, whatever the period: `awaiting_payment` is
 pending Midtrans orders, `transfers_to_confirm` pending bank transfers, and the other three are the
 §5.1 saved views. Every amount is minor units (BR-006).
 

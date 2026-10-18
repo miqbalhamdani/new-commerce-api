@@ -30,6 +30,7 @@ type Dashboard struct {
 	ByPaymentMethod []Split
 	New, Returning  int
 	TopProducts     []TopProduct
+	TopCustomers    []sqlcgen.DashboardTopCustomersRow
 }
 
 // TopProduct is one of the period's best sellers with its main-tree
@@ -139,7 +140,8 @@ func (s *Service) Dashboard(ctx context.Context, from, to time.Time) (Dashboard,
 		for i, p := range top {
 			d.TopProducts[i] = TopProduct{DashboardTopProductsRow: p, Categories: byProduct[p.ProductID]}
 		}
-		return nil
+		d.TopCustomers, err = q.DashboardTopCustomers(ctx, sqlcgen.DashboardTopCustomersParams(period))
+		return err
 	})
 	return d, err
 }

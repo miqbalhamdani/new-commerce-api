@@ -284,6 +284,59 @@ func (q *Queries) DashboardProductCategories(ctx context.Context, productIds []u
 	return items, nil
 }
 
+const dashboardTopCustomers = `-- name: DashboardTopCustomers :many
+SELECT o.customer_id,
+       (array_agg(o.customer->>'name' ORDER BY o.placed_at DESC))[1]::text AS name,
+       sum(o.total_amount)::bigint AS sales,
+       count(*)::int AS orders
+FROM orders o
+WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
+  AND o.placed_at >= $1 AND o.placed_at < $2
+  AND coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')) IS NOT NULL
+GROUP BY coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')), o.customer_id
+ORDER BY sales DESC, name
+LIMIT 3
+`
+
+type DashboardTopCustomersParams struct {
+	PeriodFrom time.Time
+	PeriodTo   time.Time
+}
+
+type DashboardTopCustomersRow struct {
+	CustomerID *uuid.UUID
+	Name       string
+	Sales      int64
+	Orders     int32
+}
+
+// The period's three best customers by sales: BR-066's people (the account,
+// else the order's email, else its phone), named as on their latest order.
+func (q *Queries) DashboardTopCustomers(ctx context.Context, arg DashboardTopCustomersParams) ([]DashboardTopCustomersRow, error) {
+	rows, err := q.db.Query(ctx, dashboardTopCustomers, arg.PeriodFrom, arg.PeriodTo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DashboardTopCustomersRow
+	for rows.Next() {
+		var i DashboardTopCustomersRow
+		if err := rows.Scan(
+			&i.CustomerID,
+			&i.Name,
+			&i.Sales,
+			&i.Orders,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const dashboardTopProducts = `-- name: DashboardTopProducts :many
 SELECT p.id                                                   AS product_id,
        p.title,

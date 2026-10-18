@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.18.0
+  version: 2.19.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -3554,7 +3554,7 @@ components:
 
     Dashboard:
       type: object
-      required: [from, to, needs_action, current, previous, daily, by_source, by_payment_method, customers, top_products]
+      required: [from, to, needs_action, current, previous, daily, by_source, by_payment_method, customers, top_products, top_customers]
       properties:
         from:
           type: string
@@ -3587,6 +3587,11 @@ components:
           maxItems: 5
           items:
             $ref: "#/components/schemas/DashboardProduct"
+        top_customers:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/DashboardTopCustomer"
 
     DashboardNeedsAction:
       type: object
@@ -3652,6 +3657,23 @@ components:
         new:
           type: integer
         returning:
+          type: integer
+
+    DashboardTopCustomer:
+      type: object
+      description: One of the period's best customers by sales (BR-066).
+      required: [customer_id, name, sales, orders]
+      properties:
+        customer_id:
+          type: [string, "null"]
+          format: uuid
+          description: "`null` for a guest, found by the email or phone on their orders."
+        name:
+          type: string
+          description: As on their latest order in the period.
+        sales:
+          $ref: "#/components/schemas/Money"
+        orders:
           type: integer
 
     DashboardProduct:

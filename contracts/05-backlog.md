@@ -176,6 +176,8 @@ to work an order the day the first one arrives.
 | P1-112 | Order export screen | FE | 107 | Uses the order-list filters; download link expires in 15 minutes and can be regenerated (BR-063) | review | Iqbal Hamdani |
 | P1-113 | Dashboard figures `GET /v1/dashboard` | CT/BE | 103 | As §5.7; counts only paid, uncancelled orders placed in the period; previous period, WIB days, channel, payment method, customers and top products zero-filled and correct against seeded orders; another shop's orders never count (BR-001, BR-066) | review | Iqbal Hamdani |
 | P1-114 | Dashboard screen | FE | 113, 108 | `/` is the dashboard: needs-action tiles open the matching saved view; 7, 30 or 90 days with change against the period before; daily sales chart; channel, payment method and customer split; top products; latest orders. No stock anywhere (BR-017, BR-066) | review | Iqbal Hamdani |
+| P1-115 | Top customers on the dashboard | CT/BE | 113 | As §5.7: `top_customers`, the period's three best by sales, BR-066's people named as on their latest order, `customer_id` null for a guest; another shop's customers never appear (BR-001, BR-066) | review | Iqbal Hamdani |
+| P1-116 | Top customers card | FE | 115, 114 | Under Customers: name and sales for each, a guest's name plain and an account's linked to the customer; a button to the customer list | review | Iqbal Hamdani |
 
 ---
 

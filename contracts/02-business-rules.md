@@ -575,6 +575,8 @@ The dashboard counts an order once it is paid and until it is cancelled: placed 
   customer was purged, BR-097) is left out.
 - **Top products** rank by sales, a line being worth its quantity times its unit price less its
   discount, and name their main-tree categories as the product list does.
+- **Top customers** rank the same people as customers do by sales, each named as on their latest
+  order in the period.
 - **Needs action** is the shop now, not the period: pending orders by payment method, and the
   order list's saved views (`04-api-spec.md` §5.1).
 
