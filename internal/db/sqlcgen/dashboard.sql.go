@@ -295,7 +295,7 @@ WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
   AND coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')) IS NOT NULL
 GROUP BY coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')), o.customer_id
 ORDER BY sales DESC, name
-LIMIT 5
+LIMIT 3
 `
 
 type DashboardTopCustomersParams struct {
@@ -310,7 +310,7 @@ type DashboardTopCustomersRow struct {
 	Orders     int32
 }
 
-// The period's five best customers by sales: BR-066's people (the account,
+// The period's three best customers by sales: BR-066's people (the account,
 // else the order's email, else its phone), named as on their latest order.
 func (q *Queries) DashboardTopCustomers(ctx context.Context, arg DashboardTopCustomersParams) ([]DashboardTopCustomersRow, error) {
 	rows, err := q.db.Query(ctx, dashboardTopCustomers, arg.PeriodFrom, arg.PeriodTo)

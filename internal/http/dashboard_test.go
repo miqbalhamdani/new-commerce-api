@@ -280,7 +280,7 @@ func TestDashboard(t *testing.T) {
 	equal("top_customers[1]", buyers[1], map[string]any{"name": "Rina Wati", "sales": n(40000), "orders": n(2)})
 	equal("top_customers[2]", buyers[2], map[string]any{"name": "Sari", "sales": n(20000), "orders": n(1)})
 
-	t.Run("a customer with an account is named and linked by it", func(t *testing.T) {
+	t.Run("an account is one customer, named and linked by it; only the three best show", func(t *testing.T) {
 		account := uuid.Must(uuid.NewV7())
 		if err := store.InTenantTx(tenant.NewContext(ctx, tenantID), func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, `INSERT INTO customers (id, tenant_id, email, name) VALUES ($1, $2, $3, 'Budi Santoso')`,
@@ -295,16 +295,24 @@ func TestDashboard(t *testing.T) {
 			email: "old@example.com", customer: &account, lines: []dashLine{{tee, 1, 10000, 0}}})
 		dashOrder(ctx, t, store, tenantID, dashSeed{status: "paid", placed: wib("2021-03-02 10:00"), name: "Budi Santoso",
 			email: "new@example.com", customer: &account, lines: []dashLine{{tee, 2, 10000, 0}}})
+		// Three guests under him: the fourth best is left out.
+		for i, sales := range []int64{25000, 20000, 10000} {
+			dashOrder(ctx, t, store, tenantID, dashSeed{status: "completed", placed: wib("2021-03-03 10:00"),
+				name: fmt.Sprintf("Guest %d", i+1), email: fmt.Sprintf("guest%d@example.com", i+1),
+				lines: []dashLine{{tee, 1, sales, 0}}})
+		}
 		code, d := do("GET", "/v1/dashboard?from=2021-03-01&to=2021-03-08", nil)
 		if code != 200 {
 			t.Fatalf("%d %v", code, d)
 		}
 		buyers, _ := d["top_customers"].([]any)
-		if len(buyers) != 1 {
-			t.Fatalf("top_customers: %v", buyers)
+		if len(buyers) != 3 {
+			t.Fatalf("top_customers: %v, want the three best", buyers)
 		}
 		equal("top_customers[0]", buyers[0], map[string]any{"name": "Budi Santoso", "sales": n(30000), "orders": n(2),
 			"customer_id": account.String()})
+		equal("top_customers[1]", buyers[1], map[string]any{"name": "Guest 1", "sales": n(25000), "customer_id": nil})
+		equal("top_customers[2]", buyers[2], map[string]any{"name": "Guest 2", "sales": n(20000)})
 	})
 
 	t.Run("an empty period is zeros, every day and every split still listed", func(t *testing.T) {

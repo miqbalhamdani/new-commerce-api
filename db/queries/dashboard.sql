@@ -83,7 +83,7 @@ WHERE pc.product_id = ANY(sqlc.arg(product_ids)::uuid[]) AND c.kind = 'category'
 ORDER BY pc.product_id, c.path;
 
 -- name: DashboardTopCustomers :many
--- The period's five best customers by sales: BR-066's people (the account,
+-- The period's three best customers by sales: BR-066's people (the account,
 -- else the order's email, else its phone), named as on their latest order.
 SELECT o.customer_id,
        (array_agg(o.customer->>'name' ORDER BY o.placed_at DESC))[1]::text AS name,
@@ -95,4 +95,4 @@ WHERE o.status IN ('paid', 'processing', 'shipped', 'completed')
   AND coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')) IS NOT NULL
 GROUP BY coalesce(o.customer_id::text, lower(nullif(o.customer->>'email', '')), nullif(o.customer->>'phone', '')), o.customer_id
 ORDER BY sales DESC, name
-LIMIT 5;
+LIMIT 3;
