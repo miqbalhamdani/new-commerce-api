@@ -9,7 +9,8 @@ lives in the ERD or the API spec.
 
 Ids are grouped by area and never reused: `001–019` platform · `020–029` auth & team ·
 `030–049` catalog · `050–059` media · `060–069` jobs, export & reporting · `070–079` orders ·
-`080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email. A rule that no longer applies is marked
+`080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email ·
+`130–139` blog. A rule that no longer applies is marked
 **retired** and keeps its number.
 
 ---
@@ -132,9 +133,10 @@ instant exact, so the choice of zone is presentation only.
 ### BR-008 Server-managed fields are never accepted
 `id`, `tenant_id`, `version`, `created_at`, `updated_at`, `path`, any `*_at` audit timestamp, and
 derived values are set by the server. A client that sends one gets `422 validation_failed`
-naming the field, **on create and on update alike**. Slugs are the exception: brand and product
-slugs and a category's `label` default to a derived value and are editable (BR-030, BR-032,
-BR-042).
+naming the field, **on create and on update alike**. Slugs are the exception: brand, product,
+blog category and blog post slugs and a category's `label` default to a derived value and are
+editable (BR-030, BR-032, BR-042, BR-130, BR-131). A blog post's `published_at` is a schedule the
+client sets, not an audit timestamp (BR-131).
 
 *Why:* silently ignoring a field teaches the client that sending it worked. One rule for both
 verbs means there is nothing to remember.
@@ -155,7 +157,8 @@ travels only in the header, never in the body.
 Settings, users, media, API keys, brands and categories have no `version`, and their `PATCH` takes
 no `If-Match`: the last save wins. Edits there are rare, small (a name, a move in a tree the
 database keeps consistent on its own, BR-032) and made by an owner or admin, so a lost edit is
-cheap to notice and redo.
+cheap to notice and redo. Blog categories and posts have no `version` either: a post is written by
+one person at a time.
 
 ### BR-011 Errors have one shape and are traceable
 Every error is RFC 9457 `application/problem+json` and carries `trace_id`, the OpenTelemetry trace
@@ -170,7 +173,7 @@ someone else's row would reveal which ids exist.
 brand also clears `brand_id` on every product that carries it, bumping each product's `version`;
 the admin shows a deleted brand nowhere (BR-030). Deleting a category removes it from every
 product it is assigned to (the `product_categories` rows go), bumping each product's `version`
-(BR-036). Users are
+(BR-036). Blog categories and posts are archived the same way (BR-130, BR-131). Users are
 disabled (BR-027), API keys are revoked (BR-028). Media is the only thing truly deleted. Orders
 are never deleted (BR-079).
 
@@ -518,18 +521,19 @@ The worker makes 1600, 800 and 200 px WebP derivatives (libvips). Derivatives ar
 original, which is not enlarged; the job also records the original's width and height.
 
 ### BR-053 Bucket layout, access and link lifetimes
-One bucket, every object keyed by its tenant. Product images start with the tenant; temporary
+One bucket, every object keyed by its tenant. Product and blog images start with the tenant; temporary
 files start with their kind (`jobs/`, `exports/`) and then the tenant, because R2 lifecycle rules
 match a key's start only, and one rule must cover every tenant.
 
 | Prefix | Contents | Access |
 |---|---|---|
 | `{tenant}/products/{product}/{hash}.{ext}`, `…/{hash}_{1600,800,200}.webp` | Product images: the original plus three `.webp` derivatives | **Public** through the image domain, edge-cached |
+| `{tenant}/blogs/{post}/{hash}.{ext}` | Blog cover images: the original only (BR-135) | **Public** through the image domain, edge-cached |
 | `jobs/{tenant}/{job}/upload.csv` | Uploaded product CSV | Presigned `PUT`, 10 min; read by the worker only; deleted after 30 days |
 | `jobs/{tenant}/{job}/errors.csv` | Error reports for CSV and marketplace imports | Presigned `GET`, 15 min; deleted after 30 days |
 | `exports/{tenant}/{job}.csv` | Order exports | Presigned `GET`, 15 min; deleted after 7 days |
 
-Product images are the one public class: the storefront API returns full image-domain URLs so the
+Product and blog cover images are the public classes: the storefront API returns full image-domain URLs so the
 owner's website renders them with a plain `<img>`. Keys contain a content hash, so a replaced
 image gets a new URL and an edge cache never serves a stale one. Lifetimes are enforced by two R2
 lifecycle rules: `jobs/` expires after 30 days, `exports/` after 7.
@@ -665,6 +669,8 @@ its product is visible and the variant is not archived. Visible means orderable 
 
 ### BR-081 Storefront handlers read only the storefront views
 Storefront handlers query `storefront_products` and `storefront_variants`, never the base tables.
+Blog posts go through `storefront_blog_posts` the same way (BR-131); it is the one view that reads
+`users`, and it selects the author's `name` and `bio` only (BR-133).
 The views are `security_invoker = true` and select only shopper-facing columns.
 
 *Why:* a new storefront endpoint then cannot forget the visibility filter, and cost fields,
@@ -675,6 +681,7 @@ internal notes or staff identities cannot leak through a careless `SELECT *`. Wi
 | Routes | Credential |
 |---|---|
 | Catalog: products, categories, brands | API key |
+| Blog: categories, posts | API key |
 | Cart and checkout | API key + cart id |
 | Customer account and order history | API key + customer token |
 | Guest order lookup | API key + `X-Order-Token` |
@@ -962,6 +969,64 @@ It is decrypted for that one call and never logged.
 
 ---
 
+## 10. Blog
+
+### BR-130 Blog categories
+A blog category is one tab on the shop's journal page. Its `slug` follows BR-030: it defaults to
+`slugify(name)`, can be set by the client, is unique per tenant with archived categories included,
+and a clash is `422` on `slug` when the client sent one, else on `name`. `position` orders the tabs
+(ascending, then by name). A post's category is optional, so a shop with one category or none
+leaves it empty. Deleting a category archives it (BR-012): it leaves the storefront's category
+list, and its posts show there with no category until they are moved.
+
+*Why:* tabs are worth having only from two categories up; whether to show them is the website's
+call, made from the category list.
+
+### BR-131 Blog posts: slug, publishing, the featured post
+- A post's `slug` behaves like a product's (BR-042): derived from the title on create, editable
+  afterwards, unique per tenant with archived posts included, and it does not follow the title. A
+  clash is `422` on `slug` when the client sent one, else on `title`.
+- `status` is `draft` or `published`. A post is **live** when it is published, not archived, and
+  its `published_at` is now or earlier. A later `published_at` schedules it: the post goes live
+  by itself, with no job to run, like a scheduled sale (BR-046).
+- Publishing a post that has no `published_at` sets it to now. Moving a post back to `draft`
+  keeps its date.
+- A shop has at most one featured post. Marking a post featured clears the flag on the post that
+  had it, in the same request. Deleting (archiving) a post clears its flag (BR-012).
+- Posts have no `version`: the last save wins (BR-010).
+
+### BR-132 The excerpt is written or worked out
+`excerpt` is optional. When it is empty, the post's excerpt is taken from its `body`: the first
+paragraph that is not a heading, Markdown formatting removed, cut at 160 characters on a word
+boundary and ended with "…". It is worked out when the post is read, never stored. The storefront
+returns the resolved excerpt; the admin returns `excerpt` as written plus `excerpt_preview`, the
+resolved one, from the same function, which the editor shows as a placeholder.
+
+*Why:* a stored copy would go stale the moment the body is edited, and could not be told apart from
+one the editor wrote.
+
+### BR-133 The author is a staff user
+A post's author is a user of the shop (`users`); on create it defaults to the user creating the
+post. The storefront shows the author's `name` and `bio` and nothing else: no email, role or
+status. A disabled user stays the author of their posts. `bio` is optional and set on the Team
+screen (`users:write`).
+
+*Why:* name and bio are written for the public, unlike the rest of a staff record, so they are the
+one exception to BR-081's "no staff identities", and they pass only through the view.
+
+### BR-134 Products in a post
+A post can list products ("Shop the guide"), in the order given. The storefront shows the ones
+that are visible (BR-080); a product that is hidden or archived drops out, and its link stays for
+when it comes back.
+
+### BR-135 Body and cover
+`body` is Markdown, stored as written; the API neither renders nor rewrites it. The website renders
+it without raw HTML. The cover is one image, used on the list card, the featured block and the
+post header, uploaded like a product image (BR-051) to `{tenant}/blogs/{post}/` (BR-053), with no
+derivatives yet. Its alt text is the post title.
+
+---
+
 ## Traceability
 
 | BR | Shows up in | Proven by |
@@ -1008,3 +1073,4 @@ It is decrypted for that one call and never logged.
 | 127 | sign in with Google | P1-223, P1-224 |
 | 128 | every email | P1-225, P1-226, P1-228 |
 | 129 | storefront settings | P1-216, P1-217, P1-227 |
+| 130–135 | blog manager, storefront blog | P1-601–608 |

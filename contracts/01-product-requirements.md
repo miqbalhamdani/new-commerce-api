@@ -45,7 +45,7 @@ unchanged except where `05-backlog.md` lists a follow-up.
 
 ## 2. Scope
 
-### 2.1 In scope — five modules
+### 2.1 In scope — six modules
 
 | # | Module | What it covers |
 |---|---|---|
@@ -54,6 +54,7 @@ unchanged except where `05-backlog.md` lists a follow-up.
 | M3 | Storefront API | The owner's website's only data source: catalog, cart, checkout, customer accounts, order history. |
 | M4 | Marketplace product import | Pull products and variants from Shopee and Tokopedia into M2. |
 | M5 | Tenancy, users, roles | Shared-schema multi-tenancy with RLS, staff accounts, roles, API keys, audit log. |
+| M6 | Blog | Posts and categories written in the admin and read by the owner's website through M3: a journal with tabs, a featured post, and products linked from each post. |
 
 **App language: English** (BR-016), and so are these documents.
 
@@ -142,6 +143,8 @@ appear (BR-025).
 | Settings | Owner | Shop name, time zone, order prefix | M5 |
 | Storefront settings | Owner | Contact email, Google client ID, shipping origin and couriers, payment methods and Midtrans keys | M3 |
 | Audit log | Owner/Admin | Who changed what | M5 |
+| Blog posts | Admin | List, then an editor: title, slug, Markdown body, excerpt, cover, category, author, tags, linked products, publish or schedule, featured | M6 |
+| Blog categories | Admin | Name, slug, tab order | M6 |
 
 ---
 
@@ -368,6 +371,20 @@ active) · import result with downloadable error report · linked listings view.
 - Every permission-denied response is `403` with the required permission named in `detail`
   (BR-024).
 - Every admin mutation writes one `audit_log` row (BR-018).
+
+### 6.6 M6 — Blog
+
+- As an owner I write a post in Markdown, pick a cover, a category and the products it mentions,
+  and publish it now or on a date; my website shows it with no deploy.
+- As an owner I mark one post featured, and the website's journal page leads with it.
+
+**Acceptance.**
+- A draft, archived or not-yet-due post is absent from every storefront blog route; a scheduled
+  post appears by itself when its time comes (BR-131).
+- The storefront never shows an author's email, role or status (BR-133).
+- Every post has an excerpt on the storefront, written or worked out from the body, and the
+  admin shows the worked-out one as the placeholder (BR-132).
+- A hidden or archived product linked from a post drops out of the storefront post (BR-134).
 
 ---
 

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -32,8 +32,9 @@ info:
     The admin API's conventions hold here (`04-api-spec.md` §1): money is an integer of minor
     units, times are RFC 3339 in `+07:00`, errors are RFC 9457 `application/problem+json` with
     a `trace_id`, a field the route does not define is `422 unknown_field` — a price field on a
-    cart or checkout route above all (BR-089) — and lists are cursor-paginated. The one exception is
-    `GET /products`, which also takes `page` and answers `total` for a numbered pager (P1-230).
+    cart or checkout route above all (BR-089) — and lists are cursor-paginated. The exceptions are
+    `GET /products` and `GET /blog/posts`, which also take `page` and answer `total` for a
+    numbered pager (P1-230, P1-605).
 
     ## Rate limits (BR-014)
 
@@ -66,6 +67,8 @@ security:
 tags:
   - name: Catalog
     description: Products, categories and brands a shopper browses.
+  - name: Blog
+    description: The shop's journal, its categories and posts.
   - name: Config
     description: What the website needs to render sign-in and payment.
   - name: Cart & checkout
@@ -215,6 +218,111 @@ paths:
           $ref: "#/components/responses/InvalidApiKey"
         "403":
           $ref: "#/components/responses/OriginNotAllowed"
+
+  /blog/categories:
+    get:
+      operationId: listBlogCategories
+      tags: ["Blog"]
+      summary: The shop's blog categories
+      description: |
+        Unpaginated, ordered by `position` then name; archived ones are left out (BR-130). A
+        website usually shows tabs only when there are two or more.
+      responses:
+        "200":
+          description: The blog categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogCategoryList"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+
+  /blog/posts:
+    get:
+      operationId: listBlogPosts
+      tags: ["Blog"]
+      summary: The shop's live blog posts, newest first
+      description: |
+        Live posts only: published, not archived, and due (BR-131). `category` is a blog category
+        slug; `tag` is one tag, matched exactly; `featured=true` returns the featured post alone
+        and `featured=false` every other post, the grid under it. `excerpt` is always filled
+        (BR-132); `cover_alt` is the title (BR-135).
+
+        Page with `cursor`, or with `page` for a numbered pager; `total` counts every matching
+        post either way. A `page` past the last answers an empty `data`.
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            examples: ["bedding-tips"]
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: featured
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: page
+          in: query
+          required: false
+          description: |
+            1-based page number, for a numbered pager: the alternative to `cursor`. Sending both,
+            or a page below 1, is `422` on `page`.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: A page of posts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostPage"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /blog/posts/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getBlogPost
+      tags: ["Blog"]
+      summary: One live blog post, its products and related posts
+      description: |
+        A draft, scheduled, archived or unknown slug is `404` (BR-131). `body` is Markdown, as
+        written; render it without raw HTML (BR-135). `products` are the post's linked products
+        that are visible, in the post's order (BR-134). `related` holds up to three other live
+        posts, newest first, from the post's category, or from every post when it has none.
+      responses:
+        "200":
+          description: The post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostDetail"
+        "401":
+          $ref: "#/components/responses/InvalidApiKey"
+        "403":
+          $ref: "#/components/responses/OriginNotAllowed"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /config:
     get:
@@ -1093,6 +1201,111 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BrandRef"
+
+    BlogCategoryRef:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          examples: ["bedding-tips"]
+        name:
+          type: string
+          examples: ["Bedding tips"]
+
+    BlogCategoryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogCategoryRef"
+
+    BlogAuthor:
+      type: object
+      description: A staff member's public name and bio, and nothing else (BR-133).
+      required: [name, bio]
+      properties:
+        name:
+          type: string
+          examples: ["Yusuf"]
+        bio:
+          type: [string, "null"]
+          examples: ["Writes the Sleep Project Journal."]
+
+    BlogPostListItem:
+      type: object
+      required: [slug, title, excerpt, cover, cover_alt, category, author, tags, featured, published_at]
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        excerpt:
+          type: string
+          description: Written, or worked out from the body (BR-132).
+        cover:
+          description: |
+            The cover, or `null`. `sizes` stays empty until covers get renditions; `url` is the
+            original (BR-135).
+          oneOf:
+            - $ref: "#/components/schemas/Image"
+            - type: "null"
+        cover_alt:
+          type: string
+          description: Alt text for the cover; the title (BR-135).
+        category:
+          description: "`null` when the post has none or it is archived (BR-130)."
+          oneOf:
+            - $ref: "#/components/schemas/BlogCategoryRef"
+            - type: "null"
+        author:
+          oneOf:
+            - $ref: "#/components/schemas/BlogAuthor"
+            - type: "null"
+        tags:
+          type: array
+          items:
+            type: string
+        featured:
+          type: boolean
+        published_at:
+          type: string
+          format: date-time
+
+    BlogPostPage:
+      type: object
+      required: [data, next_cursor, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogPostListItem"
+        next_cursor:
+          type: [string, "null"]
+        total:
+          description: Live posts matching the filters, across every page.
+          type: integer
+
+    BlogPostDetail:
+      allOf:
+        - $ref: "#/components/schemas/BlogPostListItem"
+        - type: object
+          required: [body, products, related]
+          properties:
+            body:
+              type: string
+              description: Markdown, as written (BR-135).
+            products:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductListItem"
+            related:
+              type: array
+              maxItems: 3
+              items:
+                $ref: "#/components/schemas/BlogPostListItem"
 
     CartItem:
       type: object
