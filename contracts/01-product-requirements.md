@@ -143,8 +143,7 @@ appear (BR-025).
 | Settings | Owner | Shop name, time zone, order prefix | M5 |
 | Storefront settings | Owner | Contact email, Google client ID, shipping origin and couriers, payment methods and Midtrans keys | M3 |
 | Audit log | Owner/Admin | Who changed what | M5 |
-| Blog posts | Admin | List, then an editor: title, slug, Markdown body, excerpt, cover, category, author, tags, linked products, publish or schedule, featured | M6 |
-| Blog categories | Admin | Name, slug, tab order | M6 |
+| Blog posts | Admin | List, then an editor: title, a rich text body saved as Markdown, slug, excerpt, cover, category, author, tags, linked products; Save draft, Publish or Schedule; featured. Blog categories (name, slug, tab order) are managed from the editor's Category field, with no screen of their own | M6 |
 
 ---
 

@@ -367,7 +367,7 @@ website through `/v1/storefront/blog/posts`, and a scheduled one appears by itse
 | P1-603 | Blog posts API and cover upload | BE | 601, 602 | As §13.2 and §8 (`blog_cover`); one featured post per shop; publishing sets `published_at`; `excerpt_preview` filled; a cover key outside the post's prefix is `422`; `*/blogs/*` is public in the dev bucket (BR-131–135) | wip | Iqbal Hamdani |
 | P1-604 | Author bio on users | BE | 601 | `User` carries `bio`; `PATCH /v1/users/{id}` sets and clears it (§4, BR-133) | wip | Iqbal Hamdani |
 | P1-605 | Storefront blog | BE | 603, 203 | As §11.11; draft, archived and scheduled posts are absent; `featured`, `category`, `tag` and `page` filter; linked products that are hidden drop out; no author field but `name` and `bio` (BR-131–135) | wip | Iqbal Hamdani |
-| P1-606 | Blog categories screen | FE | 602 | Add, rename, reorder by `position`, delete; slug follows the name until edited (BR-130) | wip | Iqbal Hamdani |
+| P1-606 | Blog categories in the post editor | FE | 602 | From the editor's Category field: add, rename, reorder by `position`, delete; slug follows the name until edited; a category added there is picked (BR-130). The nav has one Blog entry, under Catalog | wip | Iqbal Hamdani |
 | P1-607 | Blog posts list and editor | FE | 603, 606 | List with status and search; the editor saves every §13.2 field, uploads a cover, picks products, shows `excerpt_preview` as the excerpt's placeholder, and schedules with the shop's time zone (BR-131–135) | wip | Iqbal Hamdani |
 | P1-608 | Bio on the Team screen | FE | 604 | An owner or admin edits a member's bio (BR-133) | wip | Iqbal Hamdani |
 
