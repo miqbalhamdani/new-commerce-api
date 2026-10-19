@@ -276,6 +276,89 @@ func (e ListProductsParamsSort) Valid() bool {
 	}
 }
 
+// BlogAuthor A staff member's public name and bio, and nothing else (BR-133).
+type BlogAuthor struct {
+	// Bio Examples: Writes the Sleep Project Journal.
+	Bio *string `json:"bio"`
+
+	// Name Examples: Yusuf
+	Name string `json:"name"`
+}
+
+// BlogCategoryList defines model for BlogCategoryList.
+type BlogCategoryList struct {
+	Data []BlogCategoryRef `json:"data"`
+}
+
+// BlogCategoryRef defines model for BlogCategoryRef.
+type BlogCategoryRef struct {
+	// Name Examples: Bedding tips
+	Name string `json:"name"`
+
+	// Slug Examples: bedding-tips
+	Slug string `json:"slug"`
+}
+
+// BlogPostDetail defines model for BlogPostDetail.
+type BlogPostDetail struct {
+	Author *BlogAuthor `json:"author"`
+
+	// Body Markdown, as written (BR-135).
+	Body string `json:"body"`
+
+	// Category `null` when the post has none or it is archived (BR-130).
+	Category *BlogCategoryRef `json:"category"`
+
+	// Cover The cover, or `null`. `sizes` stays empty until covers get renditions; `url` is the
+	// original (BR-135).
+	Cover *Image `json:"cover"`
+
+	// CoverAlt Alt text for the cover; the title (BR-135).
+	CoverAlt string `json:"cover_alt"`
+
+	// Excerpt Written, or worked out from the body (BR-132).
+	Excerpt     string             `json:"excerpt"`
+	Featured    bool               `json:"featured"`
+	Products    []ProductListItem  `json:"products"`
+	PublishedAt time.Time          `json:"published_at"`
+	Related     []BlogPostListItem `json:"related"`
+	Slug        string             `json:"slug"`
+	Tags        []string           `json:"tags"`
+	Title       string             `json:"title"`
+}
+
+// BlogPostListItem defines model for BlogPostListItem.
+type BlogPostListItem struct {
+	Author *BlogAuthor `json:"author"`
+
+	// Category `null` when the post has none or it is archived (BR-130).
+	Category *BlogCategoryRef `json:"category"`
+
+	// Cover The cover, or `null`. `sizes` stays empty until covers get renditions; `url` is the
+	// original (BR-135).
+	Cover *Image `json:"cover"`
+
+	// CoverAlt Alt text for the cover; the title (BR-135).
+	CoverAlt string `json:"cover_alt"`
+
+	// Excerpt Written, or worked out from the body (BR-132).
+	Excerpt     string    `json:"excerpt"`
+	Featured    bool      `json:"featured"`
+	PublishedAt time.Time `json:"published_at"`
+	Slug        string    `json:"slug"`
+	Tags        []string  `json:"tags"`
+	Title       string    `json:"title"`
+}
+
+// BlogPostPage defines model for BlogPostPage.
+type BlogPostPage struct {
+	Data       []BlogPostListItem `json:"data"`
+	NextCursor *string            `json:"next_cursor"`
+
+	// Total Live posts matching the filters, across every page.
+	Total int `json:"total"`
+}
+
 // BrandList defines model for BrandList.
 type BrandList struct {
 	Data []BrandRef `json:"data"`
@@ -854,6 +937,23 @@ type TooManyRequests = Problem
 // OpenTelemetry trace id; quote it when reporting a problem.
 type UnprocessableEntity = Problem
 
+// ListBlogPostsParams defines parameters for ListBlogPosts.
+type ListBlogPostsParams struct {
+	Category *string `form:"category,omitempty" json:"category,omitempty"`
+	Tag      *string `form:"tag,omitempty" json:"tag,omitempty"`
+	Featured *bool   `form:"featured,omitempty" json:"featured,omitempty"`
+
+	// Limit Page size. Pairs with `cursor` (or, on `GET /products` only, `page`); there is no `offset`.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The previous page's `next_cursor`, opaque.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Page 1-based page number, for a numbered pager: the alternative to `cursor`. Sending both,
+	// or a page below 1, is `422` on `page`.
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+}
+
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
 	Kind *CategoryKind `form:"kind,omitempty" json:"kind,omitempty"`
@@ -1023,6 +1123,15 @@ type ServerInterface interface {
 	// Refresh Swap a refresh token for new tokens
 	// (POST /auth/refresh)
 	Refresh(w http.ResponseWriter, r *http.Request)
+	// ListBlogCategories The shop's blog categories
+	// (GET /blog/categories)
+	ListBlogCategories(w http.ResponseWriter, r *http.Request)
+	// ListBlogPosts The shop's live blog posts, newest first
+	// (GET /blog/posts)
+	ListBlogPosts(w http.ResponseWriter, r *http.Request, params ListBlogPostsParams)
+	// GetBlogPost One live blog post, its products and related posts
+	// (GET /blog/posts/{slug})
+	GetBlogPost(w http.ResponseWriter, r *http.Request, slug string)
 	// ListBrands The shop's brands
 	// (GET /brands)
 	ListBrands(w http.ResponseWriter, r *http.Request)
@@ -1113,6 +1222,24 @@ func (_ Unimplemented) ConfirmPasswordReset(w http.ResponseWriter, r *http.Reque
 // Refresh Swap a refresh token for new tokens
 // (POST /auth/refresh)
 func (_ Unimplemented) Refresh(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBlogCategories The shop's blog categories
+// (GET /blog/categories)
+func (_ Unimplemented) ListBlogCategories(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBlogPosts The shop's live blog posts, newest first
+// (GET /blog/posts)
+func (_ Unimplemented) ListBlogPosts(w http.ResponseWriter, r *http.Request, params ListBlogPostsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBlogPost One live blog post, its products and related posts
+// (GET /blog/posts/{slug})
+func (_ Unimplemented) GetBlogPost(w http.ResponseWriter, r *http.Request, slug string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1302,6 +1429,144 @@ func (siw *ServerInterfaceWrapper) Refresh(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Refresh(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlogCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListBlogCategories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlogCategories(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlogPosts operation middleware
+func (siw *ServerInterfaceWrapper) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBlogPostsParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category", r.URL.Query(), &params.Category, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tag" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tag", r.URL.Query(), &params.Tag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tag"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "featured" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "featured", r.URL.Query(), &params.Featured, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "featured"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "featured", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page", r.URL.Query(), &params.Page, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlogPosts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBlogPost operation middleware
+func (siw *ServerInterfaceWrapper) GetBlogPost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "slug" -------------
+	var slug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "slug", chi.URLParam(r, "slug"), &slug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slug", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBlogPost(w, r, slug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1926,6 +2191,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/brands", wrapper.ListBrands)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/categories", wrapper.ListBlogCategories)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/posts", wrapper.ListBlogPosts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/posts/{slug}", wrapper.GetBlogPost)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/config", wrapper.GetConfig)

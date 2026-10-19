@@ -14,6 +14,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -137,6 +138,7 @@ func run() error {
 	google := auth.NewGoogleVerifier()
 	customersSvc.Google = google
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
+	blogSvc := blog.NewService(pool, files)
 	teamSvc := team.NewService(pool, redis, box)
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	quoter, err := shippingQuoter()
@@ -148,7 +150,7 @@ func run() error {
 	ordersSvc.Mail = enqueueMail
 	storefrontLimits := ratelimit.New(redis)
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
-		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Carts: carts.NewService(pool, files),
+		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Blog: blogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
 			OrderTokens: orderTokens, Limits: storefrontLimits}),
 		storefront.NewKeys(pool),
@@ -160,6 +162,7 @@ func run() error {
 		httpapi.NewServer(httpapi.Services{
 			Auth:           auth.NewService(pool, signer),
 			Catalog:        catalogSvc,
+			Blog:           blogSvc,
 			Jobs:           jobsSvc,
 			Team:           teamSvc,
 			Orders:         ordersSvc,

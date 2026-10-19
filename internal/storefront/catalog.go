@@ -45,24 +45,30 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 	}
 	page := ProductPage{Data: make([]ProductListItem, 0, len(res.Products)), Total: int(res.Total)}
 	for _, p := range res.Products {
-		item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax,
-			WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax),
-			Categories: make([]ProductCategory, 0, len(p.Categories))}
-		for _, c := range p.Categories {
-			item.Categories = append(item.Categories, ProductCategory{Kind: CategoryKind(c.Kind), Name: c.Name, Path: c.Path})
-		}
-		if p.Brand != nil {
-			item.Brand = &BrandRef{Slug: p.Brand.Slug, Name: p.Brand.Name}
-		}
-		if p.Image != nil {
-			item.Image = &Image{Url: p.Image.URL, Sizes: p.Image.Sizes}
-		}
-		page.Data = append(page.Data, item)
+		page.Data = append(page.Data, productListItem(p))
 	}
 	if res.Next != nil {
 		page.NextCursor = httpkit.EncodeCursor(res.Next)
 	}
 	httpkit.WriteJSON(w, http.StatusOK, page)
+}
+
+// productListItem is a product card: the list's rows, and a blog post's
+// products (P1-605).
+func productListItem(p catalog.ShopProduct) ProductListItem {
+	item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax,
+		WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax),
+		Categories: make([]ProductCategory, 0, len(p.Categories))}
+	for _, c := range p.Categories {
+		item.Categories = append(item.Categories, ProductCategory{Kind: CategoryKind(c.Kind), Name: c.Name, Path: c.Path})
+	}
+	if p.Brand != nil {
+		item.Brand = &BrandRef{Slug: p.Brand.Slug, Name: p.Brand.Name}
+	}
+	if p.Image != nil {
+		item.Image = &Image{Url: p.Image.URL, Sizes: p.Image.Sizes}
+	}
+	return item
 }
 
 func (s *Server) GetProduct(w http.ResponseWriter, r *http.Request, slug string) {

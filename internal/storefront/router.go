@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -89,6 +90,7 @@ func paramName(err error) string {
 // encode, as on the admin side.
 type Server struct {
 	catalog     *catalog.Service
+	blog        *blog.Service
 	carts       *carts.Service
 	orders      *orders.Service
 	customers   *customers.Service
@@ -101,6 +103,7 @@ type Server struct {
 // domain package.
 type Services struct {
 	Catalog     *catalog.Service
+	Blog        *blog.Service
 	Carts       *carts.Service
 	Orders      *orders.Service
 	Customers   *customers.Service
@@ -111,6 +114,6 @@ type Services struct {
 }
 
 func NewServer(svc Services) *Server {
-	return &Server{catalog: svc.Catalog, carts: svc.Carts, orders: svc.Orders, customers: svc.Customers,
+	return &Server{catalog: svc.Catalog, blog: svc.Blog, carts: svc.Carts, orders: svc.Orders, customers: svc.Customers,
 		team: svc.Team, orderTokens: svc.OrderTokens, limits: svc.Limits}
 }
