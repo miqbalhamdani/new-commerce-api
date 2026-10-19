@@ -151,7 +151,7 @@ func seedBlog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 	t.Helper()
 	execTenant(t, store, tenantID,
 		`INSERT INTO users (id, tenant_id, email, name, role, status, bio)
-		   VALUES ('{idu001}', `+tid+`, 'yusuf-{idu001}@example.com', 'Yusuf', 'admin', 'active', 'Writes the journal.')`,
+		   VALUES ('{idf001}', `+tid+`, 'yusuf-{idf001}@example.com', 'Yusuf', 'admin', 'active', 'Writes the journal.')`,
 		`INSERT INTO blog_categories (id, tenant_id, name, slug, position) VALUES
 		   ('{idc001}', `+tid+`, 'Bedding tips', 'bedding-tips', 1),
 		   ('{idc002}', `+tid+`, 'Materials', 'materials', 2)`,
@@ -159,7 +159,7 @@ func seedBlog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 		   VALUES ('{idc003}', `+tid+`, 'Old', 'old', 0, now())`,
 		`INSERT INTO blog_posts (id, tenant_id, category_id, author_id, title, slug, body, cover_r2_key, tags,
 		                         status, is_featured, published_at)
-		   VALUES ('{idp001}', `+tid+`, '{idc001}', '{idu001}', '7 Panduan', 'panduan',
+		   VALUES ('{ide001}', `+tid+`, '{idc001}', '{idf001}', '7 Panduan', 'panduan',
 		           E'# Panduan\n\nSeprai dan selimut merupakan sarana pelengkap.\n\n## 1. Anggaran', 'shop/blogs/p/cover.jpg',
 		           '{"Bedding Tips"}', 'published', true, now() - interval '1 day')`,
 		`INSERT INTO blog_posts (id, tenant_id, category_id, title, slug, tags, status, published_at)
@@ -174,7 +174,7 @@ func seedBlog(t *testing.T, store *db.Store, tenantID uuid.UUID) {
 		`INSERT INTO blog_posts (id, tenant_id, title, slug, status, published_at, archived_at)
 		   VALUES (gen_random_uuid(), `+tid+`, 'Archived', 'archived-post', 'published', now() - interval '1 hour', now())`,
 		`INSERT INTO blog_post_products (tenant_id, post_id, product_id, position)
-		   SELECT `+tid+`, '{idp001}', id, CASE slug WHEN 'hoodie' THEN 0 WHEN 'draft-tee' THEN 1 ELSE 2 END
+		   SELECT `+tid+`, '{ide001}', id, CASE slug WHEN 'hoodie' THEN 0 WHEN 'draft-tee' THEN 1 ELSE 2 END
 		   FROM products WHERE slug IN ('hoodie', 'draft-tee', 'basic-tee')`,
 	)
 	t.Cleanup(func() { cleanBlog(t, store, tenantID) })
