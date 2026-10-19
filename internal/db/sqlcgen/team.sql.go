@@ -15,7 +15,7 @@ import (
 const acceptInvitation = `-- name: AcceptInvitation :one
 UPDATE users SET password_hash = $1, status = 'active'
 WHERE id = $2 AND status = 'invited'
-RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 type AcceptInvitationParams struct {
@@ -38,13 +38,14 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const activateInvited = `-- name: ActivateInvited :one
 UPDATE users SET status = 'active' WHERE id = $1 AND status = 'invited'
-RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 // A Google sign-in by an invited user (P1-086): the verified email accepts the
@@ -62,6 +63,7 @@ func (q *Queries) ActivateInvited(ctx context.Context, id uuid.UUID) (User, erro
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -69,7 +71,7 @@ func (q *Queries) ActivateInvited(ctx context.Context, id uuid.UUID) (User, erro
 const createActiveOwner = `-- name: CreateActiveOwner :one
 INSERT INTO users (id, tenant_id, email, name, role, status)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, 'owner', 'active')
-RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 type CreateActiveOwnerParams struct {
@@ -93,6 +95,7 @@ func (q *Queries) CreateActiveOwner(ctx context.Context, arg CreateActiveOwnerPa
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -148,7 +151,7 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 
 const getUser = `-- name: GetUser :one
 
-SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at FROM users WHERE id = $1
+SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio FROM users WHERE id = $1
 `
 
 // Team: users and the tenant's own settings (P1-064, P1-071, P1-226).
@@ -165,6 +168,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
@@ -172,7 +176,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 const inviteUser = `-- name: InviteUser :one
 INSERT INTO users (id, tenant_id, email, name, role, status)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, $4, 'invited')
-RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 type InviteUserParams struct {
@@ -200,12 +204,13 @@ func (q *Queries) InviteUser(ctx context.Context, arg InviteUserParams) (User, e
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at FROM users
+SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio FROM users
 WHERE ($1::text IS NULL OR status = $1::text)
   AND ($2::text IS NULL OR role = $2::text)
   AND ($3::timestamptz IS NULL
@@ -247,6 +252,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Status,
 			&i.LastLoginAt,
 			&i.CreatedAt,
+			&i.Bio,
 		); err != nil {
 			return nil, err
 		}
@@ -268,6 +274,34 @@ func (q *Queries) OtherActiveOwners(ctx context.Context, id uuid.UUID) (int32, e
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const setUserBio = `-- name: SetUserBio :one
+UPDATE users SET bio = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
+`
+
+type SetUserBioParams struct {
+	Bio *string
+	ID  uuid.UUID
+}
+
+// The public line under a user's blog posts; NULL clears it (BR-133).
+func (q *Queries) SetUserBio(ctx context.Context, arg SetUserBioParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserBio, arg.Bio, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.Bio,
+	)
+	return i, err
 }
 
 const setUserPassword = `-- name: SetUserPassword :execrows
@@ -293,7 +327,7 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 }
 
 const setUserRole = `-- name: SetUserRole :one
-UPDATE users SET role = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+UPDATE users SET role = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 type SetUserRoleParams struct {
@@ -314,12 +348,13 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User,
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }
 
 const setUserStatus = `-- name: SetUserStatus :one
-UPDATE users SET status = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at
+UPDATE users SET status = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
 `
 
 type SetUserStatusParams struct {
@@ -340,6 +375,7 @@ func (q *Queries) SetUserStatus(ctx context.Context, arg SetUserStatusParams) (U
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }

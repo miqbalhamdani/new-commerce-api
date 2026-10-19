@@ -18,6 +18,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for BlogPostStatus.
+const (
+	BlogPostStatusDraft     BlogPostStatus = "draft"
+	BlogPostStatusPublished BlogPostStatus = "published"
+)
+
+// Valid indicates whether the value is a known member of the BlogPostStatus enum.
+func (e BlogPostStatus) Valid() bool {
+	switch e {
+	case BlogPostStatusDraft:
+		return true
+	case BlogPostStatusPublished:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BulkItemStatus.
 const (
 	BulkItemStatusActive BulkItemStatus = "active"
@@ -443,6 +461,8 @@ func (e OrderStatus) Valid() bool {
 
 // Defines values for PresignRequestPurpose.
 const (
+	PresignRequestPurposeBlogCover     PresignRequestPurpose = "blog_cover"
+	PresignRequestPurposeBlogImage     PresignRequestPurpose = "blog_image"
 	PresignRequestPurposeProductImage  PresignRequestPurpose = "product_image"
 	PresignRequestPurposeProductImport PresignRequestPurpose = "product_import"
 )
@@ -450,6 +470,10 @@ const (
 // Valid indicates whether the value is a known member of the PresignRequestPurpose enum.
 func (e PresignRequestPurpose) Valid() bool {
 	switch e {
+	case PresignRequestPurposeBlogCover:
+		return true
+	case PresignRequestPurposeBlogImage:
+		return true
 	case PresignRequestPurposeProductImage:
 		return true
 	case PresignRequestPurposeProductImport:
@@ -894,6 +918,154 @@ type AuditPage struct {
 type AuthProviders struct {
 	// GoogleClientId Examples: 1234-abc.apps.googleusercontent.com
 	GoogleClientId *string `json:"google_client_id"`
+}
+
+// BlogCategory defines model for BlogCategory.
+type BlogCategory struct {
+	ArchivedAt *time.Time         `json:"archived_at"`
+	CreatedAt  time.Time          `json:"created_at"`
+	Id         openapi_types.UUID `json:"id"`
+	Name       string             `json:"name"`
+
+	// Position Tab order, ascending (BR-130).
+	Position int `json:"position"`
+
+	// Slug Defaults to `slugify(name)`; editable (BR-130).
+	//
+	// Examples: bedding-tips
+	Slug      string    `json:"slug"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BlogCategoryCreate defines model for BlogCategoryCreate.
+type BlogCategoryCreate struct {
+	Name     string `json:"name"`
+	Position *int   `json:"position,omitempty"`
+
+	// Slug Omitted means `slugify(name)` (BR-130).
+	Slug *string `json:"slug,omitempty"`
+}
+
+// BlogCategoryList defines model for BlogCategoryList.
+type BlogCategoryList struct {
+	Data []BlogCategory `json:"data"`
+}
+
+// BlogCategoryUpdate defines model for BlogCategoryUpdate.
+type BlogCategoryUpdate struct {
+	Name     *string `json:"name,omitempty"`
+	Position *int    `json:"position,omitempty"`
+	Slug     *string `json:"slug,omitempty"`
+}
+
+// BlogPost defines model for BlogPost.
+type BlogPost struct {
+	ArchivedAt *time.Time `json:"archived_at"`
+	Author     *Ref       `json:"author"`
+
+	// Body Markdown (BR-135). An image URL ending in `#w=NN` is that percent of the column wide.
+	Body       string    `json:"body"`
+	Category   *Ref      `json:"category"`
+	CoverR2Key *string   `json:"cover_r2_key"`
+	CoverUrl   *string   `json:"cover_url"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Excerpt As written; `null` when the editor left it empty (BR-132).
+	Excerpt *string `json:"excerpt"`
+
+	// ExcerptPreview The excerpt the storefront shows: `excerpt`, or the one worked out from `body`.
+	// The editor shows it as the excerpt's placeholder (BR-132).
+	ExcerptPreview string             `json:"excerpt_preview"`
+	Id             openapi_types.UUID `json:"id"`
+	IsFeatured     bool               `json:"is_featured"`
+
+	// Products Linked products in their order, hidden ones included (BR-134).
+	Products    []BlogPostProduct `json:"products"`
+	PublishedAt *time.Time        `json:"published_at"`
+	Slug        string            `json:"slug"`
+
+	// Status A published post with a later `published_at` is scheduled (BR-131).
+	Status    BlogPostStatus `json:"status"`
+	Tags      []string       `json:"tags"`
+	Title     string         `json:"title"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// BlogPostCreate defines model for BlogPostCreate.
+type BlogPostCreate struct {
+	// AuthorId Omitted means the signed-in user (BR-133).
+	AuthorId    *openapi_types.UUID   `json:"author_id,omitempty"`
+	Body        *string               `json:"body,omitempty"`
+	CategoryId  *openapi_types.UUID   `json:"category_id,omitempty"`
+	Excerpt     *string               `json:"excerpt,omitempty"`
+	IsFeatured  *bool                 `json:"is_featured,omitempty"`
+	ProductIds  *[]openapi_types.UUID `json:"product_ids,omitempty"`
+	PublishedAt *time.Time            `json:"published_at,omitempty"`
+
+	// Slug Omitted means `slugify(title)` (BR-131).
+	Slug *string `json:"slug,omitempty"`
+
+	// Status A published post with a later `published_at` is scheduled (BR-131).
+	Status *BlogPostStatus `json:"status,omitempty"`
+	Tags   *[]string       `json:"tags,omitempty"`
+	Title  string          `json:"title"`
+}
+
+// BlogPostListItem defines model for BlogPostListItem.
+type BlogPostListItem struct {
+	ArchivedAt  *time.Time         `json:"archived_at"`
+	Author      *Ref               `json:"author"`
+	Category    *Ref               `json:"category"`
+	CoverUrl    *string            `json:"cover_url"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Id          openapi_types.UUID `json:"id"`
+	IsFeatured  bool               `json:"is_featured"`
+	PublishedAt *time.Time         `json:"published_at"`
+	Slug        string             `json:"slug"`
+
+	// Status A published post with a later `published_at` is scheduled (BR-131).
+	Status    BlogPostStatus `json:"status"`
+	Title     string         `json:"title"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
+// BlogPostPage defines model for BlogPostPage.
+type BlogPostPage struct {
+	Data       []BlogPostListItem `json:"data"`
+	NextCursor *string            `json:"next_cursor"`
+}
+
+// BlogPostProduct defines model for BlogPostProduct.
+type BlogPostProduct struct {
+	// CoverUrl The product's first image, its 200 px derivative once made.
+	CoverUrl *string            `json:"cover_url"`
+	Id       openapi_types.UUID `json:"id"`
+	Title    string             `json:"title"`
+}
+
+// BlogPostStatus A published post with a later `published_at` is scheduled (BR-131).
+type BlogPostStatus string
+
+// BlogPostUpdate defines model for BlogPostUpdate.
+type BlogPostUpdate struct {
+	AuthorId   *openapi_types.UUID `json:"author_id,omitempty"`
+	Body       *string             `json:"body,omitempty"`
+	CategoryId *openapi_types.UUID `json:"category_id,omitempty"`
+
+	// CoverR2Key A key from `POST /media/presign` with `purpose: blog_cover` (BR-135).
+	CoverR2Key *string               `json:"cover_r2_key,omitempty"`
+	Excerpt    *string               `json:"excerpt,omitempty"`
+	IsFeatured *bool                 `json:"is_featured,omitempty"`
+	ProductIds *[]openapi_types.UUID `json:"product_ids,omitempty"`
+
+	// PublishedAt `null` only on a draft (BR-131).
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+	Slug        *string    `json:"slug,omitempty"`
+
+	// Status A published post with a later `published_at` is scheduled (BR-131).
+	Status *BlogPostStatus `json:"status,omitempty"`
+	Tags   *[]string       `json:"tags,omitempty"`
+	Title  *string         `json:"title,omitempty"`
 }
 
 // Brand defines model for Brand.
@@ -1656,8 +1828,11 @@ type OrderUpdateRequest struct {
 
 // PresignRequest defines model for PresignRequest.
 type PresignRequest struct {
-	Bytes     int64                 `json:"bytes"`
-	MimeType  string                `json:"mime_type"`
+	Bytes    int64  `json:"bytes"`
+	MimeType string `json:"mime_type"`
+
+	// PostId The blog post a `blog_cover` or `blog_image` is for.
+	PostId    *openapi_types.UUID   `json:"post_id,omitempty"`
 	ProductId *openapi_types.UUID   `json:"product_id,omitempty"`
 	Purpose   PresignRequestPurpose `json:"purpose"`
 	Sha256    string                `json:"sha256"`
@@ -1669,9 +1844,12 @@ type PresignRequestPurpose string
 // PresignResponse defines model for PresignResponse.
 type PresignResponse struct {
 	// ExpiresIn Examples: 600
-	ExpiresIn int    `json:"expires_in"`
-	R2Key     string `json:"r2_key"`
-	UploadUrl string `json:"upload_url"`
+	ExpiresIn int `json:"expires_in"`
+
+	// PublicUrl Where the image is served once uploaded; set for `blog_cover` and `blog_image`, so a body image can be linked from the post's Markdown (BR-135).
+	PublicUrl *string `json:"public_url,omitempty"`
+	R2Key     string  `json:"r2_key"`
+	UploadUrl string  `json:"upload_url"`
 }
 
 // Problem RFC 9457 `application/problem+json`. Every error response in this API uses it.
@@ -2013,6 +2191,8 @@ type StorefrontSettingsUpdateMidtransEnvironment string
 
 // User defines model for User.
 type User struct {
+	// Bio Shown on the storefront under the user's blog posts (BR-133).
+	Bio         *string             `json:"bio"`
 	CreatedAt   time.Time           `json:"created_at"`
 	Email       openapi_types.Email `json:"email"`
 	Id          openapi_types.UUID  `json:"id"`
@@ -2036,6 +2216,7 @@ type UserPage struct {
 
 // UserUpdate defines model for UserUpdate.
 type UserUpdate struct {
+	Bio    *string           `json:"bio,omitempty"`
 	Role   *UserUpdateRole   `json:"role,omitempty"`
 	Status *UserUpdateStatus `json:"status,omitempty"`
 }
@@ -2274,6 +2455,27 @@ type ListAuditLogParams struct {
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListBlogCategoriesParams defines parameters for ListBlogCategories.
+type ListBlogCategoriesParams struct {
+	Archived *bool `form:"archived,omitempty" json:"archived,omitempty"`
+}
+
+// ListBlogPostsParams defines parameters for ListBlogPosts.
+type ListBlogPostsParams struct {
+	Q          *string             `form:"q,omitempty" json:"q,omitempty"`
+	Status     *BlogPostStatus     `form:"status,omitempty" json:"status,omitempty"`
+	CategoryId *openapi_types.UUID `form:"category_id,omitempty" json:"category_id,omitempty"`
+	Archived   *bool               `form:"archived,omitempty" json:"archived,omitempty"`
+
+	// Limit Page size. Pairs with `cursor`, or `page` on the product, order and customer lists.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from the previous page. Cursor pagination is the rule — a deep `offset` on a
+	// large table is a sequential scan, so the parameter does not exist; the product, order and
+	// customer lists also take `page` (P1-231).
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListBrandsParams defines parameters for ListBrands.
 type ListBrandsParams struct {
 	Q        *string `form:"q,omitempty" json:"q,omitempty"`
@@ -2469,6 +2671,18 @@ type ResendCodeJSONRequestBody = ResendCodeRequest
 
 // VerifyCodeJSONRequestBody defines body for VerifyCode for application/json ContentType.
 type VerifyCodeJSONRequestBody = VerifyCodeRequest
+
+// CreateBlogCategoryJSONRequestBody defines body for CreateBlogCategory for application/json ContentType.
+type CreateBlogCategoryJSONRequestBody = BlogCategoryCreate
+
+// UpdateBlogCategoryJSONRequestBody defines body for UpdateBlogCategory for application/json ContentType.
+type UpdateBlogCategoryJSONRequestBody = BlogCategoryUpdate
+
+// CreateBlogPostJSONRequestBody defines body for CreateBlogPost for application/json ContentType.
+type CreateBlogPostJSONRequestBody = BlogPostCreate
+
+// UpdateBlogPostJSONRequestBody defines body for UpdateBlogPost for application/json ContentType.
+type UpdateBlogPostJSONRequestBody = BlogPostUpdate
 
 // CreateBrandJSONRequestBody defines body for CreateBrand for application/json ContentType.
 type CreateBrandJSONRequestBody = BrandWrite
@@ -2820,6 +3034,33 @@ type ServerInterface interface {
 	// VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
 	// (POST /auth/verify-code)
 	VerifyCode(w http.ResponseWriter, r *http.Request)
+	// ListBlogCategories Blog categories, by position
+	// (GET /blog/categories)
+	ListBlogCategories(w http.ResponseWriter, r *http.Request, params ListBlogCategoriesParams)
+	// CreateBlogCategory Create a blog category
+	// (POST /blog/categories)
+	CreateBlogCategory(w http.ResponseWriter, r *http.Request)
+	// ArchiveBlogCategory Delete a blog category
+	// (DELETE /blog/categories/{id})
+	ArchiveBlogCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdateBlogCategory Rename, re-slug or reorder a blog category
+	// (PATCH /blog/categories/{id})
+	UpdateBlogCategory(w http.ResponseWriter, r *http.Request, id Id)
+	// ListBlogPosts Blog posts, newest first
+	// (GET /blog/posts)
+	ListBlogPosts(w http.ResponseWriter, r *http.Request, params ListBlogPostsParams)
+	// CreateBlogPost Create a blog post
+	// (POST /blog/posts)
+	CreateBlogPost(w http.ResponseWriter, r *http.Request)
+	// ArchiveBlogPost Delete a blog post
+	// (DELETE /blog/posts/{id})
+	ArchiveBlogPost(w http.ResponseWriter, r *http.Request, id Id)
+	// GetBlogPost One blog post
+	// (GET /blog/posts/{id})
+	GetBlogPost(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdateBlogPost Edit, publish, schedule or feature a blog post
+	// (PATCH /blog/posts/{id})
+	UpdateBlogPost(w http.ResponseWriter, r *http.Request, id Id)
 	// ListBrands Brands, sorted by name
 	// (GET /brands)
 	ListBrands(w http.ResponseWriter, r *http.Request, params ListBrandsParams)
@@ -2970,7 +3211,7 @@ type ServerInterface interface {
 	// DisableUser Disable a user
 	// (DELETE /users/{id})
 	DisableUser(w http.ResponseWriter, r *http.Request, id Id)
-	// UpdateUser Change a user's role, or disable or re-enable them
+	// UpdateUser Change a user's role or bio, or disable or re-enable them
 	// (PATCH /users/{id})
 	UpdateUser(w http.ResponseWriter, r *http.Request, id Id)
 	// ResendInvite Email the invitation again
@@ -3090,6 +3331,60 @@ func (_ Unimplemented) ResendCode(w http.ResponseWriter, r *http.Request) {
 // VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
 // (POST /auth/verify-code)
 func (_ Unimplemented) VerifyCode(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBlogCategories Blog categories, by position
+// (GET /blog/categories)
+func (_ Unimplemented) ListBlogCategories(w http.ResponseWriter, r *http.Request, params ListBlogCategoriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateBlogCategory Create a blog category
+// (POST /blog/categories)
+func (_ Unimplemented) CreateBlogCategory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ArchiveBlogCategory Delete a blog category
+// (DELETE /blog/categories/{id})
+func (_ Unimplemented) ArchiveBlogCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateBlogCategory Rename, re-slug or reorder a blog category
+// (PATCH /blog/categories/{id})
+func (_ Unimplemented) UpdateBlogCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ListBlogPosts Blog posts, newest first
+// (GET /blog/posts)
+func (_ Unimplemented) ListBlogPosts(w http.ResponseWriter, r *http.Request, params ListBlogPostsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreateBlogPost Create a blog post
+// (POST /blog/posts)
+func (_ Unimplemented) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ArchiveBlogPost Delete a blog post
+// (DELETE /blog/posts/{id})
+func (_ Unimplemented) ArchiveBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetBlogPost One blog post
+// (GET /blog/posts/{id})
+func (_ Unimplemented) GetBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdateBlogPost Edit, publish, schedule or feature a blog post
+// (PATCH /blog/posts/{id})
+func (_ Unimplemented) UpdateBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3393,7 +3688,7 @@ func (_ Unimplemented) DisableUser(w http.ResponseWriter, r *http.Request, id Id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// UpdateUser Change a user's role, or disable or re-enable them
+// UpdateUser Change a user's role or bio, or disable or re-enable them
 // (PATCH /users/{id})
 func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -3782,6 +4077,295 @@ func (siw *ServerInterfaceWrapper) VerifyCode(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.VerifyCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlogCategories operation middleware
+func (siw *ServerInterfaceWrapper) ListBlogCategories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBlogCategoriesParams
+
+	// ------------- Optional query parameter "archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlogCategories(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBlogCategory operation middleware
+func (siw *ServerInterfaceWrapper) CreateBlogCategory(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBlogCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveBlogCategory operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveBlogCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveBlogCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateBlogCategory operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBlogCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBlogCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBlogPosts operation middleware
+func (siw *ServerInterfaceWrapper) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBlogPostsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "category_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "category_id", r.URL.Query(), &params.CategoryId, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "archived" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "archived", r.URL.Query(), &params.Archived, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "archived"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "archived", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBlogPosts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBlogPost operation middleware
+func (siw *ServerInterfaceWrapper) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBlogPost(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveBlogPost operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveBlogPost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveBlogPost(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBlogPost operation middleware
+func (siw *ServerInterfaceWrapper) GetBlogPost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBlogPost(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateBlogPost operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBlogPost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBlogPost(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5912,6 +6496,33 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers/{id}", wrapper.GetCustomer)
 	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/categories", wrapper.ListBlogCategories)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/blog/categories", wrapper.CreateBlogCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/blog/categories/{id}", wrapper.ArchiveBlogCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/blog/categories/{id}", wrapper.UpdateBlogCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/posts", wrapper.ListBlogPosts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/blog/posts", wrapper.CreateBlogPost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/blog/posts/{id}", wrapper.ArchiveBlogPost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/blog/posts/{id}", wrapper.GetBlogPost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/blog/posts/{id}", wrapper.UpdateBlogPost)
+	})
 
 	return r
 }
@@ -7035,6 +7646,658 @@ func (response VerifyCode429ApplicationProblemPlusJSONResponse) VisitVerifyCodeR
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
 	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogCategoriesRequestObject struct {
+	Params ListBlogCategoriesParams
+}
+
+type ListBlogCategoriesResponseObject interface {
+	VisitListBlogCategoriesResponse(w http.ResponseWriter) error
+}
+
+type ListBlogCategories200JSONResponse BlogCategoryList
+
+func (response ListBlogCategories200JSONResponse) VisitListBlogCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogCategories401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogCategories401ApplicationProblemPlusJSONResponse) VisitListBlogCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogCategories403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogCategories403ApplicationProblemPlusJSONResponse) VisitListBlogCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogCategories422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogCategories422ApplicationProblemPlusJSONResponse) VisitListBlogCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogCategoryRequestObject struct {
+	Body *CreateBlogCategoryJSONRequestBody
+}
+
+type CreateBlogCategoryResponseObject interface {
+	VisitCreateBlogCategoryResponse(w http.ResponseWriter) error
+}
+
+type CreateBlogCategory201JSONResponse BlogCategory
+
+func (response CreateBlogCategory201JSONResponse) VisitCreateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogCategory401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogCategory401ApplicationProblemPlusJSONResponse) VisitCreateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogCategory403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogCategory403ApplicationProblemPlusJSONResponse) VisitCreateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogCategory422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogCategory422ApplicationProblemPlusJSONResponse) VisitCreateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogCategoryRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ArchiveBlogCategoryResponseObject interface {
+	VisitArchiveBlogCategoryResponse(w http.ResponseWriter) error
+}
+
+type ArchiveBlogCategory204Response struct {
+}
+
+func (response ArchiveBlogCategory204Response) VisitArchiveBlogCategoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ArchiveBlogCategory401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogCategory401ApplicationProblemPlusJSONResponse) VisitArchiveBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogCategory403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogCategory403ApplicationProblemPlusJSONResponse) VisitArchiveBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogCategory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogCategory404ApplicationProblemPlusJSONResponse) VisitArchiveBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogCategoryRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdateBlogCategoryJSONRequestBody
+}
+
+type UpdateBlogCategoryResponseObject interface {
+	VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error
+}
+
+type UpdateBlogCategory200JSONResponse BlogCategory
+
+func (response UpdateBlogCategory200JSONResponse) VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogCategory401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogCategory401ApplicationProblemPlusJSONResponse) VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogCategory403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogCategory403ApplicationProblemPlusJSONResponse) VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogCategory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogCategory404ApplicationProblemPlusJSONResponse) VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogCategory422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogCategory422ApplicationProblemPlusJSONResponse) VisitUpdateBlogCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogPostsRequestObject struct {
+	Params ListBlogPostsParams
+}
+
+type ListBlogPostsResponseObject interface {
+	VisitListBlogPostsResponse(w http.ResponseWriter) error
+}
+
+type ListBlogPosts200JSONResponse BlogPostPage
+
+func (response ListBlogPosts200JSONResponse) VisitListBlogPostsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogPosts401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogPosts401ApplicationProblemPlusJSONResponse) VisitListBlogPostsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogPosts403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogPosts403ApplicationProblemPlusJSONResponse) VisitListBlogPostsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBlogPosts422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response ListBlogPosts422ApplicationProblemPlusJSONResponse) VisitListBlogPostsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogPostRequestObject struct {
+	Body *CreateBlogPostJSONRequestBody
+}
+
+type CreateBlogPostResponseObject interface {
+	VisitCreateBlogPostResponse(w http.ResponseWriter) error
+}
+
+type CreateBlogPost201JSONResponse BlogPost
+
+func (response CreateBlogPost201JSONResponse) VisitCreateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogPost401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogPost401ApplicationProblemPlusJSONResponse) VisitCreateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogPost403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogPost403ApplicationProblemPlusJSONResponse) VisitCreateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBlogPost422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBlogPost422ApplicationProblemPlusJSONResponse) VisitCreateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogPostRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ArchiveBlogPostResponseObject interface {
+	VisitArchiveBlogPostResponse(w http.ResponseWriter) error
+}
+
+type ArchiveBlogPost204Response struct {
+}
+
+func (response ArchiveBlogPost204Response) VisitArchiveBlogPostResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ArchiveBlogPost401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogPost401ApplicationProblemPlusJSONResponse) VisitArchiveBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogPost403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogPost403ApplicationProblemPlusJSONResponse) VisitArchiveBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ArchiveBlogPost404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ArchiveBlogPost404ApplicationProblemPlusJSONResponse) VisitArchiveBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlogPostRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type GetBlogPostResponseObject interface {
+	VisitGetBlogPostResponse(w http.ResponseWriter) error
+}
+
+type GetBlogPost200JSONResponse BlogPost
+
+func (response GetBlogPost200JSONResponse) VisitGetBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlogPost401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlogPost401ApplicationProblemPlusJSONResponse) VisitGetBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlogPost403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlogPost403ApplicationProblemPlusJSONResponse) VisitGetBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlogPost404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlogPost404ApplicationProblemPlusJSONResponse) VisitGetBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogPostRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdateBlogPostJSONRequestBody
+}
+
+type UpdateBlogPostResponseObject interface {
+	VisitUpdateBlogPostResponse(w http.ResponseWriter) error
+}
+
+type UpdateBlogPost200JSONResponse BlogPost
+
+func (response UpdateBlogPost200JSONResponse) VisitUpdateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogPost401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogPost401ApplicationProblemPlusJSONResponse) VisitUpdateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogPost403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogPost403ApplicationProblemPlusJSONResponse) VisitUpdateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogPost404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogPost404ApplicationProblemPlusJSONResponse) VisitUpdateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBlogPost422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBlogPost422ApplicationProblemPlusJSONResponse) VisitUpdateBlogPostResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11292,6 +12555,33 @@ type StrictServerInterface interface {
 	// VerifyCode Exchange a signup's emailed 6-digit code for its invitation token
 	// (POST /auth/verify-code)
 	VerifyCode(ctx context.Context, request VerifyCodeRequestObject) (VerifyCodeResponseObject, error)
+	// ListBlogCategories Blog categories, by position
+	// (GET /blog/categories)
+	ListBlogCategories(ctx context.Context, request ListBlogCategoriesRequestObject) (ListBlogCategoriesResponseObject, error)
+	// CreateBlogCategory Create a blog category
+	// (POST /blog/categories)
+	CreateBlogCategory(ctx context.Context, request CreateBlogCategoryRequestObject) (CreateBlogCategoryResponseObject, error)
+	// ArchiveBlogCategory Delete a blog category
+	// (DELETE /blog/categories/{id})
+	ArchiveBlogCategory(ctx context.Context, request ArchiveBlogCategoryRequestObject) (ArchiveBlogCategoryResponseObject, error)
+	// UpdateBlogCategory Rename, re-slug or reorder a blog category
+	// (PATCH /blog/categories/{id})
+	UpdateBlogCategory(ctx context.Context, request UpdateBlogCategoryRequestObject) (UpdateBlogCategoryResponseObject, error)
+	// ListBlogPosts Blog posts, newest first
+	// (GET /blog/posts)
+	ListBlogPosts(ctx context.Context, request ListBlogPostsRequestObject) (ListBlogPostsResponseObject, error)
+	// CreateBlogPost Create a blog post
+	// (POST /blog/posts)
+	CreateBlogPost(ctx context.Context, request CreateBlogPostRequestObject) (CreateBlogPostResponseObject, error)
+	// ArchiveBlogPost Delete a blog post
+	// (DELETE /blog/posts/{id})
+	ArchiveBlogPost(ctx context.Context, request ArchiveBlogPostRequestObject) (ArchiveBlogPostResponseObject, error)
+	// GetBlogPost One blog post
+	// (GET /blog/posts/{id})
+	GetBlogPost(ctx context.Context, request GetBlogPostRequestObject) (GetBlogPostResponseObject, error)
+	// UpdateBlogPost Edit, publish, schedule or feature a blog post
+	// (PATCH /blog/posts/{id})
+	UpdateBlogPost(ctx context.Context, request UpdateBlogPostRequestObject) (UpdateBlogPostResponseObject, error)
 	// ListBrands Brands, sorted by name
 	// (GET /brands)
 	ListBrands(ctx context.Context, request ListBrandsRequestObject) (ListBrandsResponseObject, error)
@@ -11442,7 +12732,7 @@ type StrictServerInterface interface {
 	// DisableUser Disable a user
 	// (DELETE /users/{id})
 	DisableUser(ctx context.Context, request DisableUserRequestObject) (DisableUserResponseObject, error)
-	// UpdateUser Change a user's role, or disable or re-enable them
+	// UpdateUser Change a user's role or bio, or disable or re-enable them
 	// (PATCH /users/{id})
 	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
 	// ResendInvite Email the invitation again
@@ -11982,6 +13272,264 @@ func (sh *strictHandler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(VerifyCodeResponseObject); ok {
 		if err := validResponse.VisitVerifyCodeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBlogCategories operation middleware
+func (sh *strictHandler) ListBlogCategories(w http.ResponseWriter, r *http.Request, params ListBlogCategoriesParams) {
+	var request ListBlogCategoriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBlogCategories(ctx, request.(ListBlogCategoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBlogCategories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBlogCategoriesResponseObject); ok {
+		if err := validResponse.VisitListBlogCategoriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBlogCategory operation middleware
+func (sh *strictHandler) CreateBlogCategory(w http.ResponseWriter, r *http.Request) {
+	var request CreateBlogCategoryRequestObject
+
+	var body CreateBlogCategoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBlogCategory(ctx, request.(CreateBlogCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBlogCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBlogCategoryResponseObject); ok {
+		if err := validResponse.VisitCreateBlogCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveBlogCategory operation middleware
+func (sh *strictHandler) ArchiveBlogCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ArchiveBlogCategoryRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveBlogCategory(ctx, request.(ArchiveBlogCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveBlogCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveBlogCategoryResponseObject); ok {
+		if err := validResponse.VisitArchiveBlogCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateBlogCategory operation middleware
+func (sh *strictHandler) UpdateBlogCategory(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdateBlogCategoryRequestObject
+
+	request.Id = id
+
+	var body UpdateBlogCategoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateBlogCategory(ctx, request.(UpdateBlogCategoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateBlogCategory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateBlogCategoryResponseObject); ok {
+		if err := validResponse.VisitUpdateBlogCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBlogPosts operation middleware
+func (sh *strictHandler) ListBlogPosts(w http.ResponseWriter, r *http.Request, params ListBlogPostsParams) {
+	var request ListBlogPostsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBlogPosts(ctx, request.(ListBlogPostsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBlogPosts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBlogPostsResponseObject); ok {
+		if err := validResponse.VisitListBlogPostsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBlogPost operation middleware
+func (sh *strictHandler) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
+	var request CreateBlogPostRequestObject
+
+	var body CreateBlogPostJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBlogPost(ctx, request.(CreateBlogPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBlogPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBlogPostResponseObject); ok {
+		if err := validResponse.VisitCreateBlogPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ArchiveBlogPost operation middleware
+func (sh *strictHandler) ArchiveBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ArchiveBlogPostRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ArchiveBlogPost(ctx, request.(ArchiveBlogPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ArchiveBlogPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ArchiveBlogPostResponseObject); ok {
+		if err := validResponse.VisitArchiveBlogPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBlogPost operation middleware
+func (sh *strictHandler) GetBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
+	var request GetBlogPostRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBlogPost(ctx, request.(GetBlogPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBlogPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBlogPostResponseObject); ok {
+		if err := validResponse.VisitGetBlogPostResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateBlogPost operation middleware
+func (sh *strictHandler) UpdateBlogPost(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdateBlogPostRequestObject
+
+	request.Id = id
+
+	var body UpdateBlogPostJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateBlogPost(ctx, request.(UpdateBlogPostRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateBlogPost")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateBlogPostResponseObject); ok {
+		if err := validResponse.VisitUpdateBlogPostResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

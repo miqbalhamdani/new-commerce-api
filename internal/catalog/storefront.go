@@ -28,6 +28,8 @@ type ShopFilter struct {
 	After        *ShopCursor
 	Page         int // 1-based; 0 means keyset paging with After (P1-230)
 	Limit        int
+	// IDs keeps only these products, when set: a blog post's (BR-134).
+	IDs []uuid.UUID
 }
 
 // ShopPage is one page of the product list: the rows, the keyset position
@@ -97,6 +99,9 @@ func (s *Service) ShopProducts(ctx context.Context, f ShopFilter) (ShopPage, err
 	}
 	if q := likePattern(f.Q); q != nil {
 		where = append(where, "sp.title ILIKE '%' || "+arg(*q)+" || '%'")
+	}
+	if f.IDs != nil {
+		where = append(where, "sp.id = ANY("+arg(f.IDs)+"::uuid[])")
 	}
 	cond := "true"
 	if len(where) > 0 {

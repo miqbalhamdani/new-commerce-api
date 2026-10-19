@@ -35,6 +35,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
@@ -361,6 +362,7 @@ var newServer = func(t *testing.T) http.Handler {
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
 		Auth:    auth.NewService(store, signer),
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
+		Blog:    blog.NewService(store, testFiles(t)),
 		Jobs:    jobsSvc,
 		Team:    team.NewService(store, redis, testBox(t)),
 		Orders:  ordersSvc,

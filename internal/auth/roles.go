@@ -27,6 +27,8 @@ const (
 	PermCategoriesWrite = "categories:write"
 	PermBrandsRead      = "brands:read"
 	PermBrandsWrite     = "brands:write"
+	PermBlogRead        = "blog:read"
+	PermBlogWrite       = "blog:write"
 	PermMediaRead       = "media:read"
 	PermMediaWrite      = "media:write"
 	PermOrdersRead      = "orders:read"
@@ -50,7 +52,7 @@ const (
 // Settings are not in it: ops does not read them (04-api-spec.md 3, BR-025).
 var readAll = []string{
 	PermProductsRead, PermVariantsRead, PermCategoriesRead, PermBrandsRead,
-	PermMediaRead, PermOrdersRead, PermCustomersRead, PermExportsRead,
+	PermBlogRead, PermMediaRead, PermOrdersRead, PermCustomersRead, PermExportsRead,
 }
 
 // rolePermissions is 04-api-spec.md 3, in code. It is the only definition --
@@ -76,7 +78,7 @@ var rolePermissions = map[string][]string{
 
 var adminPermissions = concat(readAll, []string{
 	PermProductsWrite, PermVariantsWrite, PermCategoriesWrite, PermBrandsWrite,
-	PermMediaWrite, PermOrdersWrite, PermChannelsRead, PermChannelsWrite,
+	PermBlogWrite, PermMediaWrite, PermOrdersWrite, PermChannelsRead, PermChannelsWrite,
 	PermUsersRead, PermUsersWrite, PermAPIKeysRead, PermAPIKeysWrite,
 	PermAuditLogRead, PermSettingsRead,
 })

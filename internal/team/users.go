@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -110,8 +111,12 @@ func (s *Service) ResendInvite(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-// Update changes a role or a status (BR-023, BR-027).
-func (s *Service) Update(ctx context.Context, id uuid.UUID, role, status *string) (User, error) {
+// maxBioRunes is the longest bio (04-api-spec.md §4).
+const maxBioRunes = 300
+
+// Update changes a role, a status (BR-023, BR-027) or the bio shown under
+// the user's blog posts (BR-133); a bio of "" clears it.
+func (s *Service) Update(ctx context.Context, id uuid.UUID, role, status, bio *string) (User, error) {
 	if role != nil {
 		if err := grantable(ctx, *role); err != nil {
 			return User{}, err
@@ -120,13 +125,22 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, role, status *string
 	if status != nil && *status != "active" && *status != "disabled" {
 		return User{}, fieldError("status", "status is active or disabled")
 	}
+	if bio != nil {
+		b := strings.TrimSpace(*bio)
+		if utf8.RuneCountInString(b) > maxBioRunes {
+			return User{}, fieldError("bio", "a bio is at most 300 characters")
+		}
+		bio = &b
+	}
 	var u User
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) error {
 		before, err := q.GetUser(ctx, id)
 		if err != nil {
 			return notFound(err)
 		}
-		if before.Role == auth.RoleOwner && !callerIs(ctx, auth.RoleOwner) {
+		// A bio is not a change to the owner's standing, so an admin may
+		// write the owner's.
+		if before.Role == auth.RoleOwner && !callerIs(ctx, auth.RoleOwner) && (role != nil || status != nil) {
 			return apperrors.Forbidden("Only an owner can change an owner.")
 		}
 		losesOwner := before.Role == auth.RoleOwner && before.Status == "active" &&
@@ -159,9 +173,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, role, status *string
 				}
 			}
 		}
+		if bio != nil {
+			var v *string
+			if *bio != "" {
+				v = bio
+			}
+			if u, err = q.SetUserBio(ctx, sqlcgen.SetUserBioParams{ID: id, Bio: v}); err != nil {
+				return err
+			}
+		}
 		return db.Audit(ctx, tx, db.AuditEntry{Action: "user.update", SubjectType: "user", SubjectID: id.String(),
-			Before: map[string]any{"role": before.Role, "status": before.Status},
-			After:  map[string]any{"role": u.Role, "status": u.Status}})
+			Before: map[string]any{"role": before.Role, "status": before.Status, "bio": before.Bio},
+			After:  map[string]any{"role": u.Role, "status": u.Status, "bio": u.Bio}})
 	})
 	return u, err
 }

@@ -282,6 +282,8 @@ Four seeded, fixed roles (BR-023). A permission is `resource:action`, with `read
 | `categories:write` | ✓ | ✓ | | |
 | `brands:read` | ✓ | ✓ | ✓ | ✓ |
 | `brands:write` | ✓ | ✓ | | |
+| `blog:read` | ✓ | ✓ | ✓ | ✓ |
+| `blog:write` | ✓ | ✓ | | |
 | `media:read` | ✓ | ✓ | ✓ | ✓ |
 | `media:write` | ✓ | ✓ | | |
 | `orders:read` | ✓ | ✓ | ✓ | ✓ |
@@ -329,7 +331,7 @@ cannot do (BR-025).
 | `GET` | `/v1/users?status=&role=&limit=&cursor=` | `users:read` | — |
 | `POST` | `/v1/users/invite` | `users:write` | 020, 023, 026 |
 | `POST` | `/v1/users/{id}/resend-invite` | `users:write` | 026 |
-| `PATCH` | `/v1/users/{id}` | `users:write` | 023, 027 |
+| `PATCH` | `/v1/users/{id}` | `users:write` | 023, 027, 133 |
 | `DELETE` | `/v1/users/{id}` | `users:write` | 027 |
 | `GET` | `/v1/api-keys` | `api_keys:read` | 028 |
 | `POST` | `/v1/api-keys` | `api_keys:write` | 028, 083 |
@@ -409,7 +411,8 @@ GET /v1/users?status=invited
 200 OK
 { "data": [
     { "id": "0192…", "email": "rina@erigo.co.id", "name": "Rina", "role": "ops",
-      "status": "invited", "last_login_at": null, "created_at": "2026-10-06T16:15:00+07:00" } ],
+      "status": "invited", "bio": null, "last_login_at": null,
+      "created_at": "2026-10-06T16:15:00+07:00" } ],
   "next_cursor": null }
 
 POST /v1/users/invite
@@ -421,6 +424,7 @@ POST /v1/users/{id}/resend-invite
 
 PATCH /v1/users/{id}
 { "role": "admin" }                 or   { "status": "active" }
+{ "bio": "Writes the Sleep Project Journal." }      or   { "bio": null }
 200 OK   ← User
 
 DELETE /v1/users/{id}
@@ -430,7 +434,9 @@ DELETE /v1/users/{id}
 - An email already used in any tenant is `422` on `email` (BR-020).
 - Only an owner can grant `owner` (BR-023).
 - The last active owner cannot be demoted or disabled (BR-027).
-- `PATCH` takes `role` and `status` (`active` re-enables a disabled user), without `If-Match`.
+- `PATCH` takes `role`, `status` (`active` re-enables a disabled user) and `bio`, without
+  `If-Match`. `bio` is the line shown under the user's blog posts (BR-133), at most 300
+  characters; `null` or an empty string clears it.
 
 ### API keys
 
@@ -1089,7 +1095,7 @@ never applied twice (BR-060).
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`) | 051, 053 |
+| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`) | 051, 053, 135 |
 | `POST` | `/v1/media/confirm` | `media:write` | 050, 051 |
 | `PATCH` | `/v1/media/{id}` | `media:write` | 009 |
 | `DELETE` | `/v1/media/{id}` | `media:write` | 012 |
@@ -1118,9 +1124,12 @@ Uploads go **straight from the browser to R2**; bytes never transit the API (BR-
      "created_at": "2026-10-06T16:15:00+07:00" }
 ```
 
-- **Presign.** `purpose` is `product_image` (JPEG, PNG, WebP up to 20 MB) or `product_import`
-  (CSV up to 50 MB, no `product_id`); anything else is `422`. The key contains the content hash
-  (BR-053).
+- **Presign.** `purpose` is `product_image` (JPEG, PNG, WebP up to 20 MB), `product_import`
+  (CSV up to 50 MB, no `product_id`), `blog_cover` (an image like `product_image`, with
+  `post_id` in place of `product_id`) or `blog_image` (the same, for the post's body); anything
+  else is `422`. The key contains the content hash (BR-053). Blog images have no confirm step: a
+  cover's key is saved as the post's `cover_r2_key` (§13), a body image is linked from the
+  Markdown by the response's `public_url`.
 - **Confirm.** Checks content type and size against R2's `HEAD` before saving the row. A key for an
   object never uploaded is `422`.
 - **URLs.** Product images are public on the image domain (BR-053). Once ready, `derivatives` is
@@ -1250,6 +1259,7 @@ Storefront routes never accept a staff token (BR-086).
 | Routes | Credential | Why |
 |---|---|---|
 | Catalog: products, categories, brands | `X-Api-Key` | Public data. The key identifies the shop; the origin check stops other websites using it |
+| Blog: categories, posts | `X-Api-Key` | Public data, as the catalog |
 | Cart and checkout | `X-Api-Key` + cart id in the path | The cart id is random; holding it is the permission |
 | Customer account and order history | `X-Api-Key` + `Authorization: Bearer <customer token>` | Personal data. Never reachable with a key alone |
 | Guest order lookup | `X-Api-Key` + `X-Order-Token` from checkout | The token is the guest's proof the order is theirs |
@@ -1283,6 +1293,9 @@ headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
 | `GET` | `/v1/storefront/categories?kind=` | key | 031 |
 | `GET` | `/v1/storefront/brands` | key | — |
 | `GET` | `/v1/storefront/config` | key | 122, 127 |
+| `GET` | `/v1/storefront/blog/categories` | key | 130 |
+| `GET` | `/v1/storefront/blog/posts?category=&tag=&featured=&limit=&cursor=&page=` | key | 131, 132, 133, 135 |
+| `GET` | `/v1/storefront/blog/posts/{slug}` | key | 131, 132, 133, 134, 135 |
 | `POST` | `/v1/storefront/carts` | key | 087 |
 | `GET` | `/v1/storefront/carts/{cart_id}` | key + cart | 087 |
 | `PUT` | `/v1/storefront/carts/{cart_id}/items/{variant_id}` | key + cart | 087, 089 |
@@ -1622,6 +1635,58 @@ Not under `/v1/storefront`: no API key, no CORS. The handler (BR-124, BR-125):
 
 Midtrans retries non-2xx answers, so step 3 failing returns `503` and the retry finishes the job.
 
+### 11.11 Blog
+
+What a website needs for a journal: the list with its tabs and featured post, and a post page.
+
+```json
+GET /v1/storefront/blog/categories
+200 OK
+{ "data": [ { "slug": "bedding-tips", "name": "Bedding tips" }, … ] }   ← unarchived, by position then name
+
+GET /v1/storefront/blog/posts?featured=false&page=1&limit=9
+200 OK
+{ "data": [
+    { "slug": "7-panduan-lengkap-cara-memilih-sprei",
+      "title": "7 Panduan Lengkap Cara Memilih Sprei dan Selimut Agar Tidur Semakin Nyenyak",
+      "excerpt": "Seprai dan selimut merupakan sarana pelengkap istirahat Anda setelah…",
+      "cover": { "url": "https://img.{domain}/0192-tenant/blogs/0193…/9f2c….jpg", "sizes": {} },
+      "cover_alt": "7 Panduan Lengkap Cara Memilih Sprei dan Selimut Agar Tidur Semakin Nyenyak",
+      "category": { "slug": "bedding-tips", "name": "Bedding tips" },
+      "author": { "name": "Yusuf", "bio": "Writes the Sleep Project Journal." },
+      "tags": ["Bedding Tips", "Panduan Pilih Sprei"],
+      "featured": false,
+      "published_at": "2026-12-24T09:00:00+07:00" } ],
+  "next_cursor": null,
+  "total": 9 }
+```
+
+- Live posts only (BR-131), newest `published_at` first.
+- `category` takes a blog category slug; `tag` one tag, matched exactly; `featured=true` returns
+  the featured post alone, `featured=false` every other post (the grid under it).
+- `excerpt` is always filled (BR-132); `cover_alt` is the title (BR-135); `cover` is `null` when
+  the post has none, and `sizes` stays `{}` until covers get derivatives.
+- `category` is `null` when the post has none or its category is archived (BR-130); `author` is
+  `null` when the post has none.
+- Paging as `/products` (§11.4): `cursor`, or `page` with `total`.
+
+```json
+GET /v1/storefront/blog/posts/7-panduan-lengkap-cara-memilih-sprei
+200 OK
+{ …the list item above…,
+  "body": "Seprai dan selimut merupakan…\n\n## 1. Tentukan anggaran belanja\n…",
+  "products": [ …ProductListItem, as /products… ],
+  "related": [ …up to 3 list items… ] }
+```
+
+- `body` is Markdown, as written (BR-135). Its images are `![alt](public_url)`, uploaded with
+  `purpose: blog_image`; one ending in `#w=33`, `#w=50` or `#w=75` is that percent of the column
+  wide, else the full column.
+- `products` are the post's linked products that are visible, in the post's order (BR-134).
+- `related` holds up to three other live posts, newest first, from the post's category, or from
+  every post when it has none.
+- A draft, scheduled, archived or unknown slug is `404`.
+
 ---
 
 ## 12. Not in the API
@@ -1642,3 +1707,105 @@ Asked for often enough to say so explicitly.
 | Customer email change | Not scheduled |
 | WhatsApp or OTP sign-in | No; email + password and Google only (BR-092). A signup's emailed code only confirms the address (BR-026) |
 | Promotions, discount codes | Out of scope; manual orders have per-line discounts only |
+
+---
+
+## 13. Blog (M6)
+
+| Method | Path | Permission | BR |
+|---|---|---|---|
+| `GET` | `/v1/blog/categories?archived=false` | `blog:read` | 130 |
+| `POST` | `/v1/blog/categories` | `blog:write` | 130 |
+| `PATCH` | `/v1/blog/categories/{id}` | `blog:write` | 009, 130 |
+| `DELETE` | `/v1/blog/categories/{id}` | `blog:write` | 012, 130 |
+| `GET` | `/v1/blog/posts?q=&status=&category_id=&archived=false&limit=&cursor=` | `blog:read` | — |
+| `POST` | `/v1/blog/posts` | `blog:write` | 131, 133, 134, 135 |
+| `GET` | `/v1/blog/posts/{id}` | `blog:read` | 132 |
+| `PATCH` | `/v1/blog/posts/{id}` | `blog:write` | 009, 131, 133, 134, 135 |
+| `DELETE` | `/v1/blog/posts/{id}` | `blog:write` | 012, 131 |
+
+### 13.1 Blog categories
+
+```json
+POST /v1/blog/categories
+{ "name": "Bedding tips", "position": 1 }       ← slug optional, omitted means slugify(name)
+
+201 Created
+{ "id": "0192…", "name": "Bedding tips", "slug": "bedding-tips", "position": 1,
+  "archived_at": null, "created_at": "2026-10-06T16:15:00+07:00", "updated_at": "…" }
+
+GET /v1/blog/categories
+200 OK
+{ "data": [ …BlogCategory, by position then name… ] }      ← unpaginated
+
+PATCH /v1/blog/categories/{id}
+{ "position": 3 }      or   { "name": "Materials", "slug": "bahan" }
+200 OK   ← BlogCategory
+
+DELETE /v1/blog/categories/{id}
+204 No Content   ← archived_at set; its posts keep it (BR-130)
+```
+
+Slugs behave as brand slugs (BR-030, BR-130): a rename that sends no `slug` re-derives it, and a
+clash, archived categories included, is `422` on `slug` when the client sent it, else on `name`.
+`archived=true` lists the archived ones instead. No `If-Match` (BR-010).
+
+### 13.2 Blog posts
+
+```json
+POST /v1/blog/posts
+{ "title": "7 Panduan Lengkap Cara Memilih Sprei dan Selimut Agar Tidur Semakin Nyenyak",
+  "body": "Seprai dan selimut merupakan…\n\n## 1. Tentukan anggaran belanja\n…",
+  "category_id": "0192…", "tags": ["Bedding Tips", "Panduan Pilih Sprei"],
+  "product_ids": ["0192-plain-white", "0192-steel-light"] }
+
+201 Created
+{ "id": "0193…", "title": "7 Panduan Lengkap…", "slug": "7-panduan-lengkap-cara-memilih-sprei-…",
+  "status": "draft", "published_at": null, "is_featured": false,
+  "category": { "id": "0192…", "name": "Bedding tips" },
+  "author": { "id": "0191…", "name": "Yusuf" },        ← the user who created it (BR-133)
+  "excerpt": null,
+  "excerpt_preview": "Seprai dan selimut merupakan sarana pelengkap istirahat Anda setelah…",
+  "body": "…", "tags": ["Bedding Tips", "Panduan Pilih Sprei"],
+  "cover_r2_key": null, "cover_url": null,
+  "products": [ { "id": "0192-plain-white", "title": "Plain White — Organic Cotton Bedding Set",
+                  "cover_url": "https://img.{domain}/…/800.webp" }, … ],
+  "archived_at": null, "created_at": "…", "updated_at": "…" }
+
+PATCH /v1/blog/posts/{id}
+{ "status": "published" }                              ← published_at set to now when empty
+{ "status": "published", "published_at": "2026-12-24T09:00:00+07:00" }   ← scheduled
+{ "is_featured": true }                                ← the post that had it loses it
+{ "excerpt": "Pilih paket sprei yang tepat agar tidur makin lelap." }   or   { "excerpt": null }
+{ "cover_r2_key": "0192-tenant/blogs/0193…/9f2c….jpg" }   or   { "cover_r2_key": null }
+{ "product_ids": ["0192-steel-light"] }                ← replaces the list, in this order
+200 OK   ← BlogPost
+
+DELETE /v1/blog/posts/{id}
+204 No Content   ← archived_at set; is_featured cleared (BR-131)
+```
+
+- **Slug** as a product's (BR-131): derived from the title on create, editable after, never
+  follows the title. A clash, archived posts included, is `422` on `slug` when the client sent it,
+  else on `title`.
+- **Excerpt.** `excerpt` is as written, `null` when empty; `excerpt_preview` is what the storefront
+  shows, the written one or the one worked out from `body` (BR-132). An empty string is stored as
+  `null`.
+- **Author.** Omitted on create means the user creating the post. It must be a user of the shop,
+  else `422` on `author_id`; `null` clears it (BR-133).
+- **Category.** Must be an unarchived blog category of the shop, else `422` on `category_id`;
+  `null` clears it.
+- **Cover.** Upload with `POST /v1/media/presign` (`purpose: blog_cover`, `post_id`), `PUT` to R2,
+  then set `cover_r2_key`. The key must be this post's (`{tenant}/blogs/{post}/…`) and the object
+  must exist as an image, else `422` on `cover_r2_key` (BR-135).
+- **Products.** `product_ids` replaces the list in the order given; each must be a product of the
+  shop, with no repeats, at most 12, else `422` on `product_ids` (BR-134). `products` lists them
+  all, hidden ones included, so the editor can remove one.
+- **Tags.** At most 10, each trimmed and 1–40 characters, else `422` on `tags`; repeats are dropped.
+- **Publishing.** `published_at` must carry an offset. Back to `draft` keeps the date (BR-131);
+  `published_at: null` on a published post is `422`.
+- **Archived.** An archived post cannot be edited: `PATCH` is `422` on `status`, as for products.
+- **List.** `BlogPostListItem` (the post without `body`, `excerpt`, `excerpt_preview`, `tags`
+  and `products`), newest created first; `q` matches the title, `status` is `draft` or
+  `published`, `category_id` filters by category. Cursor paging.
+- No `If-Match`: the last save wins (BR-010).

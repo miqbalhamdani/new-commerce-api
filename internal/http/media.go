@@ -15,13 +15,15 @@ import (
 type presignBody struct {
 	Purpose   optional[string]    `json:"purpose"`
 	ProductID optional[uuid.UUID] `json:"product_id"`
+	PostID    optional[uuid.UUID] `json:"post_id"`
 	MimeType  optional[string]    `json:"mime_type"`
 	Bytes     optional[int64]     `json:"bytes"`
 	SHA256    optional[string]    `json:"sha256"`
 }
 
-// PresignMedia needs media:write for an image and products:write for an
-// import; the purpose decides which, so it is checked after decoding.
+// PresignMedia needs media:write for an image, products:write for an import
+// and blog:write for a blog cover or body image; the purpose decides which,
+// so it is checked after decoding.
 func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 	role, ok := auth.RoleFromContext(r.Context())
 	if !ok {
@@ -40,7 +42,8 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := rejectNull(map[string]bool{"purpose": body.Purpose.Null, "product_id": body.ProductID.Null,
-		"mime_type": body.MimeType.Null, "bytes": body.Bytes.Null, "sha256": body.SHA256.Null}); err != nil {
+		"post_id": body.PostID.Null, "mime_type": body.MimeType.Null, "bytes": body.Bytes.Null,
+		"sha256": body.SHA256.Null}); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -53,9 +56,32 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	blogImage := body.Purpose.Value == "blog_cover" || body.Purpose.Value == "blog_image"
+	if body.PostID.Set && !blogImage {
+		writeError(w, r, fieldErr("post_id", "post_id is for a blog_cover or blog_image"))
+		return
+	}
+
 	var p catalog.Presign
 	var err error
 	switch body.Purpose.Value {
+	case "blog_cover", "blog_image": // the same upload; a body image is linked by its public URL
+		if !auth.Can(role, auth.PermBlogWrite) {
+			writeError(w, r, apperrors.PermissionDenied(auth.PermBlogWrite))
+			return
+		}
+		if !body.PostID.Set || body.ProductID.Set {
+			writeError(w, r, fieldErr("post_id", "a blog image needs post_id and no product_id"))
+			return
+		}
+		c, err := s.blog.PresignImage(r.Context(), body.PostID.Value, body.MimeType.Value, body.Bytes.Value, body.SHA256.Value)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, PresignResponse{UploadUrl: c.URL, R2Key: c.Key, ExpiresIn: c.ExpiresIn,
+			PublicUrl: &c.PublicURL})
+		return
 	case "product_image":
 		if !auth.Can(role, auth.PermMediaWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermMediaWrite))
@@ -77,7 +103,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		p, err = s.catalog.PresignImport(r.Context(), body.MimeType.Value, body.Bytes.Value)
 	default:
-		writeError(w, r, fieldErr("purpose", "purpose is product_image or product_import"))
+		writeError(w, r, fieldErr("purpose", "purpose is product_image, product_import, blog_cover or blog_image"))
 		return
 	}
 	if err != nil {

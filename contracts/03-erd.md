@@ -1,6 +1,6 @@
 # Ecommerce Backoffice v2 · Data Model
 
-**24 tables, 3 views.** Constraints are tagged with the rule they enforce (`BR-xxx`, see
+**27 tables, 4 views.** Constraints are tagged with the rule they enforce (`BR-xxx`, see
 `02-business-rules.md`). The API contract is `04-api-spec.md`; which backlog item builds which
 table is `05-backlog.md`. Migrations in `new-commerce-api/db/migrations/` must match this file;
 if they disagree, the migration is the bug.
@@ -35,6 +35,9 @@ erDiagram
   ORDERS ||--|{ ORDER_LINES : contains
   ORDERS ||--o{ PAYMENTS : "paid through"
   TENANTS ||--o| STOREFRONT_SETTINGS : configures
+  BLOG_CATEGORIES ||--o{ BLOG_POSTS : groups
+  USERS ||--o{ BLOG_POSTS : writes
+  BLOG_POSTS }o--o{ PRODUCTS : "shows"
 ```
 
 `product_categories` is the join table behind the many-to-many, and it is what lets one product sit
@@ -48,7 +51,8 @@ in several trees of different `kind` at once (BR-031). Not drawn: `jobs`, `order
 | Marketplace import | `channels`, `channel_listings` | M4 |
 | Storefront | `storefront_settings`, `customers`, `customer_identities`, `customer_sessions`, `carts`, `cart_items` | M3 |
 | Orders | `orders`, `order_lines`, `order_sequences`, `payments` | M1 |
-| Views | `storefront_products`, `storefront_variants` | M3 |
+| Blog | `blog_categories`, `blog_posts`, `blog_post_products` | M6 |
+| Views | `storefront_products`, `storefront_variants`, `storefront_blog_posts` | M3, M6 |
 
 ---
 
@@ -173,9 +177,11 @@ CREATE TABLE users (
     status        text NOT NULL DEFAULT 'invited'
                   CHECK (status IN ('invited','active','disabled')),
     last_login_at timestamptz,
+    bio           text,                 -- public under the user's blog posts (BR-133)
     created_at    timestamptz NOT NULL DEFAULT now(),
     UNIQUE (email)                      -- BR-020: system-wide, not per tenant
 );
+ALTER TABLE users ADD CONSTRAINT users_id_tenant_uq UNIQUE (id, tenant_id);  -- blog author FK (BR-004)
 
 CREATE TABLE refresh_tokens (
     id           uuid PRIMARY KEY,
@@ -751,6 +757,73 @@ CREATE UNIQUE INDEX payments_one_pending_per_order ON payments (order_id) WHERE 
 `ON DELETE CASCADE` from `orders` to `order_lines` exists for the PII purge and tenant deletion
 jobs (BR-097) only; no request path deletes an order (BR-079).
 
+### 3.8 Blog (M6)
+
+```sql
+CREATE TABLE blog_categories (
+    id          uuid PRIMARY KEY,
+    tenant_id   uuid NOT NULL REFERENCES tenants(id),
+    name        text NOT NULL,
+    slug        text NOT NULL,          -- slugify(name) unless the client sets one (BR-130)
+    position    integer NOT NULL DEFAULT 0,          -- tab order (BR-130)
+    archived_at timestamptz,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, slug)            -- archived categories included (BR-130)
+);
+ALTER TABLE blog_categories ADD CONSTRAINT blog_categories_id_tenant_uq UNIQUE (id, tenant_id);
+
+CREATE TABLE blog_posts (
+    id           uuid PRIMARY KEY,
+    tenant_id    uuid NOT NULL REFERENCES tenants(id),
+    category_id  uuid,                  -- optional (BR-130)
+    author_id    uuid,                  -- a staff user (BR-133)
+    title        text NOT NULL,
+    slug         text NOT NULL,         -- from the title on create, never follows it (BR-131)
+    excerpt      text,                  -- NULL: worked out from body when read (BR-132)
+    body         text NOT NULL DEFAULT '',            -- Markdown, stored as written (BR-135)
+    cover_r2_key text,                  -- {tenant}/blogs/{post}/{hash}.{ext} (BR-053, BR-135)
+    tags         text[] NOT NULL DEFAULT '{}',
+    status       text NOT NULL DEFAULT 'draft'
+                 CHECK (status IN ('draft','published')),
+    is_featured  boolean NOT NULL DEFAULT false,
+    published_at timestamptz,           -- later than now(): scheduled (BR-131)
+    archived_at  timestamptz,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, slug),           -- archived posts included (BR-131)
+    CHECK (status = 'draft' OR published_at IS NOT NULL),          -- BR-131
+    -- BR-004. SET NULL (author_id) clears only the author, never tenant_id.
+    CONSTRAINT blog_posts_same_tenant_as_category
+        FOREIGN KEY (category_id, tenant_id) REFERENCES blog_categories (id, tenant_id),
+    CONSTRAINT blog_posts_same_tenant_as_author
+        FOREIGN KEY (author_id, tenant_id) REFERENCES users (id, tenant_id)
+        ON DELETE SET NULL (author_id)
+);
+CREATE UNIQUE INDEX blog_posts_one_featured ON blog_posts (tenant_id) WHERE is_featured;  -- BR-131
+CREATE INDEX ON blog_posts (tenant_id, published_at DESC)
+    WHERE status = 'published' AND archived_at IS NULL;
+CREATE INDEX ON blog_posts (tenant_id, category_id);
+CREATE INDEX ON blog_posts USING gin (tags);
+ALTER TABLE blog_posts ADD CONSTRAINT blog_posts_id_tenant_uq UNIQUE (id, tenant_id);
+
+-- "Shop the guide" (BR-134).
+CREATE TABLE blog_post_products (
+    tenant_id  uuid NOT NULL REFERENCES tenants(id),
+    post_id    uuid NOT NULL,
+    product_id uuid NOT NULL,
+    position   integer NOT NULL DEFAULT 0,
+    PRIMARY KEY (post_id, product_id),
+    CONSTRAINT blog_post_products_same_tenant_as_post
+        FOREIGN KEY (post_id, tenant_id) REFERENCES blog_posts (id, tenant_id) ON DELETE CASCADE,
+    CONSTRAINT blog_post_products_same_tenant_as_product
+        FOREIGN KEY (product_id, tenant_id) REFERENCES products (id, tenant_id) ON DELETE CASCADE
+);
+```
+
+Archiving a post clears `is_featured` in the same statement, so the partial unique index never
+counts an archived post.
+
 ### 3.7 Category path trigger
 
 Enforces BR-032 (path derived, subtree rewritten in one statement), BR-034 (no cycles) and BR-035
@@ -882,7 +955,20 @@ FROM variants v
 JOIN products p ON p.id = v.product_id;
 ```
 
-Brands, categories and product media hold nothing private and are read directly, with archived
+Blog posts reach the storefront only through this view (BR-131). It is the one view that reads
+`users`, and it takes the author's `name` and `bio`, nothing else (BR-133).
+
+```sql
+CREATE VIEW storefront_blog_posts WITH (security_invoker = true) AS
+SELECT b.id, b.tenant_id, b.category_id, b.slug, b.title, b.excerpt, b.body, b.cover_r2_key,
+       b.tags, b.is_featured, b.published_at,
+       u.name AS author_name, u.bio AS author_bio
+FROM blog_posts b
+LEFT JOIN users u ON u.id = b.author_id
+WHERE b.status = 'published' AND b.archived_at IS NULL AND b.published_at <= now();
+```
+
+Brands, categories, blog categories and product media hold nothing private and are read directly, with archived
 rows filtered in the query. A product image tied to a variant the views do not show is returned
 with `variant_id = null`, so no hidden variant's id escapes (BR-081).
 
@@ -931,7 +1017,8 @@ variant of a product contend on one row, and erase the difference between on-han
 | Change | Tables |
 |---|---|
 | Removed | `stock_locations`, `stock_ledger_entries`, `stock_balances`, `channel_events`, `reservations`, `fulfillments`, `fulfillment_lines`, `shipments`, `returns`, `return_lines`, `idempotency_keys`, `outbound_webhooks` (all from the v1.0 spec, never built) |
-| Added | `customers`, `customer_sessions`, `carts`, `cart_items`, `orders`, `order_lines`, `order_sequences`, `channels`, `channel_listings`, `audit_log`, `jobs`, and in v2.1 `storefront_settings`, `payments` |
+| Added | `customers`, `customer_sessions`, `carts`, `cart_items`, `orders`, `order_lines`, `order_sequences`, `channels`, `channel_listings`, `audit_log`, `jobs`, in v2.1 `storefront_settings`, `payments`, and in v2.20 `blog_categories`, `blog_posts`, `blog_post_products` |
+| `users` (v2.20) | `bio` added; `UNIQUE (id, tenant_id)` added for the blog author FK (BR-133) |
 | `users.role` | `warehouse` removed from the CHECK (BR-023). Migration: P1-017 |
 | `api_keys` | `permissions` and `key_prefix` dropped; `allowed_origin` added (one URL per key). One kind of key, no `kind` column (BR-028). Migration: P1-019. v2.12 adds `key_last4` |
 | `brands` | `channel_brand_ids` dropped (marketplace CSV export retired, BR-061) |

@@ -38,7 +38,7 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at FROM users
+SELECT id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio FROM users
 WHERE email = $1
 `
 
@@ -58,6 +58,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Status,
 		&i.LastLoginAt,
 		&i.CreatedAt,
+		&i.Bio,
 	)
 	return i, err
 }

@@ -58,6 +58,8 @@ func TestPlatformSchema(t *testing.T) {
 			{"status", "text", false},
 			{"last_login_at", "timestamp with time zone", true},
 			{"created_at", "timestamp with time zone", false},
+			// 000028 adds it, so it sits last, not before created_at as in the ERD.
+			{"bio", "text", true},
 		}},
 		{"refresh_tokens", []column{
 			{"id", "uuid", false},

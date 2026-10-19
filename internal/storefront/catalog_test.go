@@ -20,6 +20,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/biteship"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/carts"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/customers"
@@ -158,7 +159,7 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = pay.client(), testBox(t), "http://api.test"
 	ordersSvc.Mail = mail.queue
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
-		Carts: carts.NewService(store, files), Orders: ordersSvc,
+		Blog: blog.NewService(store, files), Carts: carts.NewService(store, files), Orders: ordersSvc,
 		Customers: cust, Team: team.NewService(store, nil, testBox(t)),
 		OrderTokens: tokens}), NewKeys(store), signer, nil),
 		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust, files: files, store: store}

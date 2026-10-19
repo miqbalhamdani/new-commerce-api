@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.19.0
+  version: 2.22.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -10,7 +10,7 @@ info:
     **This file is a skeleton plus the paths already built.** It carries the conventions from
     `04-api-spec.md` §1 that every endpoint depends on — authentication, the error envelope,
     money, pagination, optimistic concurrency, rate limiting — and only the endpoints whose
-    backlog item is done: `P1-011` the three auth paths, `P1-012` roles, `P1-021` brands, `P1-024` categories, `P1-028` products, `P1-029` variants, `P1-060` jobs, `P1-040` the variant matrix, `P1-043` media, `P1-072` bulk, `P1-073` import, `P1-064` users, `P1-071` settings, `P1-077` the audit log, `P1-102` order status routes, `P1-103` the order list, `P1-104` order detail, `P1-105` manual orders, `P1-106` customers, `P1-107` order export, `P1-200` API keys, `P1-216` storefront settings, `P1-218` shipping rates, `P1-221` the Midtrans webhook.
+    backlog item is done: `P1-011` the three auth paths, `P1-012` roles, `P1-021` brands, `P1-024` categories, `P1-028` products, `P1-029` variants, `P1-060` jobs, `P1-040` the variant matrix, `P1-043` media, `P1-072` bulk, `P1-073` import, `P1-064` users, `P1-071` settings, `P1-077` the audit log, `P1-102` order status routes, `P1-103` the order list, `P1-104` order detail, `P1-105` manual orders, `P1-106` customers, `P1-107` order export, `P1-200` API keys, `P1-216` storefront settings, `P1-218` shipping rates, `P1-221` the Midtrans webhook, `P1-602` blog categories, `P1-603` blog posts.
 
     Every other path is added by the backlog item that builds it (`05-backlog.md`). The API repo
     generates a strict server interface from this file, so a path listed here before its handler
@@ -1079,8 +1079,10 @@ paths:
         Bytes go straight from the browser to R2 with the returned URL; they never pass through
         the API (BR-051). `product_image`: JPEG, PNG or WebP up to 20 MB, `product_id` required,
         `media:write`. `product_import`: CSV up to 50 MB, no `product_id`, `products:write`; the
-        key carries the future job's id. The key contains the content hash (BR-053). The URL
-        lives 10 minutes.
+        key carries the future job's id. `blog_cover`: an image as `product_image`, `post_id`
+        required, `blog:write`; there is no confirm, the key is set on the post (BR-135).
+        `blog_image`: the same, for an image in the post's body, which links it by the returned
+        `public_url`. The key contains the content hash (BR-053). The URL lives 10 minutes.
       requestBody:
         required: true
         content:
@@ -1293,9 +1295,10 @@ paths:
       - $ref: "#/components/parameters/Id"
     patch:
       operationId: updateUser
-      summary: Change a user's role, or disable or re-enable them
+      summary: Change a user's role or bio, or disable or re-enable them
       description: |
-        No `If-Match` (BR-010). `status` is `active` (re-enable a disabled user) or `disabled`;
+        No `If-Match` (BR-010). `bio` is the public line under their blog posts; `null` or `""`
+        clears it (BR-133). `status` is `active` (re-enable a disabled user) or `disabled`;
         an invited user becomes active only by accepting. Disabling revokes their refresh
         tokens, so they are out within 15 minutes (BR-027). Only an owner can grant `owner` or
         change an owner (BR-023), else `403`. The last active owner cannot be demoted or
@@ -2151,6 +2154,243 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /blog/categories:
+    get:
+      operationId: listBlogCategories
+      summary: Blog categories, by position
+      description: |
+        Unpaginated, sorted by `position` then `name`. Archived categories are listed only with
+        `archived=true` (BR-012). Requires `blog:read`.
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Every blog category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogCategoryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createBlogCategory
+      summary: Create a blog category
+      description: |
+        `slug` defaults to `slugify(name)`; a clash, archived categories included, is `422` on
+        `slug` when sent, else on `name` (BR-130). Requires `blog:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogCategoryCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogCategory"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /blog/categories/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateBlogCategory
+      summary: Rename, re-slug or reorder a blog category
+      description: |
+        A new `name` without `slug` re-derives the slug (BR-030, BR-130). No `If-Match` (BR-010).
+        Requires `blog:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogCategoryUpdate"
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogCategory"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveBlogCategory
+      summary: Delete a blog category
+      description: |
+        Soft delete: sets `archived_at`. Its posts keep it and show uncategorised on the storefront
+        (BR-012, BR-130). Requires `blog:write`.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /blog/posts:
+    get:
+      operationId: listBlogPosts
+      summary: Blog posts, newest first
+      description: |
+        Cursor-paginated, newest created first. `q` matches the title. Archived posts are listed
+        only with `archived=true` (BR-012). Requires `blog:read`.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BlogPostStatus"
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of posts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    post:
+      operationId: createBlogPost
+      summary: Create a blog post
+      description: |
+        Starts as a draft unless `status` says otherwise. `slug` defaults to `slugify(title)`
+        (BR-131); `author_id` defaults to the signed-in user (BR-133). The cover is set by `PATCH`
+        once the post exists, since its key carries the post's id (BR-135). Requires `blog:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogPostCreate"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /blog/posts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getBlogPost
+      summary: One blog post
+      description: |
+        With `excerpt_preview`, the excerpt the storefront shows (BR-132). Requires `blog:read`.
+      responses:
+        "200":
+          description: The post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateBlogPost
+      summary: Edit, publish, schedule or feature a blog post
+      description: |
+        Publishing without `published_at` sets it to now; a later `published_at` schedules the
+        post. `is_featured: true` clears the flag on the post that had it (BR-131). `product_ids`
+        replaces the list in its order (BR-134). `cover_r2_key` must be one of this post's keys
+        and exist (BR-135). No `If-Match` (BR-010). Requires `blog:write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogPostUpdate"
+      responses:
+        "200":
+          description: The post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      operationId: archiveBlogPost
+      summary: Delete a blog post
+      description: |
+        Soft delete: sets `archived_at` and clears `is_featured` (BR-012, BR-131). Requires
+        `blog:write`.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
 
   securitySchemes:
@@ -2957,10 +3197,14 @@ components:
       properties:
         purpose:
           type: string
-          enum: [product_image, product_import]
+          enum: [product_image, product_import, blog_cover, blog_image]
         product_id:
           type: string
           format: uuid
+        post_id:
+          type: string
+          format: uuid
+          description: The blog post a `blog_cover` or `blog_image` is for.
         mime_type:
           type: string
         bytes:
@@ -2982,6 +3226,11 @@ components:
         expires_in:
           type: integer
           examples: [600]
+        public_url:
+          type: string
+          description: >-
+            Where the image is served once uploaded; set for `blog_cover` and `blog_image`, so a
+            body image can be linked from the post's Markdown (BR-135).
 
     ConfirmMedia:
       type: object
@@ -3254,7 +3503,7 @@ components:
 
     User:
       type: object
-      required: [id, email, name, role, status, last_login_at, created_at]
+      required: [id, email, name, role, status, bio, last_login_at, created_at]
       properties:
         id:
           type: string
@@ -3270,6 +3519,9 @@ components:
         status:
           type: string
           enum: [invited, active, disabled]
+        bio:
+          type: [string, "null"]
+          description: Shown on the storefront under the user's blog posts (BR-133).
         last_login_at:
           type: [string, "null"]
           format: date-time
@@ -3313,6 +3565,257 @@ components:
         status:
           type: string
           enum: [active, disabled]
+        bio:
+          type: [string, "null"]
+          maxLength: 300
+
+    BlogCategory:
+      type: object
+      required: [id, name, slug, position, archived_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          description: Defaults to `slugify(name)`; editable (BR-130).
+          examples: ["bedding-tips"]
+        position:
+          type: integer
+          description: Tab order, ascending (BR-130).
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BlogCategoryCreate:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: Omitted means `slugify(name)` (BR-130).
+        position:
+          type: integer
+          default: 0
+
+    BlogCategoryUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        position:
+          type: integer
+
+    BlogCategoryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogCategory"
+
+    BlogPostStatus:
+      type: string
+      enum: [draft, published]
+      description: A published post with a later `published_at` is scheduled (BR-131).
+
+    BlogPostProduct:
+      type: object
+      required: [id, title, cover_url]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        cover_url:
+          type: [string, "null"]
+          description: The product's first image, its 200 px derivative once made.
+
+    BlogPostListItem:
+      type: object
+      required: [id, title, slug, status, published_at, is_featured, category, author, cover_url,
+                 archived_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: "#/components/schemas/BlogPostStatus"
+        published_at:
+          type: [string, "null"]
+          format: date-time
+        is_featured:
+          type: boolean
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        author:
+          oneOf:
+            - $ref: "#/components/schemas/Ref"
+            - type: "null"
+        cover_url:
+          type: [string, "null"]
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BlogPost:
+      allOf:
+        - $ref: "#/components/schemas/BlogPostListItem"
+        - type: object
+          required: [excerpt, excerpt_preview, body, tags, cover_r2_key, products]
+          properties:
+            excerpt:
+              type: [string, "null"]
+              description: As written; `null` when the editor left it empty (BR-132).
+            excerpt_preview:
+              type: string
+              description: |
+                The excerpt the storefront shows: `excerpt`, or the one worked out from `body`.
+                The editor shows it as the excerpt's placeholder (BR-132).
+            body:
+              type: string
+              description: >-
+                Markdown (BR-135). An image URL ending in `#w=NN` is that percent of the column
+                wide.
+            tags:
+              type: array
+              items:
+                type: string
+            cover_r2_key:
+              type: [string, "null"]
+            products:
+              type: array
+              description: Linked products in their order, hidden ones included (BR-134).
+              items:
+                $ref: "#/components/schemas/BlogPostProduct"
+
+    BlogPostCreate:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: Omitted means `slugify(title)` (BR-131).
+        body:
+          type: string
+        excerpt:
+          type: string
+        category_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+          description: Omitted means the signed-in user (BR-133).
+        tags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/BlogPostStatus"
+        published_at:
+          type: string
+          format: date-time
+        is_featured:
+          type: boolean
+        product_ids:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            format: uuid
+
+    BlogPostUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        body:
+          type: string
+        excerpt:
+          type: [string, "null"]
+        category_id:
+          type: [string, "null"]
+          format: uuid
+        author_id:
+          type: [string, "null"]
+          format: uuid
+        tags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/BlogPostStatus"
+        published_at:
+          type: [string, "null"]
+          format: date-time
+          description: "`null` only on a draft (BR-131)."
+        is_featured:
+          type: boolean
+        cover_r2_key:
+          type: [string, "null"]
+          description: "A key from `POST /media/presign` with `purpose: blog_cover` (BR-135)."
+        product_ids:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            format: uuid
+
+    BlogPostPage:
+      type: object
+      required: [data, next_cursor]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogPostListItem"
+        next_cursor:
+          type: [string, "null"]
 
     Settings:
       type: object
