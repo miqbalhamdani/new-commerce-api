@@ -328,6 +328,22 @@ func TestBlogPosts(t *testing.T) {
 			"mime_type": "image/png", "bytes": 4, "sha256": strings.Repeat("ab", 32)})
 		assertProblem(t, code, e, 422, "validation_failed", "post_id")
 	})
+	t.Run("a body image is presigned under the post, with its public URL", func(t *testing.T) {
+		code, e := do("POST", "/v1/media/presign", map[string]any{"purpose": "blog_image", "post_id": id,
+			"mime_type": "image/webp", "bytes": 4, "sha256": strings.Repeat("cd", 32)})
+		key, _ := e["r2_key"].(string)
+		u, _ := e["public_url"].(string)
+		if code != 200 || !strings.Contains(key, "/blogs/"+id+"/") || !strings.HasSuffix(u, "/"+key) {
+			t.Fatalf("presign: %d %v", code, e)
+		}
+		code, e = do("POST", "/v1/media/presign", map[string]any{"purpose": "blog_image",
+			"mime_type": "image/webp", "bytes": 4, "sha256": strings.Repeat("cd", 32)})
+		assertProblem(t, code, e, 422, "validation_failed", "post_id")
+		ops := signInAnotherUser(ctx, t, store, tenantID, auth.RoleOps)
+		code, e = apiClient(t, ops)("POST", "/v1/media/presign", map[string]any{"purpose": "blog_image", "post_id": id,
+			"mime_type": "image/webp", "bytes": 4, "sha256": strings.Repeat("cd", 32)})
+		assertProblem(t, code, e, 403, "permission_denied", "")
+	})
 	t.Run("list filters and pages; delete archives and clears featured", func(t *testing.T) {
 		code, l := do("GET", "/v1/blog/posts?q=panduan", nil)
 		if code != 200 || len(l["data"].([]any)) != 1 {

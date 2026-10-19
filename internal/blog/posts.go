@@ -89,11 +89,13 @@ type PostFilter struct {
 	Limit      int
 }
 
-// Presign is a signed direct upload of a cover.
+// Presign is a signed direct upload of a post's image, and where it will be
+// served from.
 type Presign struct {
 	URL       string
 	Key       string
 	ExpiresIn int
+	PublicURL string
 }
 
 // CreatePost makes a post, a draft unless in says otherwise. Its slug comes
@@ -261,9 +263,9 @@ func (s *Service) ListPosts(ctx context.Context, f PostFilter) ([]PostListRow, *
 	return out, next, nil
 }
 
-// PresignCover signs an upload of a post's cover to
+// PresignImage signs an upload of a post's cover or body image to
 // {tenant}/blogs/{post}/{sha256}.{ext} (BR-053, BR-135).
-func (s *Service) PresignCover(ctx context.Context, postID uuid.UUID, mime string, bytes int64, sha string) (Presign, error) {
+func (s *Service) PresignImage(ctx context.Context, postID uuid.UUID, mime string, bytes int64, sha string) (Presign, error) {
 	ext, ok := coverTypes[mime]
 	if !ok {
 		return Presign{}, fieldError("mime_type", "images are image/jpeg, image/png or image/webp")
@@ -283,7 +285,7 @@ func (s *Service) PresignCover(ctx context.Context, postID uuid.UUID, mime strin
 	}
 	key := fmt.Sprintf("%s/blogs/%s/%s.%s", tenantOf(ctx), postID, sha, ext)
 	u, err := s.files.PresignPut(ctx, key, presignTTL)
-	return Presign{URL: u, Key: key, ExpiresIn: int(presignTTL.Seconds())}, err
+	return Presign{URL: u, Key: key, ExpiresIn: int(presignTTL.Seconds()), PublicURL: s.files.PublicURL(key)}, err
 }
 
 // checkCover holds a cover key to the post's own prefix and to an uploaded

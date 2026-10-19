@@ -462,6 +462,7 @@ func (e OrderStatus) Valid() bool {
 // Defines values for PresignRequestPurpose.
 const (
 	PresignRequestPurposeBlogCover     PresignRequestPurpose = "blog_cover"
+	PresignRequestPurposeBlogImage     PresignRequestPurpose = "blog_image"
 	PresignRequestPurposeProductImage  PresignRequestPurpose = "product_image"
 	PresignRequestPurposeProductImport PresignRequestPurpose = "product_import"
 )
@@ -470,6 +471,8 @@ const (
 func (e PresignRequestPurpose) Valid() bool {
 	switch e {
 	case PresignRequestPurposeBlogCover:
+		return true
+	case PresignRequestPurposeBlogImage:
 		return true
 	case PresignRequestPurposeProductImage:
 		return true
@@ -1828,7 +1831,7 @@ type PresignRequest struct {
 	Bytes    int64  `json:"bytes"`
 	MimeType string `json:"mime_type"`
 
-	// PostId The blog post a `blog_cover` is for.
+	// PostId The blog post a `blog_cover` or `blog_image` is for.
 	PostId    *openapi_types.UUID   `json:"post_id,omitempty"`
 	ProductId *openapi_types.UUID   `json:"product_id,omitempty"`
 	Purpose   PresignRequestPurpose `json:"purpose"`
@@ -1841,9 +1844,12 @@ type PresignRequestPurpose string
 // PresignResponse defines model for PresignResponse.
 type PresignResponse struct {
 	// ExpiresIn Examples: 600
-	ExpiresIn int    `json:"expires_in"`
-	R2Key     string `json:"r2_key"`
-	UploadUrl string `json:"upload_url"`
+	ExpiresIn int `json:"expires_in"`
+
+	// PublicUrl Where the image is served once uploaded; set for `blog_cover` and `blog_image`, so a body image can be linked from the post's Markdown (BR-135).
+	PublicUrl *string `json:"public_url,omitempty"`
+	R2Key     string  `json:"r2_key"`
+	UploadUrl string  `json:"upload_url"`
 }
 
 // Problem RFC 9457 `application/problem+json`. Every error response in this API uses it.
