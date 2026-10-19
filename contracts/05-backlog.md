@@ -362,7 +362,7 @@ website through `/v1/storefront/blog/posts`, and a scheduled one appears by itse
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-601 | Blog schema | BE | — | Migration `000028_blog` matches `03-erd.md` §3.8 and §4: three tables with RLS, the same-tenant FKs, `users.bio`, `storefront_blog_posts`; `blog:read`/`blog:write` in the role matrix (BR-130–135) | wip | Iqbal Hamdani |
+| P1-601 | Blog schema | BE | — | Migration `000028_blog` matches `03-erd.md` §3.8 and §4: three tables with RLS, the same-tenant FKs, `users.bio`, `storefront_blog_posts`; `blog:read`/`blog:write` in the role matrix (BR-130–135) | review | Iqbal Hamdani |
 | P1-602 | Blog categories API | BE | 601 | As §13.1; slug clash is `422` on `slug` or `name`; `DELETE` archives (BR-012, BR-130) | wip | Iqbal Hamdani |
 | P1-603 | Blog posts API and cover upload | BE | 601, 602 | As §13.2 and §8 (`blog_cover`); one featured post per shop; publishing sets `published_at`; `excerpt_preview` filled; a cover key outside the post's prefix is `422`; `*/blogs/*` is public in the dev bucket (BR-131–135) | wip | Iqbal Hamdani |
 | P1-604 | Author bio on users | BE | 601 | `User` carries `bio`; `PATCH /v1/users/{id}` sets and clears it (§4, BR-133) | wip | Iqbal Hamdani |

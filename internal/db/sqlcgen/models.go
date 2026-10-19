@@ -37,6 +37,43 @@ type AuditLog struct {
 	CreatedAt   time.Time
 }
 
+type BlogCategory struct {
+	ID         uuid.UUID
+	TenantID   uuid.UUID
+	Name       string
+	Slug       string
+	Position   int32
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type BlogPost struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	CategoryID  *uuid.UUID
+	AuthorID    *uuid.UUID
+	Title       string
+	Slug        string
+	Excerpt     *string
+	Body        string
+	CoverR2Key  *string
+	Tags        []string
+	Status      string
+	IsFeatured  bool
+	PublishedAt *time.Time
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type BlogPostProduct struct {
+	TenantID  uuid.UUID
+	PostID    uuid.UUID
+	ProductID uuid.UUID
+	Position  int32
+}
+
 type Brand struct {
 	ID         uuid.UUID
 	TenantID   uuid.UUID
@@ -244,6 +281,22 @@ type RefreshToken struct {
 	CreatedAt   time.Time
 }
 
+type StorefrontBlogPost struct {
+	ID          uuid.UUID
+	TenantID    uuid.UUID
+	CategoryID  *uuid.UUID
+	Slug        string
+	Title       string
+	Excerpt     *string
+	Body        string
+	CoverR2Key  *string
+	Tags        []string
+	IsFeatured  bool
+	PublishedAt *time.Time
+	AuthorName  *string
+	AuthorBio   *string
+}
+
 type StorefrontProduct struct {
 	ID          uuid.UUID
 	TenantID    uuid.UUID
@@ -316,6 +369,7 @@ type User struct {
 	Status       string
 	LastLoginAt  *time.Time
 	CreatedAt    time.Time
+	Bio          *string
 }
 
 type Variant struct {
