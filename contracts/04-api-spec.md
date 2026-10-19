@@ -1798,7 +1798,9 @@ DELETE /v1/blog/posts/{id}
   shop, with no repeats, at most 12, else `422` on `product_ids` (BR-134). `products` lists them
   all, hidden ones included, so the editor can remove one.
 - **Tags.** At most 10, each trimmed and 1–40 characters, else `422` on `tags`; repeats are dropped.
-- **Publishing.** `published_at` must carry an offset. Back to `draft` keeps the date (BR-131).
+- **Publishing.** `published_at` must carry an offset. Back to `draft` keeps the date (BR-131);
+  `published_at: null` on a published post is `422`.
+- **Archived.** An archived post cannot be edited: `PATCH` is `422` on `status`, as for products.
 - **List.** `BlogPostListItem` (the post without `body`, `excerpt`, `excerpt_preview`, `tags`
   and `products`), newest created first; `q` matches the title, `status` is `draft` or
   `published`, `category_id` filters by category. Cursor paging.

@@ -109,10 +109,10 @@ func (s *Store) PublicURL(key string) string { return s.publicBase + "/" + key }
 // same two lifecycle rules at provisioning (P1-045).
 var Expiry = map[string]int{"jobs/": 30, "exports/": 7}
 
-// EnsureBucket creates the bucket, lets anyone read product images and sets
-// the Expiry rules, the way the R2 bucket and image domain do in production
-// (P1-045). For development; production buckets are provisioned, not created
-// by the app.
+// EnsureBucket creates the bucket, lets anyone read product images and blog
+// covers and sets the Expiry rules, the way the R2 bucket and image domain do
+// in production (P1-045). For development; production buckets are
+// provisioned, not created by the app.
 func (s *Store) EnsureBucket(ctx context.Context) error {
 	exists, err := s.client.BucketExists(ctx, s.bucket)
 	if err != nil {
@@ -124,7 +124,7 @@ func (s *Store) EnsureBucket(ctx context.Context) error {
 		}
 	}
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},
-		"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*/products/*"]}]}`, s.bucket)
+		"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%[1]s/*/products/*","arn:aws:s3:::%[1]s/*/blogs/*"]}]}`, s.bucket)
 	if err := s.client.SetBucketPolicy(ctx, s.bucket, policy); err != nil {
 		return fmt.Errorf("bucket policy: %w", err)
 	}
