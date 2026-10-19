@@ -1,0 +1,101 @@
+{{/* The shell every staff and owner email shares (BR-128), from the Belli.id
+     email design: a 600px card on a gray page, the logo, then each email's
+     "body" rows and its "footer" line. Tables and inline styles, for mail
+     clients. */}}
+{{define "layout"}}<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{template "title" .}}</title>
+{{mso}}
+<style>
+body{margin:0;padding:0;}
+table{border-collapse:collapse;}
+a{color:#465FFF;}
+@media only screen and (max-width:620px){
+  .wrap{width:100% !important;}
+  .card{padding:28px 20px !important;}
+  .code{font-size:30px !important;letter-spacing:6px !important;}
+}
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#F9FAFB;">
+<span style="display:none;font-size:1px;color:#F9FAFB;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">{{template "preheader" .}}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F9FAFB" style="width:100%;background-color:#F9FAFB;">
+<tr>
+<td align="center" style="padding:32px 16px;">
+<table role="presentation" class="wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+
+<tr>
+<td class="card" bgcolor="#FFFFFF" style="background-color:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:40px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td align="center" style="padding:0 0 28px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td width="32" height="32" align="center" valign="middle" bgcolor="#465FFF" style="width:32px;height:32px;border-radius:8px;background-color:#465FFF;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:18px;line-height:32px;font-weight:700;color:#FFFFFF;mso-line-height-rule:exactly;">B</td>
+<td width="8" style="width:8px;font-size:0;line-height:0;">&nbsp;</td>
+<td valign="middle" style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:18px;line-height:24px;font-weight:600;color:#1D2939;mso-line-height-rule:exactly;">Belli.id</td>
+</tr>
+</table>
+</td>
+</tr>
+{{template "body" .}}
+</table>
+</td>
+</tr>
+
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#667085;padding:24px 8px 0 8px;mso-line-height-rule:exactly;">{{template "footer" .}}</td>
+</tr>
+
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+{{end}}
+
+{{/* The primary button: (button link label spaced), spaced setting it off
+     from a box above it. "fallback" spells the link out for clients that
+     block buttons. */}}
+{{define "button"}}<tr>
+<td{{if .Spaced}} style="padding:28px 0 0 0;"{{end}}>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td bgcolor="#465FFF" style="background-color:#465FFF;border-radius:8px;">
+<a href="{{.Link}}" style="display:block;padding:12px 22px;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;mso-line-height-rule:exactly;">{{.Label}}</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>{{end}}
+
+{{define "fallback"}}<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#667085;padding:20px 0 0 0;mso-line-height-rule:exactly;">Button not working? Copy this link into your browser:<br><a href="{{.}}" style="color:#465FFF;text-decoration:underline;word-break:break-all;">{{.}}</a></td>
+</tr>{{end}}
+
+{{define "divider"}}<tr>
+<td style="padding:28px 0 0 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr><td style="border-top:1px solid #E4E7EC;font-size:0;line-height:0;height:1px;">&nbsp;</td></tr>
+</table>
+</td>
+</tr>{{end}}
+
+{{define "heading"}}<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:24px;line-height:32px;font-weight:600;color:#1D2939;padding:0 0 12px 0;mso-line-height-rule:exactly;">{{.}}</td>
+</tr>{{end}}
+
+{{/* A quiet closing line under the card's content. */}}
+{{define "aside"}}<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#667085;padding:24px 0 0 0;mso-line-height-rule:exactly;">{{.}}</td>
+</tr>{{end}}
+
+{{/* Mail a shop sends: who it is from, and where a reply goes (BR-128). */}}
+{{define "shop-footer"}}Sent by Belli.id on behalf of {{.Shop}}.{{if .ReplyTo}} Reply to this email to reach the shop at <a href="mailto:{{.ReplyTo}}" style="color:#667085;text-decoration:underline;">{{.ReplyTo}}</a>.{{end}}{{end}}

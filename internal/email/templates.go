@@ -1,10 +1,86 @@
 package email
 
 import (
+	"embed"
 	"fmt"
 	"html"
+	htmltemplate "html/template"
 	"strings"
+	texttemplate "text/template"
 )
+
+// The staff and owner emails are files in the Belli.id email design: an HTML
+// part on templates/layout.html and a plain-text twin.
+//
+//go:embed templates
+var files embed.FS
+
+// msoHead is the web font for most clients and the Arial fallback for
+// Outlook. html/template drops HTML comments, so these conditional comments
+// go in as trusted markup.
+const msoHead = `<!--[if !mso]><!-->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--<![endif]-->
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<style>table,td,a,span{font-family:Arial,Helvetica,sans-serif !important;}</style>
+<![endif]-->`
+
+type button struct {
+	Link, Label string
+	Spaced      bool
+}
+
+var funcs = htmltemplate.FuncMap{
+	"mso": func() htmltemplate.HTML { return msoHead },
+	"button": func(link, label string, spaced bool) button {
+		return button{Link: link, Label: label, Spaced: spaced}
+	},
+}
+
+// design is one email of the design: its HTML and its plain text.
+type design struct {
+	html *htmltemplate.Template
+	text *texttemplate.Template
+}
+
+func parse(name string) design {
+	return design{
+		html: htmltemplate.Must(htmltemplate.New(name).Funcs(funcs).
+			ParseFS(files, "templates/layout.html", "templates/"+name+".html")),
+		text: texttemplate.Must(texttemplate.ParseFS(files, "templates/"+name+".txt")),
+	}
+}
+
+func (d design) render(m Staff) (text, htmlBody string, err error) {
+	var t, h strings.Builder
+	if err := d.text.Execute(&t, m); err != nil {
+		return "", "", err
+	}
+	if err := d.html.ExecuteTemplate(&h, "layout", m); err != nil {
+		return "", "", err
+	}
+	return t.String(), h.String(), nil
+}
+
+var signup = parse("signup")
+
+// Staff is what a staff or owner email says: the shop, who it is to, and
+// the link (with a code, for a signup).
+type Staff struct {
+	Shop string
+	Name string // the recipient's
+	Code string
+	Link string
+}
+
+// Signup confirms a new owner's email (P1-084, P1-086, BR-026, BR-128), in
+// English (BR-016): the 6-digit code for the screen they are on, and the link
+// for anyone who closed it.
+func Signup(m Staff) (subject, text, htmlBody string, err error) {
+	text, htmlBody, err = signup.render(m)
+	return m.Code + " is your Belli.id code", text, htmlBody, err
+}
 
 // Invitation is the staff invitation (BR-026, BR-128), in English (BR-016).
 func Invitation(shop, inviter, role, link string) (subject, text, htmlBody string) {
@@ -21,33 +97,6 @@ The link works for 7 days. If it has expired, ask %s to send a new invitation.
 <p>The link works for 7 days. If it has expired, ask %s to send a new invitation.</p>`,
 		html.EscapeString(inviter), html.EscapeString(shop), html.EscapeString(role),
 		html.EscapeString(link), html.EscapeString(inviter))
-	return subject, text, htmlBody
-}
-
-// Signup confirms a new owner's email (P1-084, P1-086, BR-026, BR-128), in
-// English (BR-016): the 6-digit code for the screen they are on, and the link
-// for anyone who closed it.
-func Signup(shop, name, code, link string) (subject, text, htmlBody string) {
-	subject = code + " is your Belli.id code"
-	text = fmt.Sprintf(`Hi %s,
-
-Your code to open %s on Belli.id:
-
-    %s
-
-It works for 30 minutes. Or confirm your email and choose a password with this link, which works for 7 days:
-%s
-
-If both have expired, register again with the same email to get new ones.
-If you did not sign up, you can ignore this email.
-`, name, shop, code, link)
-	htmlBody = fmt.Sprintf(`<p>Hi %s,</p>
-<p>Your code to open <strong>%s</strong> on Belli.id:</p>
-<p style="font-size:28px;font-weight:700;letter-spacing:6px">%s</p>
-<p>It works for 30 minutes. Or <a href="%s">confirm your email and choose a password</a> with this link, which works for 7 days.</p>
-<p>If both have expired, register again with the same email to get new ones.
-If you did not sign up, you can ignore this email.</p>`,
-		html.EscapeString(name), html.EscapeString(shop), html.EscapeString(code), html.EscapeString(link))
 	return subject, text, htmlBody
 }
 

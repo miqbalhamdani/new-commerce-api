@@ -145,7 +145,11 @@ func SignupMail(store *db.Store, invites *auth.InviteSigner, adminURL string) em
 		// onboarding afterwards.
 		now := time.Now()
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, now) + "&signup=1"
-		subject, text, html := email.Signup(shop.Name, user.Name, invites.Code(user.ID, user.TenantID, now), link)
+		subject, text, html, err := email.Signup(email.Staff{Shop: shop.Name, Name: user.Name,
+			Code: invites.Code(user.ID, user.TenantID, now), Link: link})
+		if err != nil {
+			return nil, err
+		}
 		return &email.Message{FromName: "Belli.id", To: string(user.Email), Subject: subject, Text: text, HTML: html}, nil
 	}
 }

@@ -1,0 +1,20 @@
+Belli.id
+
+CONFIRM YOUR EMAIL
+
+Hi {{.Name}},
+
+Enter this code on the Belli.id screen you were on to keep setting up {{.Shop}}:
+
+    {{.Code}}
+
+Valid for 30 minutes.
+
+Closed that screen?
+Confirm your email and choose a password from this link instead. It works for 7 days:
+{{.Link}}
+
+Didn't sign up for Belli.id? You can ignore this email.
+
+--
+You're getting this because this address was used to register a shop on Belli.id.

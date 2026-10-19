@@ -1,0 +1,28 @@
+{{/* A new owner's confirmation (P1-084, BR-026): the code for the screen
+     they are on, and the link for anyone who closed it. */}}
+{{define "title"}}Your Belli.id confirmation code{{end}}
+
+{{define "preheader"}}Enter {{.Code}} to keep setting up {{.Shop}}. The code expires in 30 minutes.{{end}}
+
+{{define "body"}}{{template "heading" "Confirm your email"}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#1D2939;padding:0 0 24px 0;mso-line-height-rule:exactly;">Hi {{.Name}},<br><br>Enter this code on the Belli.id screen you were on to keep setting up <strong style="font-weight:600;">{{.Shop}}</strong>.</td>
+</tr>
+<tr>
+<td align="center" bgcolor="#ECF3FF" style="background-color:#ECF3FF;border-radius:8px;padding:22px 20px;">
+<div class="code" style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:36px;line-height:44px;font-weight:600;letter-spacing:8px;color:#3641F5;mso-line-height-rule:exactly;">{{.Code}}</div>
+<div style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#667085;padding-top:4px;mso-line-height-rule:exactly;">Valid for 30 minutes</div>
+</td>
+</tr>
+{{template "divider"}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;font-weight:600;color:#1D2939;padding:24px 0 6px 0;mso-line-height-rule:exactly;">Closed that screen?</td>
+</tr>
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#667085;padding:0 0 20px 0;mso-line-height-rule:exactly;">Confirm your email and choose a password from here instead. This link works for 7 days.</td>
+</tr>
+{{template "button" (button .Link "Confirm email & set password" false)}}
+{{template "fallback" .Link}}
+{{template "aside" "Didn't sign up for Belli.id? You can ignore this email."}}{{end}}
+
+{{define "footer"}}You're getting this because this address was used to register a shop on Belli.id.{{end}}
