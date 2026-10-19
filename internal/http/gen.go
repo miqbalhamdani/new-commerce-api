@@ -963,7 +963,7 @@ type BlogPost struct {
 	ArchivedAt *time.Time `json:"archived_at"`
 	Author     *Ref       `json:"author"`
 
-	// Body Markdown (BR-135).
+	// Body Markdown (BR-135). An image URL ending in `#w=NN` is that percent of the column wide.
 	Body       string    `json:"body"`
 	Category   *Ref      `json:"category"`
 	CoverR2Key *string   `json:"cover_r2_key"`

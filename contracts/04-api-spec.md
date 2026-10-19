@@ -1680,7 +1680,8 @@ GET /v1/storefront/blog/posts/7-panduan-lengkap-cara-memilih-sprei
 ```
 
 - `body` is Markdown, as written (BR-135). Its images are `![alt](public_url)`, uploaded with
-  `purpose: blog_image`.
+  `purpose: blog_image`; one ending in `#w=33`, `#w=50` or `#w=75` is that percent of the column
+  wide, else the full column.
 - `products` are the post's linked products that are visible, in the post's order (BR-134).
 - `related` holds up to three other live posts, newest first, from the post's category, or from
   every post when it has none.

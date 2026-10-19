@@ -1025,7 +1025,10 @@ it without raw HTML. The cover is one image, used on the list card, the featured
 post header, uploaded like a product image (BR-051) to `{tenant}/blogs/{post}/` (BR-053), with no
 derivatives yet. Its alt text is the post title. Images in the body are uploaded the same way to the
 same prefix and linked from the Markdown by their public URL, with the alt text the editor gives
-them. An image taken out of the body, like a replaced cover, stays stored.
+them. An image taken out of the body, like a replaced cover, stays stored. A body image's URL may
+end in `#w=33`, `#w=50` or `#w=75`: its width as a percent of the text column; without it the image
+fills the column. The website sets the width from it; a renderer that ignores it shows the image
+full width.
 
 ---
 

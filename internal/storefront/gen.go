@@ -303,7 +303,7 @@ type BlogCategoryRef struct {
 type BlogPostDetail struct {
 	Author *BlogAuthor `json:"author"`
 
-	// Body Markdown, as written (BR-135).
+	// Body Markdown, as written (BR-135). An image URL ending in `#w=NN` is that percent of the column wide.
 	Body string `json:"body"`
 
 	// Category `null` when the post has none or it is archived (BR-130).

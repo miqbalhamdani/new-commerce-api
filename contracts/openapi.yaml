@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.21.0
+  version: 2.22.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -3706,7 +3706,9 @@ components:
                 The editor shows it as the excerpt's placeholder (BR-132).
             body:
               type: string
-              description: Markdown (BR-135).
+              description: >-
+                Markdown (BR-135). An image URL ending in `#w=NN` is that percent of the column
+                wide.
             tags:
               type: array
               items:

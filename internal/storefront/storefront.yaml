@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.11.0
+  version: 0.12.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -307,7 +307,8 @@ paths:
       summary: One live blog post, its products and related posts
       description: |
         A draft, scheduled, archived or unknown slug is `404` (BR-131). `body` is Markdown, as
-        written; render it without raw HTML (BR-135). `products` are the post's linked products
+        written; render it without raw HTML, and an image whose URL ends in `#w=NN` at that
+        percent of the column (BR-135). `products` are the post's linked products
         that are visible, in the post's order (BR-134). `related` holds up to three other live
         posts, newest first, from the post's category, or from every post when it has none.
       responses:
@@ -1296,7 +1297,9 @@ components:
           properties:
             body:
               type: string
-              description: Markdown, as written (BR-135).
+              description: >-
+                Markdown, as written (BR-135). An image URL ending in `#w=NN` is that percent of
+                the column wide.
             products:
               type: array
               items:
