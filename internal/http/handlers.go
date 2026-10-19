@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
@@ -25,6 +26,7 @@ const refreshCookieName = "refresh_token"
 type Server struct {
 	auth    *auth.Service
 	catalog *catalog.Service
+	blog    *blog.Service
 	jobs    *jobs.Service
 	team    *team.Service
 	orders  *orders.Service
@@ -47,6 +49,7 @@ type Server struct {
 type Services struct {
 	Auth    *auth.Service
 	Catalog *catalog.Service
+	Blog    *blog.Service
 	Jobs    *jobs.Service
 	Team    *team.Service
 	Orders  *orders.Service
@@ -62,7 +65,7 @@ type Services struct {
 }
 
 func NewServer(svc Services, secureCookies bool) *Server {
-	return &Server{auth: svc.Auth, catalog: svc.Catalog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
+	return &Server{auth: svc.Auth, catalog: svc.Catalog, blog: svc.Blog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
 		resets: svc.Resets, limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID, secureCookies: secureCookies}
 }
 
