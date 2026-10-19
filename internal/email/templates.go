@@ -67,6 +67,7 @@ func (d design) render(m Staff) (text, htmlBody string, err error) {
 var (
 	signup     = parse("signup")
 	invitation = parse("invitation")
+	staffReset = parse("staff_reset")
 )
 
 // Staff is what a staff or owner email says: the shop, who it is to, and
@@ -75,6 +76,7 @@ var (
 type Staff struct {
 	Shop         string
 	Name         string // the recipient's
+	Address      string // the recipient's email, to say which account
 	Code         string
 	Link         string
 	Inviter      string
@@ -111,6 +113,13 @@ func Signup(m Staff) (subject, text, htmlBody string, err error) {
 func Invitation(m Staff) (subject, text, htmlBody string, err error) {
 	text, htmlBody, err = invitation.render(m)
 	return fmt.Sprintf("%s invited you to %s", m.Inviter, m.Shop), text, htmlBody, err
+}
+
+// StaffPasswordReset is a staff member's reset link (P1-088, BR-094,
+// BR-128), in English (BR-016). Customers get PasswordReset.
+func StaffPasswordReset(m Staff) (subject, text, htmlBody string, err error) {
+	text, htmlBody, err = staffReset.render(m)
+	return "Reset your " + m.Shop + " password", text, htmlBody, err
 }
 
 // PasswordReset is a customer's reset link (BR-094, BR-128), in English

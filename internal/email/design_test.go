@@ -65,6 +65,30 @@ func TestInvitationDesign(t *testing.T) {
 	mustContain(t, "html", html, "Sent by Belli.id on behalf of Toko &lt;ABC&gt;.")
 }
 
+// TestStaffResetDesign: the staff reset names the admin account and its
+// address; a customer's reset is not this email.
+func TestStaffResetDesign(t *testing.T) {
+	m := Staff{Shop: "Toko <ABC>", Name: "Rizky", Address: "rizky@example.com",
+		Link: "http://admin/reset-password#token=rst_x"}
+	subject, text, html, err := StaffPasswordReset(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject != "Reset your Toko <ABC> password" {
+		t.Errorf("subject %q", subject)
+	}
+	mustContain(t, "text", text, "RESET YOUR PASSWORD", "Toko <ABC> admin account (rizky@example.com)", "rst_x",
+		"works once and expires in 30 minutes", "Sent by Belli.id on behalf of Toko <ABC>.")
+	mustContain(t, "html", html, "Reset your password", "admin account (rizky@example.com)",
+		`href="http://admin/reset-password#token=rst_x"`, ">Reset password</a>", "Toko &lt;ABC&gt;", "<!--[if mso]>")
+	if strings.Contains(html, "Reply to this email") {
+		t.Errorf("no reply address, yet the footer offers one")
+	}
+	if _, customer, _ := PasswordReset("Toko ABC", "Rina", "http://shop/reset"); strings.Contains(customer, "admin account") {
+		t.Errorf("a customer's reset speaks of an admin account")
+	}
+}
+
 // TestPreviewEmails writes the designed emails to EMAIL_PREVIEW_DIR, to look
 // at in a browser; skipped otherwise.
 func TestPreviewEmails(t *testing.T) {
@@ -73,8 +97,10 @@ func TestPreviewEmails(t *testing.T) {
 		t.Skip("EMAIL_PREVIEW_DIR is unset")
 	}
 	m := Staff{Shop: "Toko Sinar Jaya", Name: "Rizky", Code: "482913", Link: "https://admin.belli.id/accept-invite#token=4f9c2a7e",
-		Inviter: "Dewi Lestari", InviterEmail: "dewi@sinarjaya.id", Role: "admin", ReplyTo: "halo@sinarjaya.id"}
-	previews := map[string]func(Staff) (string, string, string, error){"signup": Signup, "invitation": Invitation}
+		Inviter: "Dewi Lestari", InviterEmail: "dewi@sinarjaya.id", Role: "admin", ReplyTo: "halo@sinarjaya.id",
+		Address: "rizky.pratama@gmail.com"}
+	previews := map[string]func(Staff) (string, string, string, error){"signup": Signup, "invitation": Invitation,
+		"staff_reset": StaffPasswordReset}
 	for name, render := range previews {
 		_, text, html, err := render(m)
 		if err != nil {

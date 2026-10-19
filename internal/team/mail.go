@@ -96,12 +96,17 @@ func ResetMail(store *db.Store, resets *auth.ResetTokens, adminURL string) email
 			return nil, nil
 		}
 		link := adminURL + "/reset-password#token=" + resets.Mint(user.ID, user.TenantID, user.PasswordHash, time.Now())
-		subject, text, html := email.PasswordReset(shop.Name, user.Name, link)
-		msg := &email.Message{FromName: shop.Name, To: string(user.Email), Subject: subject, Text: text, HTML: html}
+		reply := ""
 		if replyTo != nil {
-			msg.ReplyTo = *replyTo
+			reply = *replyTo
 		}
-		return msg, nil
+		subject, text, html, err := email.StaffPasswordReset(email.Staff{Shop: shop.Name, Name: user.Name,
+			Address: string(user.Email), Link: link, ReplyTo: reply})
+		if err != nil {
+			return nil, err
+		}
+		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: reply,
+			Subject: subject, Text: text, HTML: html}, nil
 	}
 }
 

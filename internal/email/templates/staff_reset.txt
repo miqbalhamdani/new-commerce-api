@@ -1,0 +1,16 @@
+Belli.id
+
+RESET YOUR PASSWORD
+
+Hi {{.Name}},
+
+We got a request to reset the password for your {{.Shop}} admin account ({{.Address}}). Use this link to choose a new one:
+
+{{.Link}}
+
+This link works once and expires in 30 minutes.
+
+Didn't ask for this? Ignore this email and your password stays the same.
+
+--
+{{template "shop-footer" .}}
