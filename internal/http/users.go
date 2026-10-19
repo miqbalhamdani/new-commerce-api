@@ -78,6 +78,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id Id) {
 		var body struct {
 			Role   optional[string] `json:"role"`
 			Status optional[string] `json:"status"`
+			Bio    optional[string] `json:"bio"`
 		}
 		if !decodeJSON(w, r, &body, "email") {
 			return
@@ -86,14 +87,17 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id Id) {
 			writeError(w, r, err)
 			return
 		}
-		var role, status *string
+		var role, status, bio *string
 		if body.Role.Set {
 			role = &body.Role.Value
 		}
 		if body.Status.Set {
 			status = &body.Status.Value
 		}
-		u, err := s.team.Update(r.Context(), id, role, status)
+		if body.Bio.Set {
+			bio = &body.Bio.Value // "" when null: both clear it (BR-133)
+		}
+		u, err := s.team.Update(r.Context(), id, role, status, bio)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -105,7 +109,7 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id Id) {
 func (s *Server) DisableUser(w http.ResponseWriter, r *http.Request, id Id) {
 	requirePermission(auth.PermUsersWrite, func(w http.ResponseWriter, r *http.Request) {
 		disabled := "disabled"
-		if _, err := s.team.Update(r.Context(), id, nil, &disabled); err != nil {
+		if _, err := s.team.Update(r.Context(), id, nil, &disabled, nil); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -307,5 +311,5 @@ func (s *Server) ConfirmStaffPasswordReset(w http.ResponseWriter, r *http.Reques
 
 func userOut(u team.User) User {
 	return User{Id: u.ID, Email: openapi_types.Email(u.Email), Name: u.Name, Role: UserRole(u.Role), Status: UserStatus(u.Status),
-		LastLoginAt: u.LastLoginAt, CreatedAt: u.CreatedAt}
+		Bio: u.Bio, LastLoginAt: u.LastLoginAt, CreatedAt: u.CreatedAt}
 }

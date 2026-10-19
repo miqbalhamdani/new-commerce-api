@@ -27,6 +27,10 @@ UPDATE users SET role = sqlc.arg(role) WHERE id = sqlc.arg(id) RETURNING *;
 -- name: SetUserStatus :one
 UPDATE users SET status = sqlc.arg(status) WHERE id = sqlc.arg(id) RETURNING *;
 
+-- name: SetUserBio :one
+-- The public line under a user's blog posts; NULL clears it (BR-133).
+UPDATE users SET bio = sqlc.narg(bio) WHERE id = sqlc.arg(id) RETURNING *;
+
 -- name: OtherActiveOwners :one
 -- BR-027: the last active owner cannot be demoted or disabled.
 SELECT count(*)::int FROM users WHERE role = 'owner' AND status = 'active' AND id <> $1;

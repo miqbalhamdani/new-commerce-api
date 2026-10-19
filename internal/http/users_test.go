@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,6 +196,25 @@ func TestUsers(t *testing.T) {
 		ops := signInAnotherUser(ctx, t, store, tenantID, auth.RoleOps)
 		code, p := apiClient(t, ops)("GET", "/v1/users", nil)
 		assertProblem(t, code, p, 403, "permission_denied", "")
+	})
+	t.Run("a bio is set, trimmed and cleared; an admin may write the owner's (P1-604)", func(t *testing.T) {
+		code, p := do("PATCH", "/v1/users/"+rina, map[string]any{"bio": "  Writes the Sleep Project Journal. "})
+		if code != 200 || p["bio"] != "Writes the Sleep Project Journal." || p["role"] != "ops" {
+			t.Fatalf("set: %d %v", code, p)
+		}
+		code, p = do("PATCH", "/v1/users/"+rina, map[string]any{"bio": strings.Repeat("x", 301)})
+		assertProblem(t, code, p, 422, "validation_failed", "bio")
+		code, p = do("PATCH", "/v1/users/"+rina, map[string]any{"bio": nil})
+		if code != 200 || p["bio"] != nil {
+			t.Errorf("null clears: %d %v", code, p)
+		}
+		_, list := do("GET", "/v1/users?role=owner", nil)
+		ownerID := list["data"].([]any)[0].(map[string]any)["id"].(string)
+		admin := signInAnotherUser(ctx, t, store, tenantID, auth.RoleAdmin)
+		code, p = apiClient(t, admin)("PATCH", "/v1/users/"+ownerID, map[string]any{"bio": "Founder."})
+		if code != 200 || p["bio"] != "Founder." {
+			t.Errorf("admin on the owner's bio: %d %v", code, p)
+		}
 	})
 }
 

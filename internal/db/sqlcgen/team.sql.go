@@ -276,6 +276,34 @@ func (q *Queries) OtherActiveOwners(ctx context.Context, id uuid.UUID) (int32, e
 	return column_1, err
 }
 
+const setUserBio = `-- name: SetUserBio :one
+UPDATE users SET bio = $1 WHERE id = $2 RETURNING id, tenant_id, email, password_hash, name, role, status, last_login_at, created_at, bio
+`
+
+type SetUserBioParams struct {
+	Bio *string
+	ID  uuid.UUID
+}
+
+// The public line under a user's blog posts; NULL clears it (BR-133).
+func (q *Queries) SetUserBio(ctx context.Context, arg SetUserBioParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserBio, arg.Bio, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Role,
+		&i.Status,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.Bio,
+	)
+	return i, err
+}
+
 const setUserPassword = `-- name: SetUserPassword :execrows
 UPDATE users SET password_hash = $1
 WHERE id = $2 AND status = 'active' AND password_hash IS NOT DISTINCT FROM $3
