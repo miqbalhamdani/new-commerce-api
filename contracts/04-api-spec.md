@@ -1095,7 +1095,7 @@ never applied twice (BR-060).
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover`) | 051, 053, 135 |
+| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`) | 051, 053, 135 |
 | `POST` | `/v1/media/confirm` | `media:write` | 050, 051 |
 | `PATCH` | `/v1/media/{id}` | `media:write` | 009 |
 | `DELETE` | `/v1/media/{id}` | `media:write` | 012 |
@@ -1125,9 +1125,11 @@ Uploads go **straight from the browser to R2**; bytes never transit the API (BR-
 ```
 
 - **Presign.** `purpose` is `product_image` (JPEG, PNG, WebP up to 20 MB), `product_import`
-  (CSV up to 50 MB, no `product_id`) or `blog_cover` (an image like `product_image`, with
-  `post_id` in place of `product_id`); anything else is `422`. The key contains the content hash
-  (BR-053). A blog cover has no confirm step: its key is saved as the post's `cover_r2_key` (§13).
+  (CSV up to 50 MB, no `product_id`), `blog_cover` (an image like `product_image`, with
+  `post_id` in place of `product_id`) or `blog_image` (the same, for the post's body); anything
+  else is `422`. The key contains the content hash (BR-053). Blog images have no confirm step: a
+  cover's key is saved as the post's `cover_r2_key` (§13), a body image is linked from the
+  Markdown by the response's `public_url`.
 - **Confirm.** Checks content type and size against R2's `HEAD` before saving the row. A key for an
   object never uploaded is `422`.
 - **URLs.** Product images are public on the image domain (BR-053). Once ready, `derivatives` is
@@ -1677,7 +1679,8 @@ GET /v1/storefront/blog/posts/7-panduan-lengkap-cara-memilih-sprei
   "related": [ …up to 3 list items… ] }
 ```
 
-- `body` is Markdown, as written (BR-135).
+- `body` is Markdown, as written (BR-135). Its images are `![alt](public_url)`, uploaded with
+  `purpose: blog_image`.
 - `products` are the post's linked products that are visible, in the post's order (BR-134).
 - `related` holds up to three other live posts, newest first, from the post's category, or from
   every post when it has none.

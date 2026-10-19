@@ -528,7 +528,7 @@ match a key's start only, and one rule must cover every tenant.
 | Prefix | Contents | Access |
 |---|---|---|
 | `{tenant}/products/{product}/{hash}.{ext}`, `…/{hash}_{1600,800,200}.webp` | Product images: the original plus three `.webp` derivatives | **Public** through the image domain, edge-cached |
-| `{tenant}/blogs/{post}/{hash}.{ext}` | Blog cover images: the original only (BR-135) | **Public** through the image domain, edge-cached |
+| `{tenant}/blogs/{post}/{hash}.{ext}` | Blog cover and body images: the original only (BR-135) | **Public** through the image domain, edge-cached |
 | `jobs/{tenant}/{job}/upload.csv` | Uploaded product CSV | Presigned `PUT`, 10 min; read by the worker only; deleted after 30 days |
 | `jobs/{tenant}/{job}/errors.csv` | Error reports for CSV and marketplace imports | Presigned `GET`, 15 min; deleted after 30 days |
 | `exports/{tenant}/{job}.csv` | Order exports | Presigned `GET`, 15 min; deleted after 7 days |
@@ -1023,7 +1023,9 @@ when it comes back.
 `body` is Markdown, stored as written; the API neither renders nor rewrites it. The website renders
 it without raw HTML. The cover is one image, used on the list card, the featured block and the
 post header, uploaded like a product image (BR-051) to `{tenant}/blogs/{post}/` (BR-053), with no
-derivatives yet. Its alt text is the post title.
+derivatives yet. Its alt text is the post title. Images in the body are uploaded the same way to the
+same prefix and linked from the Markdown by their public URL, with the alt text the editor gives
+them. An image taken out of the body, like a replaced cover, stays stored.
 
 ---
 
