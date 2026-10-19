@@ -1,0 +1,42 @@
+{{/* A staff invitation (BR-026): the shop, the role, who asked, and the
+     link to set a password. */}}
+{{define "title"}}You're invited to help manage {{.Shop}}{{end}}
+
+{{define "preheader"}}{{.Inviter}} invited you to join as {{.RoleLabel}}. Set a password to get started. The link works for 7 days.{{end}}
+
+{{define "body"}}{{template "heading" (print "You're invited to " .Shop)}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#1D2939;padding:0 0 24px 0;mso-line-height-rule:exactly;">Hi {{.Name}},<br><br>{{.Inviter}} has invited you to help manage <strong style="font-weight:600;">{{.Shop}}</strong> on Belli.id. Set a password to get started.</td>
+</tr>
+<tr>
+<td bgcolor="#F9FAFB" style="background-color:#F9FAFB;border:1px solid #E4E7EC;border-radius:8px;padding:16px 20px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td width="110" style="width:110px;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:13px;line-height:24px;color:#667085;padding:3px 0;mso-line-height-rule:exactly;">Shop</td>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:24px;font-weight:500;color:#1D2939;padding:3px 0;mso-line-height-rule:exactly;">{{.Shop}}</td>
+</tr>
+<tr>
+<td width="110" style="width:110px;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:13px;line-height:24px;color:#667085;padding:3px 0;mso-line-height-rule:exactly;">Your role</td>
+<td style="padding:3px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td bgcolor="#ECF3FF" style="background-color:#ECF3FF;border-radius:999px;padding:2px 10px;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;font-weight:600;color:#3641F5;mso-line-height-rule:exactly;">{{.RoleLabel}}</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td width="110" style="width:110px;font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:13px;line-height:24px;color:#667085;padding:3px 0;mso-line-height-rule:exactly;">Invited by</td>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:24px;font-weight:500;color:#1D2939;padding:3px 0;mso-line-height-rule:exactly;">{{.Inviter}}{{if .InviterEmail}} &middot; <a href="mailto:{{.InviterEmail}}" style="color:#465FFF;text-decoration:none;font-weight:400;">{{.InviterEmail}}</a>{{end}}</td>
+</tr>
+</table>
+</td>
+</tr>
+{{template "button" (button .Link "Set your password" true)}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#667085;padding:20px 0 0 0;mso-line-height-rule:exactly;">This link works for 7 days. If it expires, ask {{.InviterFirst}} for a new invitation.</td>
+</tr>
+{{template "fallback" .Link}}
+{{template "aside" "Not expecting this? You can ignore this email."}}{{end}}
+
+{{define "footer"}}{{template "shop-footer" .}}{{end}}

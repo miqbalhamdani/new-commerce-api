@@ -38,6 +38,33 @@ func TestSignupDesign(t *testing.T) {
 	}
 }
 
+// TestInvitationDesign: the subject as before; the role as a badge, who
+// invited, who to ask; the reply address only when the shop has one.
+func TestInvitationDesign(t *testing.T) {
+	m := Staff{Shop: "Toko <ABC>", Name: "Rizky", Link: "http://admin/accept-invite#token=inv_x",
+		Inviter: "Budi Santoso", InviterEmail: "budi@tokoabc.com", Role: "ops", ReplyTo: "halo@tokoabc.com"}
+	subject, text, html, err := Invitation(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject != "Budi Santoso invited you to Toko <ABC>" {
+		t.Errorf("subject %q", subject)
+	}
+	mustContain(t, "text", text, "YOU'RE INVITED TO TOKO <ABC>", "Hi Rizky,", "Your role:   Ops",
+		"Invited by:  Budi Santoso (budi@tokoabc.com)", "inv_x", "ask Budi for a new invitation",
+		"reach the shop at halo@tokoabc.com.")
+	mustContain(t, "html", html, "You&#39;re invited to Toko &lt;ABC&gt;", ">Ops</td>",
+		`href="mailto:budi@tokoabc.com"`, `href="http://admin/accept-invite#token=inv_x"`,
+		"Set your password", "ask Budi for a new invitation", `href="mailto:halo@tokoabc.com"`, "<!--[if mso]>")
+
+	m.ReplyTo = ""
+	_, text, html, _ = Invitation(m)
+	if strings.Contains(text, "Reply to this email") || strings.Contains(html, "Reply to this email") {
+		t.Errorf("a shop with no reply address still offers one")
+	}
+	mustContain(t, "html", html, "Sent by Belli.id on behalf of Toko &lt;ABC&gt;.")
+}
+
 // TestPreviewEmails writes the designed emails to EMAIL_PREVIEW_DIR, to look
 // at in a browser; skipped otherwise.
 func TestPreviewEmails(t *testing.T) {
@@ -45,8 +72,9 @@ func TestPreviewEmails(t *testing.T) {
 	if dir == "" {
 		t.Skip("EMAIL_PREVIEW_DIR is unset")
 	}
-	m := Staff{Shop: "Toko Sinar Jaya", Name: "Dewi", Code: "482913", Link: "https://admin.belli.id/accept-invite#token=4f9c2a7e"}
-	previews := map[string]func(Staff) (string, string, string, error){"signup": Signup}
+	m := Staff{Shop: "Toko Sinar Jaya", Name: "Rizky", Code: "482913", Link: "https://admin.belli.id/accept-invite#token=4f9c2a7e",
+		Inviter: "Dewi Lestari", InviterEmail: "dewi@sinarjaya.id", Role: "admin", ReplyTo: "halo@sinarjaya.id"}
+	previews := map[string]func(Staff) (string, string, string, error){"signup": Signup, "invitation": Invitation}
 	for name, render := range previews {
 		_, text, html, err := render(m)
 		if err != nil {

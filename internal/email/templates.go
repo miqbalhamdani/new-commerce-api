@@ -48,7 +48,8 @@ func parse(name string) design {
 	return design{
 		html: htmltemplate.Must(htmltemplate.New(name).Funcs(funcs).
 			ParseFS(files, "templates/layout.html", "templates/"+name+".html")),
-		text: texttemplate.Must(texttemplate.ParseFS(files, "templates/"+name+".txt")),
+		text: texttemplate.Must(texttemplate.New(name+".txt").Funcs(texttemplate.FuncMap{"upper": strings.ToUpper}).
+			ParseFS(files, "templates/"+name+".txt", "templates/shop.txt")),
 	}
 }
 
@@ -63,15 +64,39 @@ func (d design) render(m Staff) (text, htmlBody string, err error) {
 	return t.String(), h.String(), nil
 }
 
-var signup = parse("signup")
+var (
+	signup     = parse("signup")
+	invitation = parse("invitation")
+)
 
 // Staff is what a staff or owner email says: the shop, who it is to, and
-// the link (with a code, for a signup).
+// the link (with a code, for a signup); who invited them, for an invitation;
+// and where a reply goes, for mail from the shop.
 type Staff struct {
-	Shop string
-	Name string // the recipient's
-	Code string
-	Link string
+	Shop         string
+	Name         string // the recipient's
+	Code         string
+	Link         string
+	Inviter      string
+	InviterEmail string
+	Role         string // owner, admin, ops or viewer
+	ReplyTo      string // the shop's contact email; "" when it has none
+}
+
+// RoleLabel is the role as the Team screen names it: "Admin".
+func (m Staff) RoleLabel() string {
+	if m.Role == "" {
+		return ""
+	}
+	return strings.ToUpper(m.Role[:1]) + m.Role[1:]
+}
+
+// InviterFirst is who to ask for a new invitation: "ask Dewi".
+func (m Staff) InviterFirst() string {
+	if f := strings.Fields(m.Inviter); len(f) > 0 {
+		return f[0]
+	}
+	return "the shop"
 }
 
 // Signup confirms a new owner's email (P1-084, P1-086, BR-026, BR-128), in
@@ -83,21 +108,9 @@ func Signup(m Staff) (subject, text, htmlBody string, err error) {
 }
 
 // Invitation is the staff invitation (BR-026, BR-128), in English (BR-016).
-func Invitation(shop, inviter, role, link string) (subject, text, htmlBody string) {
-	subject = fmt.Sprintf("%s invited you to %s", inviter, shop)
-	text = fmt.Sprintf(`%s invited you to manage %s as %s.
-
-Set your password to get started:
-%s
-
-The link works for 7 days. If it has expired, ask %s to send a new invitation.
-`, inviter, shop, role, link, inviter)
-	htmlBody = fmt.Sprintf(`<p>%s invited you to manage <strong>%s</strong> as %s.</p>
-<p><a href="%s">Set your password</a> to get started.</p>
-<p>The link works for 7 days. If it has expired, ask %s to send a new invitation.</p>`,
-		html.EscapeString(inviter), html.EscapeString(shop), html.EscapeString(role),
-		html.EscapeString(link), html.EscapeString(inviter))
-	return subject, text, htmlBody
+func Invitation(m Staff) (subject, text, htmlBody string, err error) {
+	text, htmlBody, err = invitation.render(m)
+	return fmt.Sprintf("%s invited you to %s", m.Inviter, m.Shop), text, htmlBody, err
 }
 
 // PasswordReset is a customer's reset link (BR-094, BR-128), in English

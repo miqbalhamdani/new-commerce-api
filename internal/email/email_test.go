@@ -42,16 +42,6 @@ func TestResend(t *testing.T) {
 	}
 }
 
-func TestInvitationTemplate(t *testing.T) {
-	subject, text, html := Invitation("Toko <ABC>", "Budi", "ops", "http://admin/accept-invite#token=inv_x")
-	if subject != "Budi invited you to Toko <ABC>" || !strings.Contains(text, "inv_x") || !strings.Contains(text, "7 days") {
-		t.Errorf("%s\n%s", subject, text)
-	}
-	if !strings.Contains(html, "Toko &lt;ABC&gt;") {
-		t.Errorf("html not escaped: %s", html)
-	}
-}
-
 func TestLogSenderPrintsTheLink(t *testing.T) {
 	var buf bytes.Buffer
 	_ = Log{Out: &buf}.Send(context.Background(), Message{To: "a@b.c", Subject: "S", Text: "link inv_x\n"})

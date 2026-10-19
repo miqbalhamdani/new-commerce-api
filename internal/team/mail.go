@@ -49,12 +49,16 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 			return nil, nil
 		}
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now())
-		subject, text, html := email.Invitation(shop.Name, inviter.Name, user.Role, link)
 		// Reply-To is the shop's contact email (BR-128), or the inviter for a
 		// shop that has not set one.
 		reply := string(inviter.Email)
 		if replyTo != nil {
 			reply = *replyTo
+		}
+		subject, text, html, err := email.Invitation(email.Staff{Shop: shop.Name, Name: user.Name, Link: link,
+			Inviter: inviter.Name, InviterEmail: string(inviter.Email), Role: user.Role, ReplyTo: reply})
+		if err != nil {
+			return nil, err
 		}
 		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: reply,
 			Subject: subject, Text: text, HTML: html}, nil
