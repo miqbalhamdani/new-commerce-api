@@ -1,0 +1,2 @@
+{{/* Mail a shop sends: who it is from, and where a reply goes (BR-128). */}}
+{{- define "shop-footer"}}Sent by Belli.id on behalf of {{.Shop}}.{{if .ReplyTo}} Reply to this email to reach the shop at {{.ReplyTo}}.{{end}}{{end}}

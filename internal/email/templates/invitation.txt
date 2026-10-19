@@ -1,0 +1,21 @@
+Belli.id
+
+YOU'RE INVITED TO {{upper .Shop}}
+
+Hi {{.Name}},
+
+{{.Inviter}} has invited you to help manage {{.Shop}} on Belli.id. Set a password to get started.
+
+Shop:        {{.Shop}}
+Your role:   {{.RoleLabel}}
+Invited by:  {{.Inviter}}{{if .InviterEmail}} ({{.InviterEmail}}){{end}}
+
+Set your password:
+{{.Link}}
+
+This link works for 7 days. If it expires, ask {{.InviterFirst}} for a new invitation.
+
+Not expecting this? You can ignore this email.
+
+--
+{{template "shop-footer" .}}

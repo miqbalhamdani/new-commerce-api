@@ -49,12 +49,16 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 			return nil, nil
 		}
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now())
-		subject, text, html := email.Invitation(shop.Name, inviter.Name, user.Role, link)
 		// Reply-To is the shop's contact email (BR-128), or the inviter for a
 		// shop that has not set one.
 		reply := string(inviter.Email)
 		if replyTo != nil {
 			reply = *replyTo
+		}
+		subject, text, html, err := email.Invitation(email.Staff{Shop: shop.Name, Name: user.Name, Link: link,
+			Inviter: inviter.Name, InviterEmail: string(inviter.Email), Role: user.Role, ReplyTo: reply})
+		if err != nil {
+			return nil, err
 		}
 		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: reply,
 			Subject: subject, Text: text, HTML: html}, nil
@@ -92,12 +96,17 @@ func ResetMail(store *db.Store, resets *auth.ResetTokens, adminURL string) email
 			return nil, nil
 		}
 		link := adminURL + "/reset-password#token=" + resets.Mint(user.ID, user.TenantID, user.PasswordHash, time.Now())
-		subject, text, html := email.PasswordReset(shop.Name, user.Name, link)
-		msg := &email.Message{FromName: shop.Name, To: string(user.Email), Subject: subject, Text: text, HTML: html}
+		reply := ""
 		if replyTo != nil {
-			msg.ReplyTo = *replyTo
+			reply = *replyTo
 		}
-		return msg, nil
+		subject, text, html, err := email.StaffPasswordReset(email.Staff{Shop: shop.Name, Name: user.Name,
+			Address: string(user.Email), Link: link, ReplyTo: reply})
+		if err != nil {
+			return nil, err
+		}
+		return &email.Message{FromName: shop.Name, To: string(user.Email), ReplyTo: reply,
+			Subject: subject, Text: text, HTML: html}, nil
 	}
 }
 
@@ -145,7 +154,11 @@ func SignupMail(store *db.Store, invites *auth.InviteSigner, adminURL string) em
 		// onboarding afterwards.
 		now := time.Now()
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, now) + "&signup=1"
-		subject, text, html := email.Signup(shop.Name, user.Name, invites.Code(user.ID, user.TenantID, now), link)
+		subject, text, html, err := email.Signup(email.Staff{Shop: shop.Name, Name: user.Name,
+			Code: invites.Code(user.ID, user.TenantID, now), Link: link})
+		if err != nil {
+			return nil, err
+		}
 		return &email.Message{FromName: "Belli.id", To: string(user.Email), Subject: subject, Text: text, HTML: html}, nil
 	}
 }

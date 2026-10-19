@@ -1,0 +1,19 @@
+{{/* A staff password reset (P1-088, BR-094): the account it is for, and a
+     link that works once, for 30 minutes. */}}
+{{define "title"}}Reset your {{.Shop}} admin password{{end}}
+
+{{define "preheader"}}Choose a new password for your {{.Shop}} admin account. The link works once and expires in 30 minutes.{{end}}
+
+{{define "body"}}{{template "heading" "Reset your password"}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#1D2939;padding:0 0 28px 0;mso-line-height-rule:exactly;">Hi {{.Name}},<br><br>We got a request to reset the password for your <strong style="font-weight:600;">{{.Shop}}</strong> admin account ({{.Address}}). Use the button below to choose a new one.</td>
+</tr>
+{{template "button" (button .Link "Reset password" false)}}
+<tr>
+<td style="font-family:'Outfit',Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#667085;padding:20px 0 0 0;mso-line-height-rule:exactly;">This link works once and expires in 30 minutes.</td>
+</tr>
+{{template "fallback" .Link}}
+{{template "divider"}}
+{{template "aside" "Didn't ask for this? Ignore this email and your password stays the same."}}{{end}}
+
+{{define "footer"}}{{template "shop-footer" .}}{{end}}
