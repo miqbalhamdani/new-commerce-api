@@ -36,7 +36,9 @@ var specJSON = sync.OnceValues(func() ([]byte, error) {
 // else: it is served from the API's own origin, where a tampered script
 // could call the admin API with the staff refresh cookie. proxyUrl is nulled
 // because Scalar's try-it client otherwise routes requests -- API key
-// included -- through proxy.scalar.com; direct is 'self' and allowed.
+// included -- through proxy.scalar.com; direct is 'self' and allowed. The
+// file is the package's own standalone.js, never jsDelivr's .min.js: the
+// package ships none, jsDelivr minifies one on demand, and its hash differs.
 const docsPage = `<!doctype html>
 <html lang="en">
 <head>
@@ -47,7 +49,7 @@ const docsPage = `<!doctype html>
 <body>
 <script id="api-reference" data-url="` + BaseURL + `/openapi.json"
   data-configuration='{"proxyUrl":null}'></script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.min.js"
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0/dist/browser/standalone.js"
   integrity="sha384-VXnKAz61Xwc3tbw1P+KKrUP7YbcsSl1Ik4is5UnogJyw9XEYZ5Ay/T1i0zPYtSZH"
   crossorigin="anonymous"></script>
 </body>
