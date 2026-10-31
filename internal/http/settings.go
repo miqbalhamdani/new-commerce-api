@@ -24,20 +24,24 @@ func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	requirePermission(auth.PermSettingsWrite, func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Name        optional[string] `json:"name"`
+			Slug        optional[string] `json:"slug"`
 			Timezone    optional[string] `json:"timezone"`
 			OrderPrefix optional[string] `json:"order_prefix"`
 		}
-		if !decodeJSON(w, r, &body, "slug", "status") {
+		if !decodeJSON(w, r, &body, "status") {
 			return
 		}
-		if err := rejectNull(map[string]bool{"name": body.Name.Null, "timezone": body.Timezone.Null,
+		if err := rejectNull(map[string]bool{"name": body.Name.Null, "slug": body.Slug.Null, "timezone": body.Timezone.Null,
 			"order_prefix": body.OrderPrefix.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
-		var name, tz, prefix *string
+		var name, slug, tz, prefix *string
 		if body.Name.Set {
 			name = &body.Name.Value
+		}
+		if body.Slug.Set {
+			slug = &body.Slug.Value
 		}
 		if body.Timezone.Set {
 			tz = &body.Timezone.Value
@@ -45,7 +49,7 @@ func (s *Server) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		if body.OrderPrefix.Set {
 			prefix = &body.OrderPrefix.Value
 		}
-		t, err := s.team.UpdateSettings(r.Context(), name, tz, prefix)
+		t, err := s.team.UpdateSettings(r.Context(), name, slug, tz, prefix)
 		if err != nil {
 			writeError(w, r, err)
 			return

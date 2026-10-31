@@ -323,6 +323,11 @@ type StorefrontSetting struct {
 	MidtransServerKey        []byte
 	MidtransWebhookID        uuid.UUID
 	UpdatedAt                time.Time
+	LogoR2Key                *string
+	WhatsappNumber           *string
+	Tagline                  *string
+	BrandColor               *string
+	Instagram                *string
 }
 
 type StorefrontVariant struct {

@@ -28,16 +28,23 @@ UPDATE storefront_settings SET
     midtrans_environment = sqlc.narg(midtrans_environment),
     midtrans_client_key = sqlc.narg(midtrans_client_key),
     midtrans_server_key = sqlc.narg(midtrans_server_key),
+    logo_r2_key = sqlc.narg(logo_r2_key),
+    whatsapp_number = sqlc.narg(whatsapp_number),
+    tagline = sqlc.narg(tagline),
+    brand_color = sqlc.narg(brand_color),
+    instagram = sqlc.narg(instagram),
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
 
 -- name: StorefrontConfig :one
--- What a website renders sign-in and payment from (P1-224). A shop with no
--- settings row yet has the defaults: bank transfer on, nothing else.
+-- What a website renders sign-in, payment and its look from (P1-224, P1-703).
+-- A shop with no settings row yet has the defaults: bank transfer on, nothing
+-- else.
 SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
-       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key
+       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
+       s.logo_r2_key, s.whatsapp_number, s.tagline, s.brand_color, s.instagram
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid;

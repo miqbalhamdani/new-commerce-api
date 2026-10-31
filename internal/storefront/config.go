@@ -7,8 +7,9 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/midtrans"
 )
 
-// GetConfig is 04-api-spec.md §11.4's /config (P1-224): public by design,
-// read once by the website to render sign-in and payment. Nothing secret.
+// GetConfig is 04-api-spec.md §11.4's /config (P1-224, P1-703): public by
+// design, read once by the website to render sign-in, payment and its look
+// (BR-142). Nothing secret.
 func (s *Server) GetConfig(w http.ResponseWriter, r *http.Request) {
 	c, err := s.team.StorefrontConfig(r.Context())
 	if err != nil {
@@ -16,7 +17,9 @@ func (s *Server) GetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := StorefrontConfig{ShopName: c.ShopName, GoogleClientId: c.GoogleClientID,
-		BankTransferInstructions: c.BankTransferInstructions, PaymentMethods: []StorefrontConfigPaymentMethods{}}
+		BankTransferInstructions: c.BankTransferInstructions, PaymentMethods: []StorefrontConfigPaymentMethods{},
+		LogoUrl: s.team.LogoURL(c.LogoR2Key), WhatsappNumber: c.WhatsappNumber, Tagline: c.Tagline,
+		BrandColor: c.BrandColor, Instagram: c.Instagram}
 	if c.BankTransferEnabled {
 		out.PaymentMethods = append(out.PaymentMethods, "bank_transfer")
 	}

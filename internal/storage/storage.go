@@ -124,7 +124,7 @@ func (s *Store) EnsureBucket(ctx context.Context) error {
 		}
 	}
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},
-		"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%[1]s/*/products/*","arn:aws:s3:::%[1]s/*/blogs/*"]}]}`, s.bucket)
+		"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%[1]s/*/products/*","arn:aws:s3:::%[1]s/*/blogs/*","arn:aws:s3:::%[1]s/*/shop/*"]}]}`, s.bucket)
 	if err := s.client.SetBucketPolicy(ctx, s.bucket, policy); err != nil {
 		return fmt.Errorf("bucket policy: %w", err)
 	}

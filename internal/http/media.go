@@ -21,9 +21,9 @@ type presignBody struct {
 	SHA256    optional[string]    `json:"sha256"`
 }
 
-// PresignMedia needs media:write for an image, products:write for an import
-// and blog:write for a blog cover or body image; the purpose decides which,
-// so it is checked after decoding.
+// PresignMedia needs media:write for an image, products:write for an import,
+// blog:write for a blog cover or body image and settings:write for the shop's
+// logo; the purpose decides which, so it is checked after decoding.
 func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 	role, ok := auth.RoleFromContext(r.Context())
 	if !ok {
@@ -82,6 +82,23 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, PresignResponse{UploadUrl: c.URL, R2Key: c.Key, ExpiresIn: c.ExpiresIn,
 			PublicUrl: &c.PublicURL})
 		return
+	case "shop_logo":
+		if !auth.Can(role, auth.PermSettingsWrite) {
+			writeError(w, r, apperrors.PermissionDenied(auth.PermSettingsWrite))
+			return
+		}
+		if body.ProductID.Set {
+			writeError(w, r, fieldErr("product_id", "a logo belongs to no product"))
+			return
+		}
+		c, err := s.team.PresignLogo(r.Context(), body.MimeType.Value, body.Bytes.Value, body.SHA256.Value)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, PresignResponse{UploadUrl: c.URL, R2Key: c.Key, ExpiresIn: c.ExpiresIn,
+			PublicUrl: &c.PublicURL})
+		return
 	case "product_image":
 		if !auth.Can(role, auth.PermMediaWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermMediaWrite))
@@ -103,7 +120,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		p, err = s.catalog.PresignImport(r.Context(), body.MimeType.Value, body.Bytes.Value)
 	default:
-		writeError(w, r, fieldErr("purpose", "purpose is product_image, product_import, blog_cover or blog_image"))
+		writeError(w, r, fieldErr("purpose", "purpose is product_image, product_import, blog_cover, blog_image or shop_logo"))
 		return
 	}
 	if err != nil {

@@ -357,6 +357,8 @@ var newServer = func(t *testing.T) http.Handler {
 	ordersSvc.Rates = biteship.Cached{Quoter: biteship.Fixed{}, Cache: redis}
 	// The real client: the webhook tests here never get past the signature.
 	ordersSvc.Midtrans, ordersSvc.Box = midtrans.NewClient(), testBox(t)
+	teamSvc := team.NewService(store, redis, testBox(t))
+	teamSvc.Files = testFiles(t)
 
 	// secureCookies false: httptest speaks plain HTTP.
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
@@ -364,7 +366,7 @@ var newServer = func(t *testing.T) http.Handler {
 		Catalog: catalog.NewService(store, testFiles(t), jobsSvc),
 		Blog:    blog.NewService(store, testFiles(t)),
 		Jobs:    jobsSvc,
-		Team:    team.NewService(store, redis, testBox(t)),
+		Team:    teamSvc,
 		Orders:  ordersSvc,
 		Invites: testInvites(t),
 		Resets:  testResets(t).Staff(),
