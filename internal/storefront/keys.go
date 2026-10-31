@@ -2,6 +2,7 @@ package storefront
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -25,6 +26,9 @@ const KeyCacheTTL = 60 * time.Second
 // Keys resolves X-Api-Key to its shop, behind a per-process cache, and
 // enforces the key's origin (04-api-spec.md §11.2).
 type Keys struct {
+	// Platform is the hosted website's key (BR-141). Empty accepts none.
+	Platform string
+
 	store *db.Store
 	ttl   time.Duration
 	now   func() time.Time
@@ -84,6 +88,10 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 			httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
 			return
 		}
+		if k.Platform != "" && subtle.ConstantTimeCompare([]byte(raw), []byte(k.Platform)) == 1 {
+			k.platform(w, r, origin, next)
+			return
+		}
 		key, err := k.resolve(r.Context(), auth.HashRefreshToken(raw))
 		if errors.Is(err, db.ErrNotFound) || err == nil && key.RevokedAt != nil {
 			httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
@@ -112,6 +120,51 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, keyCtx{}, Key{ID: key.ID, AllowedOrigin: key.AllowedOrigin, Browser: origin != ""})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// platform serves the hosted website's server (BR-141): read-only, never from
+// a browser, for the active shop X-Shop names. Anywhere else the platform key
+// is refused as no key at all.
+func (k *Keys) platform(w http.ResponseWriter, r *http.Request, origin string, next http.Handler) {
+	if origin != "" || r.Method != http.MethodGet {
+		httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
+		return
+	}
+	id, err := k.shop(r.Context(), r.Header.Get("X-Shop"))
+	if errors.Is(err, db.ErrNotFound) {
+		httpkit.WriteError(w, r, apperrors.NotFound("No such shop."))
+		return
+	}
+	if err != nil {
+		httpkit.WriteError(w, r, err)
+		return
+	}
+	ctx := tenant.NewContext(r.Context(), id)
+	// The shop's id as the key's: the server limit then counts per shop, so
+	// one busy shop cannot use up another's (BR-014).
+	ctx = context.WithValue(ctx, keyCtx{}, Key{ID: id})
+	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// shop resolves a slug to its active shop through the same cache as keys,
+// so a slug the owner gives up stops working within the TTL (BR-140). As
+// with keys, only hits are cached.
+func (k *Keys) shop(ctx context.Context, slug string) (uuid.UUID, error) {
+	entry := "slug:" + slug
+	k.mu.Lock()
+	c, ok := k.cache[entry]
+	k.mu.Unlock()
+	if ok && k.now().Sub(c.at) < k.ttl {
+		return c.key.TenantID, nil
+	}
+	id, err := k.store.ActiveTenantBySlug(ctx, slug)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	k.mu.Lock()
+	k.cache[entry] = cachedKey{key: db.APIKey{TenantID: id}, at: k.now()}
+	k.mu.Unlock()
+	return id, nil
 }
 
 // allowedHeaders are the request headers a storefront call may carry

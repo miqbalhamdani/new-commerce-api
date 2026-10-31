@@ -149,11 +149,13 @@ func run() error {
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
 	ordersSvc.Mail = enqueueMail
 	storefrontLimits := ratelimit.New(redis)
+	storefrontKeys := storefront.NewKeys(pool)
+	storefrontKeys.Platform = config.StorefrontPlatformKey()
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Blog: blogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
 			OrderTokens: orderTokens, Limits: storefrontLimits}),
-		storefront.NewKeys(pool),
+		storefrontKeys,
 		signer,
 		storefrontLimits,
 	))

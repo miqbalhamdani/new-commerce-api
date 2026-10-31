@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.12.0
+  version: 0.13.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -26,6 +26,13 @@ info:
     `403 origin_not_allowed` with no `Access-Control-Allow-Origin`. Responses echo the matched
     origin (never `*`) and carry `Vary: Origin`. A request with no `Origin` — the website's own
     server — is accepted. A preflight `OPTIONS` needs no key and is answered for any origin.
+
+    ## Belli's hosted website (BR-140, BR-141)
+
+    Belli serves every shop's website at `{slug}.belli.id` from its own server, which sends a
+    platform key with `X-Shop: {slug}` in place of a shop's key. That key works only from a server
+    (no `Origin`), only on `GET`, and only for an active shop; a slug no active shop holds is
+    `404`. It is not available to shops: a shop's own website uses its own key.
 
     ## Conventions
 
@@ -332,9 +339,10 @@ paths:
       summary: What the website needs to render sign-in and payment
       description: |
         Public by design, and read once: the shop's name, its Google client ID (`null` when
-        Google sign-in is off), the payment methods it takes, its bank transfer instructions, and
-        what Snap.js needs when Midtrans is on (`null` otherwise). Nothing here is secret: no
-        server key, no notification URL (BR-122, BR-127, BR-129).
+        Google sign-in is off), the payment methods it takes, its bank transfer instructions,
+        what Snap.js needs when Midtrans is on (`null` otherwise), and its look: logo, WhatsApp
+        number, tagline, brand colour and Instagram, each `null` when unset (BR-142). Nothing
+        here is secret: no server key, no notification URL (BR-122, BR-127, BR-129).
       responses:
         "200":
           description: The configuration.
@@ -931,7 +939,7 @@ components:
         One kind of key, `sf_live_…`, made in the admin (Settings › API keys). Browser requests
         must come from the key's `allowed_origin`; server requests (no `Origin`) are accepted.
         The tenant comes from the key, and nothing in a request can choose another (BR-003,
-        BR-028, BR-083). A revoked key stops working within 60 s (BR-085). Missing, unknown or
+        BR-028, BR-083), except on Belli's hosted website (BR-141). A revoked key stops working within 60 s (BR-085). Missing, unknown or
         revoked is `401 invalid_api_key`.
 
     customerBearer:
@@ -1752,7 +1760,8 @@ components:
 
     StorefrontConfig:
       type: object
-      required: [shop_name, google_client_id, payment_methods, bank_transfer_instructions, midtrans]
+      required: [shop_name, google_client_id, payment_methods, bank_transfer_instructions, midtrans,
+                 logo_url, whatsapp_number, tagline, brand_color, instagram]
       properties:
         shop_name:
           type: string
@@ -1770,6 +1779,22 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MidtransConfig"
             - type: "null"
+        logo_url:
+          type: [string, "null"]
+          format: uri
+        whatsapp_number:
+          type: [string, "null"]
+          description: Where an order button sends shoppers, as `wa.me/{whatsapp_number}`.
+          examples: ["6281234567890"]
+        tagline:
+          type: [string, "null"]
+        brand_color:
+          type: [string, "null"]
+          description: "`#rrggbb`, lower case."
+          examples: ["#0a7d6e"]
+        instagram:
+          type: [string, "null"]
+          description: The handle, without `@`.
 
     MidtransConfig:
       type: object
