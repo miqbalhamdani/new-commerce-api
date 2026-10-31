@@ -140,6 +140,7 @@ func run() error {
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	blogSvc := blog.NewService(pool, files)
 	teamSvc := team.NewService(pool, redis, box)
+	teamSvc.Files = files
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	quoter, err := shippingQuoter()
 	if err != nil {
@@ -149,11 +150,13 @@ func run() error {
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = midtrans.NewClient(), box, config.APIURL()
 	ordersSvc.Mail = enqueueMail
 	storefrontLimits := ratelimit.New(redis)
+	storefrontKeys := storefront.NewKeys(pool)
+	storefrontKeys.Platform = config.StorefrontPlatformKey()
 	mux.Handle(storefront.BaseURL+"/", storefront.NewRouter(
 		storefront.NewServer(storefront.Services{Catalog: catalogSvc, Blog: blogSvc, Carts: carts.NewService(pool, files),
 			Orders: ordersSvc, Customers: customersSvc, Team: teamSvc,
 			OrderTokens: orderTokens, Limits: storefrontLimits}),
-		storefront.NewKeys(pool),
+		storefrontKeys,
 		signer,
 		storefrontLimits,
 	))

@@ -28,7 +28,7 @@ func init() {
 }
 
 // TestSettings is P1-071's acceptance: only the owner can PATCH (BR-023,
-// BR-029).
+// BR-029). And P1-702's: the slug is the owner's to pick (BR-008, BR-140).
 func TestSettings(t *testing.T) {
 	ctx := t.Context()
 	store := openAppStore(ctx, t)
@@ -48,9 +48,22 @@ func TestSettings(t *testing.T) {
 		code, p := do("PATCH", "/v1/settings", map[string]any{field: value})
 		assertProblem(t, code, p, 422, "validation_failed", field)
 	}
-	for _, field := range []string{"slug", "status", "id"} {
+	for _, field := range []string{"status", "id"} {
 		code, p := do("PATCH", "/v1/settings", map[string]any{field: "x"})
 		assertProblem(t, code, p, 422, "validation_failed", field)
+	}
+
+	slug := "toko-" + tenantID.String()[:8]
+	code, st = do("PATCH", "/v1/settings", map[string]any{"slug": slug})
+	if code != 200 || st["slug"] != slug {
+		t.Fatalf("slug: %d %v", code, st)
+	}
+	other := uuid.Must(uuid.NewV7())
+	seedSignedInUserWithRole(ctx, t, store, other, auth.RoleOwner)
+	taken := "iso-" + other.String() // seedAuthUser's slug
+	for _, bad := range []any{"ab", "-toko", "toko-", "Toko", "toko_abc", "toko.abc", "admin", "www", taken, nil} {
+		code, p := do("PATCH", "/v1/settings", map[string]any{"slug": bad})
+		assertProblem(t, code, p, 422, "validation_failed", "slug")
 	}
 	code, p := do("PATCH", "/v1/settings", map[string]any{"currency": "USD"})
 	assertProblem(t, code, p, 422, "unknown_field", "currency")

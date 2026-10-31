@@ -18,6 +18,7 @@ import (
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
+	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -25,6 +26,10 @@ type User = sqlcgen.User
 
 // Service is users and the tenant's settings, storefront settings included.
 type Service struct {
+	// Files holds the shop's logo (BR-142); without it there is no logo URL
+	// and no logo upload.
+	Files *storage.Store
+
 	store *db.Store
 	queue *queue.Client
 	box   *secrets.Box // seals the Midtrans server key (BR-129)

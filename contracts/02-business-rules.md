@@ -10,7 +10,7 @@ lives in the ERD or the API spec.
 Ids are grouped by area and never reused: `001–019` platform · `020–029` auth & team ·
 `030–049` catalog · `050–059` media · `060–069` jobs, export & reporting · `070–079` orders ·
 `080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email ·
-`130–139` blog. A rule that no longer applies is marked
+`130–139` blog · `140–149` hosted website. A rule that no longer applies is marked
 **retired** and keeps its number.
 
 ---
@@ -72,6 +72,12 @@ what it must:
 Each function belongs to a role that bypasses RLS and owns nothing else. In BR-001's limited-roles
 mode there is no such role: the function belongs to the schema owner and turns `app.rls_bypass`
 on for its one query, then back off. Its columns are fixed the same way.
+
+**One request names its shop: Belli's hosted website** (BR-140). Its server sends the platform key
+(BR-141), a platform credential that belongs to no shop, with `X-Shop: {slug}`. The pair reads only
+what any visitor of that shop's website could already see: `GET`, never from a browser, and only an
+`active` shop. `tenants` has no RLS, so finding the shop by slug needs no `SECURITY DEFINER`
+function; every query after it runs in that shop's tenant transaction like any storefront request.
 
 Work that spans shops, such as the nightly retention sweep (BR-096), crosses no boundary in a
 query and has no role of its own: it lists shop ids from `tenants`, which has no RLS, then does
@@ -135,7 +141,8 @@ instant exact, so the choice of zone is presentation only.
 derived values are set by the server. A client that sends one gets `422 validation_failed`
 naming the field, **on create and on update alike**. Slugs are the exception: brand, product,
 blog category and blog post slugs and a category's `label` default to a derived value and are
-editable (BR-030, BR-032, BR-042, BR-130, BR-131). A blog post's `published_at` is a schedule the
+editable (BR-030, BR-032, BR-042, BR-130, BR-131), and so is the shop's own `slug`, its website's
+address (BR-140). A blog post's `published_at` is a schedule the
 client sets, not an audit timestamp (BR-131).
 
 *Why:* silently ignoring a field teaches the client that sending it worked. One rule for both
@@ -529,6 +536,7 @@ match a key's start only, and one rule must cover every tenant.
 |---|---|---|
 | `{tenant}/products/{product}/{hash}.{ext}`, `…/{hash}_{1600,800,200}.webp` | Product images: the original plus three `.webp` derivatives | **Public** through the image domain, edge-cached |
 | `{tenant}/blogs/{post}/{hash}.{ext}` | Blog cover and body images: the original only (BR-135) | **Public** through the image domain, edge-cached |
+| `{tenant}/shop/{hash}.{ext}` | The shop's logo: the original only (BR-142) | **Public** through the image domain, edge-cached |
 | `jobs/{tenant}/{job}/upload.csv` | Uploaded product CSV | Presigned `PUT`, 10 min; read by the worker only; deleted after 30 days |
 | `jobs/{tenant}/{job}/errors.csv` | Error reports for CSV and marketplace imports | Presigned `GET`, 15 min; deleted after 30 days |
 | `exports/{tenant}/{job}.csv` | Order exports | Presigned `GET`, 15 min; deleted after 7 days |
@@ -1032,6 +1040,54 @@ full width.
 
 ---
 
+## 11. Hosted website
+
+### BR-140 Every shop has a website at `{slug}.belli.id`
+Belli serves every `active` shop's website itself, at `https://{slug}.belli.id`: home, catalog,
+product pages with a WhatsApp order button, the blog, a sitemap, and a "Dibuat dengan Belli" link
+in the footer. A shop that is `suspended` or `closed`, or a slug nobody holds, is `404`. The website
+is the shop's own, for its shoppers, so it speaks Indonesian; BR-016 covers the admin.
+
+The slug is the address. The owner changes it in settings (BR-008, BR-029):
+
+- 3–40 characters of `a-z`, `0-9` and `-`, starting and ending with a letter or digit;
+- unique across shops (`422` on `slug` when taken);
+- not one of the reserved names: `www`, `api`, `admin`, `img`, `app`, `mail`, `docs`, `blog`,
+  `help`, `status`, `cdn`, `static`, `dashboard`, `belli`, `toko`, `shop`, `dev`, `staging`, `test`.
+
+A new address works at once and the old one stops within 60 s (BR-085), with no redirect: it is free
+for another shop. A signup keeps its derived slug, the shop name plus a random suffix, until the
+owner picks one.
+
+*Why:* a shop that signs up on its own needs a website without a developer, and the subdomain is the
+address it can have on day one. Reserved names keep a shop from holding the platform's own hosts.
+
+### BR-141 The platform key
+One secret in platform config, held only by the hosted website's server. With `X-Shop: {slug}` it
+acts as that shop's key, for `GET` only and only with no `Origin`: anything else is
+`401 invalid_api_key`. An `active` shop is required (BR-140). The server rate limit counts per shop
+(BR-014), so one busy shop cannot use up another's. With no platform key configured, none is
+accepted.
+
+*Why:* a shop key belongs to one shop and one origin (BR-028), and putting each new shop's key into
+the website's config by hand is the step self-signup exists to remove. Read-only and server-only
+keep the platform key to what any shopper could already browse; checkout, accounts and orders still
+need a shop's own key.
+
+### BR-142 The shop's look
+Optional, set by the owner in storefront settings, returned by `/v1/storefront/config` for any
+website to use:
+
+| Field | Rule |
+|---|---|
+| Logo | JPEG, PNG or WebP up to 2 MB, uploaded like a blog cover (BR-051) to `{tenant}/shop/` (BR-053), the original only |
+| WhatsApp number | `62` and 8–13 more digits, where the order button sends shoppers |
+| Tagline | Up to 160 characters |
+| Brand colour | `#rrggbb`, lower case |
+| Instagram | The handle without `@`: 1–30 of letters, digits, `.` and `_` |
+
+---
+
 ## Traceability
 
 | BR | Shows up in | Proven by |
@@ -1079,3 +1135,4 @@ full width.
 | 128 | every email | P1-225, P1-226, P1-228 |
 | 129 | storefront settings | P1-216, P1-217, P1-227 |
 | 130–135 | blog manager, storefront blog | P1-601–608 |
+| 140–142 | settings, storefront settings, hosted website | P1-701–706 |

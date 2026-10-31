@@ -4,7 +4,8 @@
 #
 # Migrations first, then one API replica at a time: a stopping replica drains
 # (its /healthz turns 503 and Caddy routes around it) while the other serves,
-# and the next one waits until the new one is healthy. Then web and the worker.
+# and the next one waits until the new one is healthy. Then web, the shops'
+# website and the worker, and Caddy picks up its Caddyfile.
 #
 # On a developer machine: SKIP_PULL=1, with COMPOSE_FILE and COMPOSE_ENV_FILES
 # set as README.md says, and images built locally.
@@ -15,10 +16,12 @@ tag=${1:?usage: deploy.sh <image tag>}
 if [[ $tag != local ]]; then
 	export API_IMAGE=ghcr.io/miqbalhamdani/new-commerce-api:$tag
 	export WEB_IMAGE=ghcr.io/miqbalhamdani/new-commerce-web:$tag
+	# Its own repo, so its own shas: main unless STOREFRONT_TAG names one.
+	export STOREFRONT_IMAGE=ghcr.io/miqbalhamdani/belli-storefront:${STOREFRONT_TAG:-main}
 fi
 
 if [[ ${SKIP_PULL:-} != 1 ]]; then
-	docker compose pull --quiet api-1 web
+	docker compose pull --quiet api-1 web storefront
 fi
 
 # postgres only when this stack runs it: compose.managed-db.yaml takes it out
@@ -46,5 +49,8 @@ for svc in api-1 api-2; do
 	sleep 2
 done
 
-docker compose up -d --no-deps web worker caddy
+docker compose up -d --no-deps web storefront worker caddy
+# The Caddyfile is mounted, so an edit to it reaches Caddy only by a reload,
+# which keeps open connections. A broken one fails here and the old one stays.
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 echo "deployed $tag"

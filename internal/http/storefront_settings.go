@@ -19,7 +19,7 @@ func (s *Server) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, storefrontSettingsOut(st))
+		writeJSON(w, http.StatusOK, storefrontSettingsOut(st, s.team.LogoURL(st.LogoR2Key)))
 	})(w, r)
 }
 
@@ -36,8 +36,13 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			MidtransEnvironment      optional[string]   `json:"midtrans_environment"`
 			MidtransClientKey        optional[string]   `json:"midtrans_client_key"`
 			MidtransServerKey        optional[string]   `json:"midtrans_server_key"`
+			LogoR2Key                optional[string]   `json:"logo_r2_key"`
+			WhatsappNumber           optional[string]   `json:"whatsapp_number"`
+			Tagline                  optional[string]   `json:"tagline"`
+			BrandColor               optional[string]   `json:"brand_color"`
+			Instagram                optional[string]   `json:"instagram"`
 		}
-		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id") {
+		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id", "logo_url") {
 			return
 		}
 		if err := rejectNull(map[string]bool{"shipping_couriers": body.ShippingCouriers.Null,
@@ -50,6 +55,8 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			OriginPostalCode: change(body.OriginPostalCode), BankTransferInstructions: change(body.BankTransferInstructions),
 			MidtransEnvironment: change(body.MidtransEnvironment), MidtransClientKey: change(body.MidtransClientKey),
 			MidtransServerKey: change(body.MidtransServerKey),
+			LogoR2Key:         change(body.LogoR2Key), WhatsappNumber: change(body.WhatsappNumber), Tagline: change(body.Tagline),
+			BrandColor: change(body.BrandColor), Instagram: change(body.Instagram),
 		}
 		if body.ShippingCouriers.Set {
 			p.ShippingCouriers = &body.ShippingCouriers.Value
@@ -65,7 +72,7 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			writeError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, storefrontSettingsOut(st))
+		writeJSON(w, http.StatusOK, storefrontSettingsOut(st, s.team.LogoURL(st.LogoR2Key)))
 	})(w, r)
 }
 
@@ -76,7 +83,7 @@ func change(o optional[string]) team.Change[string] {
 	return team.Change[string]{Set: true, Value: &o.Value}
 }
 
-func storefrontSettingsOut(st team.StorefrontSettings) StorefrontSettings {
+func storefrontSettingsOut(st team.StorefrontSettings, logoURL *string) StorefrontSettings {
 	out := StorefrontSettings{
 		GoogleClientId: st.GoogleClientID, OriginPostalCode: st.OriginPostalCode,
 		BankTransferEnabled: st.BankTransferEnabled, BankTransferInstructions: st.BankTransferInstructions,
@@ -84,7 +91,9 @@ func storefrontSettingsOut(st team.StorefrontSettings) StorefrontSettings {
 		MidtransServerKeySet:    st.MidtransServerKey != nil,
 		MidtransNotificationUrl: config.APIURL() + "/v1/webhooks/midtrans/" + st.MidtransWebhookID.String(),
 		ShippingCouriers:        make([]CourierCode, 0, len(st.ShippingCouriers)),
-		UpdatedAt:               st.UpdatedAt,
+		LogoR2Key:               st.LogoR2Key, LogoUrl: logoURL, WhatsappNumber: st.WhatsappNumber, Tagline: st.Tagline,
+		BrandColor: st.BrandColor, Instagram: st.Instagram,
+		UpdatedAt: st.UpdatedAt,
 	}
 	if st.ContactEmail != nil {
 		e := openapi_types.Email(*st.ContactEmail)

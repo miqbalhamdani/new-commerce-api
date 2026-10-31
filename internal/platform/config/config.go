@@ -94,6 +94,10 @@ func TrustedProxies() ([]netip.Prefix, error) {
 	return out, nil
 }
 
+// StorefrontPlatformKey is STOREFRONT_PLATFORM_KEY, the key the hosted
+// website's server sends with X-Shop (BR-141). Unset accepts no platform key.
+func StorefrontPlatformKey() string { return os.Getenv("STOREFRONT_PLATFORM_KEY") }
+
 // JWTSecret returns the access-token signing key.
 //
 // Outside development there is no default and no fallback: a missing secret is

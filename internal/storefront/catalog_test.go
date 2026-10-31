@@ -156,11 +156,13 @@ func newShop(t *testing.T, store *db.Store, key string) shop {
 	ordersSvc := orders.NewService(store, files, nil)
 	ordersSvc.Rates = biteship.Cached{Quoter: rates, Cache: rates}
 	pay := newFakeMidtrans(t)
+	teamSvc := team.NewService(store, nil, testBox(t))
+	teamSvc.Files = files
 	ordersSvc.Midtrans, ordersSvc.Box, ordersSvc.APIURL = pay.client(), testBox(t), "http://api.test"
 	ordersSvc.Mail = mail.queue
 	return shop{h: NewRouter(NewServer(Services{Catalog: catalog.NewService(store, files, nil),
 		Blog: blog.NewService(store, files), Carts: carts.NewService(store, files), Orders: ordersSvc,
-		Customers: cust, Team: team.NewService(store, nil, testBox(t)),
+		Customers: cust, Team: teamSvc,
 		OrderTokens: tokens}), NewKeys(store), signer, nil),
 		key: key, signer: signer, resets: resets, mail: mail, rates: rates, pay: pay, orders: ordersSvc, cust: cust, files: files, store: store}
 }

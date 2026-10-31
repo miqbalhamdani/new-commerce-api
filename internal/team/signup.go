@@ -160,8 +160,9 @@ func validSignup(shopName, name, address string) error {
 	return nil
 }
 
-// slugFor derives the tenant's slug from its name. The random suffix means two
-// shops with one name never collide, and nothing else reads the slug.
+// slugFor derives the tenant's slug, its website's address, from its name.
+// The random suffix means two shops with one name never collide; the owner
+// picks a cleaner address in settings (BR-140).
 func slugFor(name string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(name) {

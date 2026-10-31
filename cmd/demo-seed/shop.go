@@ -91,7 +91,7 @@ func (sd *seeder) shopAndTeam(ctx context.Context, s shop, password string, now 
 // storefront's API keys: the live one, and an old one retire revokes.
 func (sd *seeder) settings(ctx context.Context, t *teamCtx) error {
 	tz := "Asia/Jakarta"
-	if _, err := sd.team.UpdateSettings(ctx, nil, &tz, nil); err != nil {
+	if _, err := sd.team.UpdateSettings(ctx, nil, nil, &tz, nil); err != nil {
 		return err
 	}
 	str := func(s string) team.Change[string] { return team.Change[string]{Set: true, Value: &s} }

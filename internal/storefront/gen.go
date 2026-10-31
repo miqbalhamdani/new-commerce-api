@@ -869,13 +869,28 @@ type ShippingRatesRequest struct {
 
 // StorefrontConfig defines model for StorefrontConfig.
 type StorefrontConfig struct {
-	BankTransferInstructions *string                          `json:"bank_transfer_instructions"`
-	GoogleClientId           *string                          `json:"google_client_id"`
-	Midtrans                 *MidtransConfig                  `json:"midtrans"`
-	PaymentMethods           []StorefrontConfigPaymentMethods `json:"payment_methods"`
+	BankTransferInstructions *string `json:"bank_transfer_instructions"`
+
+	// BrandColor `#rrggbb`, lower case.
+	//
+	// Examples: #0a7d6e
+	BrandColor     *string `json:"brand_color"`
+	GoogleClientId *string `json:"google_client_id"`
+
+	// Instagram The handle, without `@`.
+	Instagram      *string                          `json:"instagram"`
+	LogoUrl        *string                          `json:"logo_url"`
+	Midtrans       *MidtransConfig                  `json:"midtrans"`
+	PaymentMethods []StorefrontConfigPaymentMethods `json:"payment_methods"`
 
 	// ShopName Examples: Toko ABC
-	ShopName string `json:"shop_name"`
+	ShopName string  `json:"shop_name"`
+	Tagline  *string `json:"tagline"`
+
+	// WhatsappNumber Where an order button sends shoppers, as `wa.me/{whatsapp_number}`.
+	//
+	// Examples: 6281234567890
+	WhatsappNumber *string `json:"whatsapp_number"`
 }
 
 // StorefrontConfigPaymentMethods defines model for StorefrontConfig.PaymentMethods.

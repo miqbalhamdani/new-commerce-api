@@ -324,9 +324,9 @@ cannot do (BR-025).
 | Method | Path | Permission | BR |
 |---|---|---|---|
 | `GET` | `/v1/settings` | `settings:read` | 029 |
-| `PATCH` | `/v1/settings` | `settings:write` | 009, 029 |
-| `GET` | `/v1/storefront-settings` | `settings:read` | 120, 122, 127, 129 |
-| `PATCH` | `/v1/storefront-settings` | `settings:write` | 009, 120, 122, 127, 129 |
+| `PATCH` | `/v1/settings` | `settings:write` | 009, 029, 140 |
+| `GET` | `/v1/storefront-settings` | `settings:read` | 120, 122, 127, 129, 142 |
+| `PATCH` | `/v1/storefront-settings` | `settings:write` | 009, 120, 122, 127, 129, 142 |
 | `GET` | `/v1/roles` | `users:read` | 023 |
 | `GET` | `/v1/users?status=&role=&limit=&cursor=` | `users:read` | — |
 | `POST` | `/v1/users/invite` | `users:write` | 020, 023, 026 |
@@ -352,13 +352,15 @@ PATCH /v1/settings
 200 OK   ← same body as GET
 ```
 
-`name`, `timezone` and `order_prefix` are editable; a new prefix applies to new orders only.
+`name`, `slug`, `timezone` and `order_prefix` are editable; a new prefix applies to new orders only.
+`slug` is the hosted website's address, `{slug}.belli.id`: 3–40 of `a-z0-9-`, starting and ending
+with a letter or digit, not a reserved name, and unique, else `422` on `slug` (BR-140).
 There is no currency setting: every amount is IDR (BR-029).
 
 ### Storefront settings
 
-How the shop's website sells: contact email, Google sign-in, shipping origin and couriers, and
-payment methods.
+How the shop's website sells and looks: contact email, Google sign-in, shipping origin and
+couriers, payment methods, and the logo, WhatsApp number, tagline, brand colour and Instagram.
 
 ```json
 GET /v1/storefront-settings
@@ -374,6 +376,12 @@ GET /v1/storefront-settings
   "midtrans_client_key": "Mid-client-…",
   "midtrans_server_key_set": true,                 ← the key itself is never returned (BR-129)
   "midtrans_notification_url": "https://api.{domain}/v1/webhooks/midtrans/5b0e…",
+  "logo_r2_key": "0192-tenant/shop/9f2c….png",
+  "logo_url": "https://img.{domain}/0192-tenant/shop/9f2c….png",   ← null with no logo
+  "whatsapp_number": "6281234567890",
+  "tagline": "Sprei katun lokal, dijahit di Bandung",
+  "brand_color": "#0a7d6e",
+  "instagram": "tokoabc",
   "updated_at": "2026-10-06T16:15:00+07:00" }
 
 PATCH /v1/storefront-settings
@@ -390,6 +398,11 @@ PATCH /v1/storefront-settings
   rates need both (BR-120).
 - `midtrans_notification_url` is informational: the API sends it on every Snap transaction
   (BR-124), so the owner only needs to paste it into the Midtrans dashboard if Midtrans asks.
+- The look is optional and `null` clears each field (BR-142). `logo_r2_key` is a key from
+  `POST /v1/media/presign` with `purpose: shop_logo`; one outside the shop's `shop/` prefix, or
+  never uploaded, is `422`. `logo_url` is read-only. `whatsapp_number` is `62` and 8–13 digits,
+  `tagline` at most 160 characters, `brand_color` `#rrggbb` in lower case, `instagram` a handle
+  without `@`.
 - No `If-Match` (BR-010).
 
 ### Roles
@@ -1095,7 +1108,7 @@ never applied twice (BR-060).
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`) | 051, 053, 135 |
+| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`, `settings:write` for `shop_logo`) | 051, 053, 135, 142 |
 | `POST` | `/v1/media/confirm` | `media:write` | 050, 051 |
 | `PATCH` | `/v1/media/{id}` | `media:write` | 009 |
 | `DELETE` | `/v1/media/{id}` | `media:write` | 012 |
@@ -1126,10 +1139,11 @@ Uploads go **straight from the browser to R2**; bytes never transit the API (BR-
 
 - **Presign.** `purpose` is `product_image` (JPEG, PNG, WebP up to 20 MB), `product_import`
   (CSV up to 50 MB, no `product_id`), `blog_cover` (an image like `product_image`, with
-  `post_id` in place of `product_id`) or `blog_image` (the same, for the post's body); anything
-  else is `422`. The key contains the content hash (BR-053). Blog images have no confirm step: a
-  cover's key is saved as the post's `cover_r2_key` (§13), a body image is linked from the
-  Markdown by the response's `public_url`.
+  `post_id` in place of `product_id`), `blog_image` (the same, for the post's body) or `shop_logo`
+  (JPEG, PNG or WebP up to 2 MB, with neither id); anything else is `422`. The key contains the
+  content hash (BR-053). Blog images and the logo have no confirm step: a cover's key is saved as
+  the post's `cover_r2_key` (§13), a body image is linked from the Markdown by the response's
+  `public_url`, and a logo's key is saved as the storefront settings' `logo_r2_key` (§4).
 - **Confirm.** Checks content type and size against R2's `HEAD` before saving the row. A key for an
   object never uploaded is `422`.
 - **URLs.** Product images are public on the image domain (BR-053). Once ready, `derivatives` is
@@ -1269,12 +1283,18 @@ to their developer. The same key works in browser code (where the domain is chec
 website's own server, such as Next.js or Nuxt rendering on the server (where there is no browser
 to check).
 
+**Belli's hosted website** (BR-140) uses no shop's key. Its server sends the platform key (BR-141)
+with `X-Shop: {slug}`, for the `GET` routes only.
+
 ### 11.2 The key middleware
 
 Every storefront request runs this before any handler (BR-083, BR-085):
 
 1. Resolve `X-Api-Key` by SHA-256 through `resolve_api_key` (cached ≤ 60 s). Missing, unknown or
    revoked → `401 invalid_api_key`.
+   **The platform key** (BR-141) instead takes the shop from `X-Shop`: with an `Origin`, or on any
+   method but `GET`, it is `401 invalid_api_key`; a slug no `active` shop holds is `404 not_found`
+   (cached ≤ 60 s like a key). Server rate limits then count per shop.
 2. **Request has an `Origin`** (from a browser): it must exactly match the key's
    `allowed_origin`, else `403 origin_not_allowed` with no `Access-Control-Allow-Origin`. On a match, echo
    the origin and add `Vary: Origin`. Browser rate limits apply.
@@ -1292,7 +1312,7 @@ headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
 | `GET` | `/v1/storefront/products/{slug}` | key | 080, 081 |
 | `GET` | `/v1/storefront/categories?kind=` | key | 031 |
 | `GET` | `/v1/storefront/brands` | key | — |
-| `GET` | `/v1/storefront/config` | key | 122, 127 |
+| `GET` | `/v1/storefront/config` | key | 122, 127, 142 |
 | `GET` | `/v1/storefront/blog/categories` | key | 130 |
 | `GET` | `/v1/storefront/blog/posts?category=&tag=&featured=&limit=&cursor=&page=` | key | 131, 132, 133, 135 |
 | `GET` | `/v1/storefront/blog/posts/{slug}` | key | 131, 132, 133, 134, 135 |
@@ -1385,11 +1405,16 @@ GET /v1/storefront/config
   "payment_methods": ["bank_transfer", "midtrans"],
   "bank_transfer_instructions": "Transfer to BCA 123456789 a.n. Toko ABC",
   "midtrans": { "client_key": "Mid-client-…", "environment": "production",
-                "snap_js_url": "https://app.midtrans.com/snap/snap.js" } }   ← null when off
+                "snap_js_url": "https://app.midtrans.com/snap/snap.js" },   ← null when off
+  "logo_url": "https://img.{domain}/0192-tenant/shop/9f2c….png",            ← null with no logo
+  "whatsapp_number": "6281234567890",
+  "tagline": "Sprei katun lokal, dijahit di Bandung",
+  "brand_color": "#0a7d6e",
+  "instagram": "tokoabc" }                    ← the look is null field by field when unset (BR-142)
 ```
 
-Everything here is public by design; the website reads it once to render sign-in buttons and the
-payment step. A sandbox shop gets `https://app.sandbox.midtrans.com/snap/snap.js`.
+Everything here is public by design; the website reads it once to render sign-in buttons, the
+payment step and its look. A sandbox shop gets `https://app.sandbox.midtrans.com/snap/snap.js`.
 
 ### 11.5 Cart
 

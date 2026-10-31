@@ -465,6 +465,7 @@ const (
 	PresignRequestPurposeBlogImage     PresignRequestPurpose = "blog_image"
 	PresignRequestPurposeProductImage  PresignRequestPurpose = "product_image"
 	PresignRequestPurposeProductImport PresignRequestPurpose = "product_import"
+	PresignRequestPurposeShopLogo      PresignRequestPurpose = "shop_logo"
 )
 
 // Valid indicates whether the value is a known member of the PresignRequestPurpose enum.
@@ -477,6 +478,8 @@ func (e PresignRequestPurpose) Valid() bool {
 	case PresignRequestPurposeProductImage:
 		return true
 	case PresignRequestPurposeProductImport:
+		return true
+	case PresignRequestPurposeShopLogo:
 		return true
 	default:
 		return false
@@ -1846,7 +1849,7 @@ type PresignResponse struct {
 	// ExpiresIn Examples: 600
 	ExpiresIn int `json:"expires_in"`
 
-	// PublicUrl Where the image is served once uploaded; set for `blog_cover` and `blog_image`, so a body image can be linked from the post's Markdown (BR-135).
+	// PublicUrl Where the image is served once uploaded; set for `blog_cover`, `blog_image` and `shop_logo`, so a body image can be linked from the post's Markdown (BR-135).
 	PublicUrl *string `json:"public_url,omitempty"`
 	R2Key     string  `json:"r2_key"`
 	UploadUrl string  `json:"upload_url"`
@@ -2053,9 +2056,11 @@ type Settings struct {
 	Name string             `json:"name"`
 
 	// OrderPrefix Examples: ERG
-	OrderPrefix string         `json:"order_prefix"`
-	Slug        string         `json:"slug"`
-	Status      SettingsStatus `json:"status"`
+	OrderPrefix string `json:"order_prefix"`
+
+	// Slug The hosted website's address, `{slug}.belli.id` (BR-140).
+	Slug   string         `json:"slug"`
+	Status SettingsStatus `json:"status"`
 
 	// Timezone Examples: Asia/Jakarta
 	Timezone string `json:"timezone"`
@@ -2068,7 +2073,10 @@ type SettingsStatus string
 type SettingsUpdate struct {
 	Name        *string `json:"name,omitempty"`
 	OrderPrefix *string `json:"order_prefix,omitempty"`
-	Timezone    *string `json:"timezone,omitempty"`
+
+	// Slug Not a reserved name, and not another shop's (BR-140).
+	Slug     *string `json:"slug,omitempty"`
+	Timezone *string `json:"timezone,omitempty"`
 }
 
 // ShippingAddress defines model for ShippingAddress.
@@ -2148,11 +2156,23 @@ type StorefrontSettings struct {
 	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
 	BankTransferInstructions *string `json:"bank_transfer_instructions"`
 
+	// BrandColor Examples: #0a7d6e
+	BrandColor *string `json:"brand_color"`
+
 	// ContactEmail Reply-To on every email the shop sends (BR-128).
 	ContactEmail *openapi_types.Email `json:"contact_email"`
 
 	// GoogleClientId The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
-	GoogleClientId      *string                                `json:"google_client_id"`
+	GoogleClientId *string `json:"google_client_id"`
+
+	// Instagram The handle, without `@`.
+	Instagram *string `json:"instagram"`
+
+	// LogoR2Key A key from `POST /media/presign` with `purpose: shop_logo` (BR-142).
+	LogoR2Key *string `json:"logo_r2_key"`
+
+	// LogoUrl The logo on the image domain; read-only.
+	LogoUrl             *string                                `json:"logo_url"`
 	MidtransClientKey   *string                                `json:"midtrans_client_key"`
 	MidtransEnabled     bool                                   `json:"midtrans_enabled"`
 	MidtransEnvironment *StorefrontSettingsMidtransEnvironment `json:"midtrans_environment"`
@@ -2164,7 +2184,11 @@ type StorefrontSettings struct {
 	// OriginPostalCode Examples: 40115
 	OriginPostalCode *string       `json:"origin_postal_code"`
 	ShippingCouriers []CourierCode `json:"shipping_couriers"`
+	Tagline          *string       `json:"tagline"`
 	UpdatedAt        time.Time     `json:"updated_at"`
+
+	// WhatsappNumber Examples: 6281234567890
+	WhatsappNumber *string `json:"whatsapp_number"`
 }
 
 // StorefrontSettingsMidtransEnvironment defines model for StorefrontSettings.MidtransEnvironment.
@@ -2172,18 +2196,25 @@ type StorefrontSettingsMidtransEnvironment string
 
 // StorefrontSettingsUpdate defines model for StorefrontSettingsUpdate.
 type StorefrontSettingsUpdate struct {
-	BankTransferEnabled      *bool                                        `json:"bank_transfer_enabled,omitempty"`
-	BankTransferInstructions *string                                      `json:"bank_transfer_instructions,omitempty"`
-	ContactEmail             *openapi_types.Email                         `json:"contact_email,omitempty"`
-	GoogleClientId           *string                                      `json:"google_client_id,omitempty"`
-	MidtransClientKey        *string                                      `json:"midtrans_client_key,omitempty"`
-	MidtransEnabled          *bool                                        `json:"midtrans_enabled,omitempty"`
-	MidtransEnvironment      *StorefrontSettingsUpdateMidtransEnvironment `json:"midtrans_environment,omitempty"`
+	BankTransferEnabled      *bool                `json:"bank_transfer_enabled,omitempty"`
+	BankTransferInstructions *string              `json:"bank_transfer_instructions,omitempty"`
+	BrandColor               *string              `json:"brand_color,omitempty"`
+	ContactEmail             *openapi_types.Email `json:"contact_email,omitempty"`
+	GoogleClientId           *string              `json:"google_client_id,omitempty"`
+	Instagram                *string              `json:"instagram,omitempty"`
+
+	// LogoR2Key A key from `POST /media/presign` with `purpose: shop_logo`, uploaded (BR-142).
+	LogoR2Key           *string                                      `json:"logo_r2_key,omitempty"`
+	MidtransClientKey   *string                                      `json:"midtrans_client_key,omitempty"`
+	MidtransEnabled     *bool                                        `json:"midtrans_enabled,omitempty"`
+	MidtransEnvironment *StorefrontSettingsUpdateMidtransEnvironment `json:"midtrans_environment,omitempty"`
 
 	// MidtransServerKey Write-only; `null` removes it (and so needs Midtrans off).
 	MidtransServerKey *string        `json:"midtrans_server_key,omitempty"`
 	OriginPostalCode  *string        `json:"origin_postal_code,omitempty"`
 	ShippingCouriers  *[]CourierCode `json:"shipping_couriers,omitempty"`
+	Tagline           *string        `json:"tagline,omitempty"`
+	WhatsappNumber    *string        `json:"whatsapp_number,omitempty"`
 }
 
 // StorefrontSettingsUpdateMidtransEnvironment defines model for StorefrontSettingsUpdate.MidtransEnvironment.
@@ -3190,7 +3221,7 @@ type ServerInterface interface {
 	// GetSettings The shop's own settings
 	// (GET /settings)
 	GetSettings(w http.ResponseWriter, r *http.Request)
-	// UpdateSettings Change the shop's name, time zone or order prefix
+	// UpdateSettings Change the shop's name, address, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request)
 	// ShippingRates Quote shipping for a manual order
@@ -3646,7 +3677,7 @@ func (_ Unimplemented) GetSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// UpdateSettings Change the shop's name, time zone or order prefix
+// UpdateSettings Change the shop's name, address, time zone or order prefix
 // (PATCH /settings)
 func (_ Unimplemented) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -12711,7 +12742,7 @@ type StrictServerInterface interface {
 	// GetSettings The shop's own settings
 	// (GET /settings)
 	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
-	// UpdateSettings Change the shop's name, time zone or order prefix
+	// UpdateSettings Change the shop's name, address, time zone or order prefix
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
 	// ShippingRates Quote shipping for a manual order
