@@ -140,6 +140,7 @@ func run() error {
 	catalogSvc := catalog.NewService(pool, files, jobsSvc)
 	blogSvc := blog.NewService(pool, files)
 	teamSvc := team.NewService(pool, redis, box)
+	teamSvc.Files = files
 	ordersSvc := orders.NewService(pool, files, jobsSvc)
 	quoter, err := shippingQuoter()
 	if err != nil {

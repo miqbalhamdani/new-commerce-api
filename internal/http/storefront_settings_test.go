@@ -166,6 +166,73 @@ func TestStorefrontSettings(t *testing.T) {
 	}
 }
 
+// TestShopLook is P1-703's acceptance (04-api-spec.md §4, §8; BR-053,
+// BR-142): the look is optional, checked, and cleared by null; the logo is
+// presigned under the shop's own prefix and must have been uploaded.
+func TestShopLook(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	tenantID := uuid.Must(uuid.NewV7())
+	owner := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleOwner)
+	cleanSettings(t, store, tenantID)
+	do := apiClient(t, owner)
+
+	look := map[string]any{"whatsapp_number": "6281234567890", "tagline": "Sprei katun lokal",
+		"brand_color": "#0a7d6e", "instagram": "toko.abc_"}
+	code, st := do("PATCH", "/v1/storefront-settings", look)
+	if code != 200 || st["logo_url"] != nil {
+		t.Fatalf("look: %d %v", code, st)
+	}
+	for field, want := range look {
+		if st[field] != want {
+			t.Errorf("%s: %v, want %v", field, st[field], want)
+		}
+	}
+	for field, bad := range map[string]any{"whatsapp_number": "081234567890", "brand_color": "#0A7D6E",
+		"instagram": "@tokoabc", "tagline": strings.Repeat("a", 161), "logo_url": "https://x.test/a.png"} {
+		code, p := do("PATCH", "/v1/storefront-settings", map[string]any{field: bad})
+		assertProblem(t, code, p, 422, "validation_failed", field)
+	}
+
+	code, e := do("POST", "/v1/media/presign", map[string]any{"purpose": "shop_logo",
+		"mime_type": "image/png", "bytes": 4, "sha256": strings.Repeat("ef", 32)})
+	key, _ := e["r2_key"].(string)
+	if code != 200 || key != tenantID.String()+"/shop/"+strings.Repeat("ef", 32)+".png" || !strings.HasSuffix(e["public_url"].(string), "/"+key) {
+		t.Fatalf("presign: %d %v", code, e)
+	}
+	for what, body := range map[string]map[string]any{
+		"too big":   {"purpose": "shop_logo", "mime_type": "image/png", "bytes": 2<<20 + 1, "sha256": strings.Repeat("ef", 32)},
+		"not image": {"purpose": "shop_logo", "mime_type": "image/svg+xml", "bytes": 4, "sha256": strings.Repeat("ef", 32)},
+	} {
+		code, p := do("POST", "/v1/media/presign", body)
+		if code != 422 {
+			t.Errorf("%s: %d %v", what, code, p)
+		}
+	}
+	code, p := do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": key})
+	assertProblem(t, code, p, 422, "validation_failed", "logo_r2_key") // not uploaded yet
+	if err := testFiles(t).Put(ctx, key, strings.NewReader("\x89PNG"), 4, "image/png"); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": key})
+	if u, _ := st["logo_url"].(string); code != 200 || st["logo_r2_key"] != key || !strings.HasSuffix(u, "/"+key) {
+		t.Fatalf("logo: %d %v", code, st)
+	}
+	code, p = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": uuid.NewString() + "/shop/x.png"})
+	assertProblem(t, code, p, 422, "validation_failed", "logo_r2_key")
+
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": nil, "tagline": nil})
+	if code != 200 || st["logo_url"] != nil || st["tagline"] != nil || st["brand_color"] != "#0a7d6e" {
+		t.Errorf("clear: %d %v", code, st)
+	}
+
+	// The logo is the owner's to change, like the rest of the settings.
+	admin := signInAnotherUser(ctx, t, store, tenantID, auth.RoleAdmin)
+	code, p = apiClient(t, admin)("POST", "/v1/media/presign", map[string]any{"purpose": "shop_logo",
+		"mime_type": "image/png", "bytes": 4, "sha256": strings.Repeat("ef", 32)})
+	assertProblem(t, code, p, 403, "permission_denied", "")
+}
+
 // TestServerKeyNeverLogged extends P1-227's log scan over the route that
 // takes the key: a PATCH that succeeds and one that fails write no byte of it
 // to the log, the audit row or the response (BR-013, BR-129).

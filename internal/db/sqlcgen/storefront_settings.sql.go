@@ -28,7 +28,7 @@ func (q *Queries) EnsureStorefrontSettings(ctx context.Context, webhookID uuid.U
 }
 
 const getStorefrontSettings = `-- name: GetStorefrontSettings :one
-SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid
+SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid
 `
 
 func (q *Queries) GetStorefrontSettings(ctx context.Context) (StorefrontSetting, error) {
@@ -48,12 +48,17 @@ func (q *Queries) GetStorefrontSettings(ctx context.Context) (StorefrontSetting,
 		&i.MidtransServerKey,
 		&i.MidtransWebhookID,
 		&i.UpdatedAt,
+		&i.LogoR2Key,
+		&i.WhatsappNumber,
+		&i.Tagline,
+		&i.BrandColor,
+		&i.Instagram,
 	)
 	return i, err
 }
 
 const lockStorefrontSettings = `-- name: LockStorefrontSettings :one
-SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid FOR UPDATE
+SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid FOR UPDATE
 `
 
 // A PATCH validates the merged row under this lock, so two owners saving at
@@ -75,6 +80,11 @@ func (q *Queries) LockStorefrontSettings(ctx context.Context) (StorefrontSetting
 		&i.MidtransServerKey,
 		&i.MidtransWebhookID,
 		&i.UpdatedAt,
+		&i.LogoR2Key,
+		&i.WhatsappNumber,
+		&i.Tagline,
+		&i.BrandColor,
+		&i.Instagram,
 	)
 	return i, err
 }
@@ -82,7 +92,8 @@ func (q *Queries) LockStorefrontSettings(ctx context.Context) (StorefrontSetting
 const storefrontConfig = `-- name: StorefrontConfig :one
 SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
-       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key
+       coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
+       s.logo_r2_key, s.whatsapp_number, s.tagline, s.brand_color, s.instagram
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid
@@ -96,10 +107,16 @@ type StorefrontConfigRow struct {
 	MidtransEnabled          bool
 	MidtransEnvironment      *string
 	MidtransClientKey        *string
+	LogoR2Key                *string
+	WhatsappNumber           *string
+	Tagline                  *string
+	BrandColor               *string
+	Instagram                *string
 }
 
-// What a website renders sign-in and payment from (P1-224). A shop with no
-// settings row yet has the defaults: bank transfer on, nothing else.
+// What a website renders sign-in, payment and its look from (P1-224, P1-703).
+// A shop with no settings row yet has the defaults: bank transfer on, nothing
+// else.
 func (q *Queries) StorefrontConfig(ctx context.Context) (StorefrontConfigRow, error) {
 	row := q.db.QueryRow(ctx, storefrontConfig)
 	var i StorefrontConfigRow
@@ -111,6 +128,11 @@ func (q *Queries) StorefrontConfig(ctx context.Context) (StorefrontConfigRow, er
 		&i.MidtransEnabled,
 		&i.MidtransEnvironment,
 		&i.MidtransClientKey,
+		&i.LogoR2Key,
+		&i.WhatsappNumber,
+		&i.Tagline,
+		&i.BrandColor,
+		&i.Instagram,
 	)
 	return i, err
 }
@@ -127,9 +149,14 @@ UPDATE storefront_settings SET
     midtrans_environment = $8,
     midtrans_client_key = $9,
     midtrans_server_key = $10,
+    logo_r2_key = $11,
+    whatsapp_number = $12,
+    tagline = $13,
+    brand_color = $14,
+    instagram = $15,
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
-RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at
+RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram
 `
 
 type UpdateStorefrontSettingsParams struct {
@@ -143,6 +170,11 @@ type UpdateStorefrontSettingsParams struct {
 	MidtransEnvironment      *string
 	MidtransClientKey        *string
 	MidtransServerKey        []byte
+	LogoR2Key                *string
+	WhatsappNumber           *string
+	Tagline                  *string
+	BrandColor               *string
+	Instagram                *string
 }
 
 func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStorefrontSettingsParams) (StorefrontSetting, error) {
@@ -157,6 +189,11 @@ func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStoref
 		arg.MidtransEnvironment,
 		arg.MidtransClientKey,
 		arg.MidtransServerKey,
+		arg.LogoR2Key,
+		arg.WhatsappNumber,
+		arg.Tagline,
+		arg.BrandColor,
+		arg.Instagram,
 	)
 	var i StorefrontSetting
 	err := row.Scan(
@@ -173,6 +210,11 @@ func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStoref
 		&i.MidtransServerKey,
 		&i.MidtransWebhookID,
 		&i.UpdatedAt,
+		&i.LogoR2Key,
+		&i.WhatsappNumber,
+		&i.Tagline,
+		&i.BrandColor,
+		&i.Instagram,
 	)
 	return i, err
 }
