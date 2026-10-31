@@ -8,7 +8,7 @@ Acceptance cites the rules it proves (`BR-xxx`, `02-business-rules.md`); the rul
 there. Section references (`§7.3`) point into `04-api-spec.md` unless another file is named.
 
 **Status** `todo` · `wip` · `review` · `done` · `blocked` · `dropped`
-**Repo** `BE` backend · `FE` frontend · `CT` contracts · `OPS` infrastructure
+**Repo** `BE` backend · `FE` frontend · `SF` hosted website (`belli-storefront`) · `CT` contracts · `OPS` infrastructure
 
 Ids keep the `P1-` prefix from v1 so branches, commits and PR history stay readable. Phases follow
 the v2 delivery plan (about 28 weeks).
@@ -374,6 +374,31 @@ website through `/v1/storefront/blog/posts`, and a scheduled one appears by itse
 > **Production step for `P1-603`:** the bucket policy in `make storage-init` makes `*/blogs/*`
 > public on MinIO only. The production image domain must serve `{tenant}/blogs/…` too, or covers
 > answer `403` (BR-053).
+
+---
+
+## Phase 8 · Hosted website (`{slug}.belli.id`)
+
+Added in v2.23 so a shop that signs up on its own has a website without a developer: Belli serves
+every active shop at `{slug}.belli.id` from one template (BR-140), the precondition for the Mulai
+plan in `jadigampang.com/docs/harga.md`.
+
+**Exit:** a shop that signs up, picks its address and sets its look in the admin sees its catalog
+and blog at `https://{slug}.belli.id`, with an order button that opens WhatsApp.
+
+| ID | Item | Repo | Depends | Acceptance | Status | Owner |
+|---|---|---|---|---|---|---|
+| P1-701 | Platform key | BE | 202 | As §11.2: the platform key with `X-Shop` reads an active shop's catalog, blog and config; with an `Origin`, on a write, or with no key configured it is `401`; an unknown or suspended shop is `404`; shop A's slug never shows shop B's data; the server limit counts per shop (BR-003, BR-014, BR-141) | wip | Iqbal Hamdani |
+| P1-702 | Shop address | BE | 083 | `PATCH /v1/settings` takes `slug` as §4: format, reserved names and another shop's slug are `422` on `slug`; one audit row (BR-008, BR-140) | wip | Iqbal Hamdani |
+| P1-703 | The shop's look and logo upload | BE | 216 | Migration `000029_storefront_branding` matches `03-erd.md` §3.5; storefront settings read and write the look as §4, `null` clearing each; `shop_logo` presign as §8 (2 MB, `settings:write`), a logo key outside `{tenant}/shop/` or never uploaded is `422`; `/config` returns the look; `*/shop/*` is public in the dev bucket (BR-053, BR-142) | wip | Iqbal Hamdani |
+| P1-704 | Address and look in the admin | FE | 702, 703 | Settings edits the address with its `.belli.id` suffix and links to the website; storefront settings uploads a logo and edits WhatsApp, tagline, colour and Instagram (BR-140, BR-142) | todo | |
+| P1-705 | The hosted website | SF | 701, 703 | One Next.js server answers `{slug}.belli.id` with that shop's home, catalog, product pages (WhatsApp order button when a number is set), blog, sitemap and robots, in its logo and colour, with "Dibuat dengan Belli" in the footer; an unknown shop is a `404` page (BR-140, BR-142) | todo | |
+| P1-706 | Wildcard host in production | OPS | 705 | Caddy serves `*.belli.id` from the website's container with the origin certificate; `deploy.sh` rolls it out with the API and admin; Cloudflare proxies `*.belli.id`; the image domain serves `{tenant}/shop/…` (BR-053, BR-140) | todo | |
+
+> **Production steps for `P1-706`:** the origin certificate must name `*.belli.id`; `deploy/.env`
+> needs `ROOT_DOMAIN` and `STOREFRONT_PLATFORM_KEY`; the box must be able to pull
+> `ghcr.io/miqbalhamdani/belli-storefront`; the image domain's WAF rule must let `/shop/` through
+> (as it does `/products/` and `/blogs/`); the `*.belli.id` DNS record goes in last.
 
 ---
 

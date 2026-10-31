@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.22.0
+  version: 2.23.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -1082,7 +1082,9 @@ paths:
         key carries the future job's id. `blog_cover`: an image as `product_image`, `post_id`
         required, `blog:write`; there is no confirm, the key is set on the post (BR-135).
         `blog_image`: the same, for an image in the post's body, which links it by the returned
-        `public_url`. The key contains the content hash (BR-053). The URL lives 10 minutes.
+        `public_url`. `shop_logo`: JPEG, PNG or WebP up to 2 MB, neither id, `settings:write`;
+        the key is set as the storefront settings' `logo_r2_key` (BR-142). The key contains the
+        content hash (BR-053). The URL lives 10 minutes.
       requestBody:
         required: true
         content:
@@ -1358,12 +1360,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
     patch:
       operationId: updateSettings
-      summary: Change the shop's name, time zone or order prefix
+      summary: Change the shop's name, address, time zone or order prefix
       description: |
         Only the owner (`settings:write`, BR-029). `timezone` is an IANA name; it is for
         display only, the wire stays WIB (BR-007). `order_prefix` is 2–6 of `A-Z0-9` and applies
-        to new orders only (BR-077). `id`, `slug` and `status` are not writable (BR-008). No
-        `If-Match`: last save wins (BR-010). There is no currency setting (BR-029).
+        to new orders only (BR-077). `slug` is the hosted website's address, `{slug}.belli.id`:
+        3–40 of `a-z0-9-`, starting and ending with a letter or digit, not a reserved name, and
+        not another shop's, else `422` on `slug` (BR-140). `id` and `status` are not writable
+        (BR-008). No `If-Match`: last save wins (BR-010). There is no currency setting (BR-029).
       requestBody:
         required: true
         content:
@@ -1412,7 +1416,8 @@ paths:
         envelope-encrypted (BR-129). Enabling Midtrans without its environment, client key and
         server key is `422`, and so is turning off both payment methods (BR-122).
         `origin_postal_code` is 5 digits and `shipping_couriers` are Biteship courier codes
-        (BR-120). No `If-Match` (BR-010).
+        (BR-120). The look is optional (BR-142); a `logo_r2_key` outside the shop's `shop/`
+        prefix, or never uploaded, is `422`. No `If-Match` (BR-010).
       requestBody:
         required: true
         content:
@@ -3197,7 +3202,7 @@ components:
       properties:
         purpose:
           type: string
-          enum: [product_image, product_import, blog_cover, blog_image]
+          enum: [product_image, product_import, blog_cover, blog_image, shop_logo]
         product_id:
           type: string
           format: uuid
@@ -3229,8 +3234,8 @@ components:
         public_url:
           type: string
           description: >-
-            Where the image is served once uploaded; set for `blog_cover` and `blog_image`, so a
-            body image can be linked from the post's Markdown (BR-135).
+            Where the image is served once uploaded; set for `blog_cover`, `blog_image` and
+            `shop_logo`, so a body image can be linked from the post's Markdown (BR-135).
 
     ConfirmMedia:
       type: object
@@ -3828,6 +3833,7 @@ components:
           type: string
         slug:
           type: string
+          description: The hosted website's address, `{slug}.belli.id` (BR-140).
         order_prefix:
           type: string
           examples: ["ERG"]
@@ -3845,6 +3851,10 @@ components:
         name:
           type: string
           minLength: 1
+        slug:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$"
+          description: Not a reserved name, and not another shop's (BR-140).
         timezone:
           type: string
         order_prefix:
@@ -3861,7 +3871,8 @@ components:
       required: [contact_email, google_client_id, origin_postal_code, shipping_couriers,
                  bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled,
                  midtrans_environment, midtrans_client_key, midtrans_server_key_set,
-                 midtrans_notification_url, updated_at]
+                 midtrans_notification_url, logo_r2_key, logo_url, whatsapp_number, tagline,
+                 brand_color, instagram, updated_at]
       properties:
         contact_email:
           type: [string, "null"]
@@ -3896,6 +3907,24 @@ components:
           type: string
           format: uri
           description: Where Midtrans tells the API about payments; sent with every Snap transaction (BR-124).
+        logo_r2_key:
+          type: [string, "null"]
+          description: "A key from `POST /media/presign` with `purpose: shop_logo` (BR-142)."
+        logo_url:
+          type: [string, "null"]
+          format: uri
+          description: The logo on the image domain; read-only.
+        whatsapp_number:
+          type: [string, "null"]
+          examples: ["6281234567890"]
+        tagline:
+          type: [string, "null"]
+        brand_color:
+          type: [string, "null"]
+          examples: ["#0a7d6e"]
+        instagram:
+          type: [string, "null"]
+          description: The handle, without `@`.
         updated_at:
           type: string
           format: date-time
@@ -3933,6 +3962,21 @@ components:
           type: [string, "null"]
           writeOnly: true
           description: Write-only; `null` removes it (and so needs Midtrans off).
+        logo_r2_key:
+          type: [string, "null"]
+          description: "A key from `POST /media/presign` with `purpose: shop_logo`, uploaded (BR-142)."
+        whatsapp_number:
+          type: [string, "null"]
+          pattern: "^62[0-9]{8,13}$"
+        tagline:
+          type: [string, "null"]
+          maxLength: 160
+        brand_color:
+          type: [string, "null"]
+          pattern: "^#[0-9a-f]{6}$"
+        instagram:
+          type: [string, "null"]
+          pattern: "^[A-Za-z0-9._]{1,30}$"
 
     ApiKey:
       type: object
