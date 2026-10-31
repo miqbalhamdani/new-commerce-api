@@ -46,6 +46,7 @@ RETURNING *;
 -- tenants has no RLS, so the WHERE names the caller's own tenant explicitly.
 UPDATE tenants SET
   name         = coalesce(sqlc.narg(name), name),
+  slug         = coalesce(sqlc.narg(slug), slug),
   timezone     = coalesce(sqlc.narg(timezone), timezone),
   order_prefix = coalesce(sqlc.narg(order_prefix), order_prefix)
 WHERE id = current_setting('app.tenant_id')::uuid
