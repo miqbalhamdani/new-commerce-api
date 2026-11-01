@@ -360,7 +360,8 @@ There is no currency setting: every amount is IDR (BR-029).
 ### Storefront settings
 
 How the shop's website sells and looks: contact email, Google sign-in, shipping origin and
-couriers, payment methods, and the logo, WhatsApp number, tagline, brand colour and Instagram.
+couriers, payment methods, and the theme, brand colour, logo, hero photo, WhatsApp number, tagline,
+Instagram, address, opening hours and marketplace links.
 
 ```json
 GET /v1/storefront-settings
@@ -376,12 +377,19 @@ GET /v1/storefront-settings
   "midtrans_client_key": "Mid-client-…",
   "midtrans_server_key_set": true,                 ← the key itself is never returned (BR-129)
   "midtrans_notification_url": "https://api.{domain}/v1/webhooks/midtrans/5b0e…",
+  "theme": "katalog",
+  "brand_color": "#9a4e3a",                        ← null = the theme's first colour
   "logo_r2_key": "0192-tenant/shop/9f2c….png",
   "logo_url": "https://img.{domain}/0192-tenant/shop/9f2c….png",   ← null with no logo
+  "hero_r2_key": null,
+  "hero_url": null,
   "whatsapp_number": "6281234567890",
   "tagline": "Sprei katun lokal, dijahit di Bandung",
-  "brand_color": "#0a7d6e",
   "instagram": "tokoabc",
+  "address": "Jl. Braga No. 10, Bandung",
+  "opening_hours": "Setiap hari 09.00–21.00",
+  "shopee_url": "https://shopee.co.id/tokoabc",
+  "tokopedia_url": null,
   "updated_at": "2026-10-06T16:15:00+07:00" }
 
 PATCH /v1/storefront-settings
@@ -398,11 +406,15 @@ PATCH /v1/storefront-settings
   rates need both (BR-120).
 - `midtrans_notification_url` is informational: the API sends it on every Snap transaction
   (BR-124), so the owner only needs to paste it into the Midtrans dashboard if Midtrans asks.
-- The look is optional and `null` clears each field (BR-142). `logo_r2_key` is a key from
-  `POST /v1/media/presign` with `purpose: shop_logo`; one outside the shop's `shop/` prefix, or
-  never uploaded, is `422`. `logo_url` is read-only. `whatsapp_number` is `62` and 8–13 digits,
-  `tagline` at most 160 characters, `brand_color` `#rrggbb` in lower case, `instagram` a handle
-  without `@`.
+- The look is optional and `null` clears each field (BR-142), except `theme`, which is one of the
+  eight in BR-143 and never `null`. `brand_color` is one of the theme's four colours, else `422`;
+  a `PATCH` that changes `theme` without `brand_color` clears it. `logo_r2_key` is a key from
+  `POST /v1/media/presign` with `purpose: shop_logo`, and `hero_r2_key` one with
+  `purpose: shop_hero`; one outside the shop's `shop/` prefix, or never uploaded, is `422`.
+  `logo_url` and `hero_url` are read-only. `whatsapp_number` is `62` and 8–13 digits, `tagline` at
+  most 160 characters, `instagram` a handle without `@`, `address` at most 300 characters,
+  `opening_hours` at most 120, and `shopee_url` / `tokopedia_url` an `https://` link on
+  `shopee.co.id` / `tokopedia.com` of at most 300.
 - No `If-Match` (BR-010).
 
 ### Roles
@@ -1108,7 +1120,7 @@ never applied twice (BR-060).
 
 | Method | Path | Permission | BR |
 |---|---|---|---|
-| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`, `settings:write` for `shop_logo`) | 051, 053, 135, 142 |
+| `POST` | `/v1/media/presign` | `media:write` (or `products:write` for `product_import`, `blog:write` for `blog_cover` and `blog_image`, `settings:write` for `shop_logo` and `shop_hero`) | 051, 053, 135, 142 |
 | `POST` | `/v1/media/confirm` | `media:write` | 050, 051 |
 | `PATCH` | `/v1/media/{id}` | `media:write` | 009 |
 | `DELETE` | `/v1/media/{id}` | `media:write` | 012 |
@@ -1139,11 +1151,12 @@ Uploads go **straight from the browser to R2**; bytes never transit the API (BR-
 
 - **Presign.** `purpose` is `product_image` (JPEG, PNG, WebP up to 20 MB), `product_import`
   (CSV up to 50 MB, no `product_id`), `blog_cover` (an image like `product_image`, with
-  `post_id` in place of `product_id`), `blog_image` (the same, for the post's body) or `shop_logo`
-  (JPEG, PNG or WebP up to 2 MB, with neither id); anything else is `422`. The key contains the
-  content hash (BR-053). Blog images and the logo have no confirm step: a cover's key is saved as
-  the post's `cover_r2_key` (§13), a body image is linked from the Markdown by the response's
-  `public_url`, and a logo's key is saved as the storefront settings' `logo_r2_key` (§4).
+  `post_id` in place of `product_id`), `blog_image` (the same, for the post's body) , `shop_logo`
+  (JPEG, PNG or WebP up to 2 MB, with neither id) or `shop_hero` (the same, up to 5 MB); anything
+  else is `422`. The key contains the content hash (BR-053). Blog images, the logo and the hero
+  photo have no confirm step: a cover's key is saved as the post's `cover_r2_key` (§13), a body
+  image is linked from the Markdown by the response's `public_url`, and a logo's or hero photo's key
+  is saved as the storefront settings' `logo_r2_key` or `hero_r2_key` (§4).
 - **Confirm.** Checks content type and size against R2's `HEAD` before saving the row. A key for an
   object never uploaded is `422`.
 - **URLs.** Product images are public on the image domain (BR-053). Once ready, `derivatives` is
@@ -1312,7 +1325,7 @@ headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
 | `GET` | `/v1/storefront/products/{slug}` | key | 080, 081 |
 | `GET` | `/v1/storefront/categories?kind=` | key | 031 |
 | `GET` | `/v1/storefront/brands` | key | — |
-| `GET` | `/v1/storefront/config` | key | 122, 127, 142 |
+| `GET` | `/v1/storefront/config` | key | 122, 127, 142, 143 |
 | `GET` | `/v1/storefront/blog/categories` | key | 130 |
 | `GET` | `/v1/storefront/blog/posts?category=&tag=&featured=&limit=&cursor=&page=` | key | 131, 132, 133, 135 |
 | `GET` | `/v1/storefront/blog/posts/{slug}` | key | 131, 132, 133, 134, 135 |
@@ -1345,8 +1358,12 @@ GET /v1/storefront/products?category=apparel.tees&sort=-updated_at&limit=24
     { "slug": "erigo-basic-tee", "title": "Erigo Basic Tee",
       "brand": { "slug": "erigo", "name": "Erigo" },
       "categories": [ { "kind": "category", "name": "Tees", "path": "apparel.tees" } ],
-      "price_min": 19900000,
+      "price_min": 14900000,
       "price_max": 21900000,
+      "on_sale": true,
+      "regular_price_min": 19900000,
+      "options": [ { "name": "Colour", "values": ["Black", "White"] },
+                   { "name": "Size", "values": ["S", "M", "L"] } ],
       "weight_grams_min": 200,
       "weight_grams_max": 250,
       "image": { "url": "https://img.{domain}/…/800.webp",
@@ -1359,6 +1376,10 @@ GET /v1/storefront/products?category=apparel.tees&sort=-updated_at&limit=24
   a trigram match on title.
 - `sort`: `-updated_at` (default), `price_min`, `-price_min`, `title`.
 - `price_min`/`price_max` are the prices shoppers pay right now, sales included (BR-046).
+  `on_sale` is true when any visible variant is on sale, and `regular_price_min` is the lowest
+  regular price among them, to cross out beside `price_min` (BR-143).
+- `options` lists each option name in the product's order with its distinct values, in the order
+  the visible variants first use them; `[]` for a product without options.
 - `categories` are the product's unarchived categories, ordered as on the product below;
   `weight_grams_min`/`weight_grams_max` span its visible variants (P1-230).
 - Paging: `cursor` as everywhere, or `page` (1-based) for a numbered pager, the one exception to
@@ -1406,11 +1427,17 @@ GET /v1/storefront/config
   "bank_transfer_instructions": "Transfer to BCA 123456789 a.n. Toko ABC",
   "midtrans": { "client_key": "Mid-client-…", "environment": "production",
                 "snap_js_url": "https://app.midtrans.com/snap/snap.js" },   ← null when off
+  "theme": "katalog",
+  "brand_color": "#2f5a4c",                   ← never null: the theme's first colour when unset
   "logo_url": "https://img.{domain}/0192-tenant/shop/9f2c….png",            ← null with no logo
+  "hero_url": null,
   "whatsapp_number": "6281234567890",
   "tagline": "Sprei katun lokal, dijahit di Bandung",
-  "brand_color": "#0a7d6e",
-  "instagram": "tokoabc" }                    ← the look is null field by field when unset (BR-142)
+  "instagram": "tokoabc",
+  "address": "Jl. Braga No. 10, Bandung",
+  "opening_hours": "Setiap hari 09.00–21.00",
+  "shopee_url": "https://shopee.co.id/tokoabc",
+  "tokopedia_url": null }      ← the rest of the look is null field by field when unset (BR-142)
 ```
 
 Everything here is public by design; the website reads it once to render sign-in buttons, the

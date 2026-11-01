@@ -536,7 +536,7 @@ match a key's start only, and one rule must cover every tenant.
 |---|---|---|
 | `{tenant}/products/{product}/{hash}.{ext}`, `…/{hash}_{1600,800,200}.webp` | Product images: the original plus three `.webp` derivatives | **Public** through the image domain, edge-cached |
 | `{tenant}/blogs/{post}/{hash}.{ext}` | Blog cover and body images: the original only (BR-135) | **Public** through the image domain, edge-cached |
-| `{tenant}/shop/{hash}.{ext}` | The shop's logo: the original only (BR-142) | **Public** through the image domain, edge-cached |
+| `{tenant}/shop/{hash}.{ext}` | The shop's logo and hero photo: the original only (BR-142) | **Public** through the image domain, edge-cached |
 | `jobs/{tenant}/{job}/upload.csv` | Uploaded product CSV | Presigned `PUT`, 10 min; read by the worker only; deleted after 30 days |
 | `jobs/{tenant}/{job}/errors.csv` | Error reports for CSV and marketplace imports | Presigned `GET`, 15 min; deleted after 30 days |
 | `exports/{tenant}/{job}.csv` | Order exports | Presigned `GET`, 15 min; deleted after 7 days |
@@ -1075,16 +1075,42 @@ keep the platform key to what any shopper could already browse; checkout, accoun
 need a shop's own key.
 
 ### BR-142 The shop's look
-Optional, set by the owner in storefront settings, returned by `/v1/storefront/config` for any
-website to use:
+Set by the owner in storefront settings, returned by `/v1/storefront/config` for any website to use.
+Every field but the theme is optional:
 
 | Field | Rule |
 |---|---|
+| Theme | One of the themes in BR-143; `katalog` until the owner picks |
+| Brand colour | One of the chosen theme's four colours (BR-143); none means its first. Picking another theme without a colour clears it |
 | Logo | JPEG, PNG or WebP up to 2 MB, uploaded like a blog cover (BR-051) to `{tenant}/shop/` (BR-053), the original only |
+| Hero photo | As the logo, up to 5 MB |
 | WhatsApp number | `62` and 8–13 more digits, where the order button sends shoppers |
 | Tagline | Up to 160 characters |
-| Brand colour | `#rrggbb`, lower case |
 | Instagram | The handle without `@`: 1–30 of letters, digits, `.` and `_` |
+| Address | Up to 300 characters; the website shows it with a map |
+| Opening hours | Up to 120 characters of free text, such as `Setiap hari 09.00–21.00` |
+| Shopee, Tokopedia | An `https://` link on `shopee.co.id` or `tokopedia.com` (or a subdomain of either), up to 300 characters |
+
+`/config` always returns a brand colour: the chosen one or the theme's first.
+
+### BR-143 Themes
+The hosted website draws a shop in one of eight themes. Each comes with four brand colours, made for
+it; the first is its default. The admin labels each theme with the kind of shop it suits and links
+to a demo shop that uses it, but any shop may pick any theme.
+
+| Theme | Suits | Colours |
+|---|---|---|
+| `busana` | Busana muslim, hijab | `#6e4b3a` `#3f5a4c` `#7a3e52` `#26364f` |
+| `clothing` | Everyday clothing, t-shirts, unisex | `#2d5b8a` `#121212` `#4e5b31` `#a4472a` |
+| `woman` | Women's fashion, boutiques | `#8c6e57` `#141414` `#6e2f3c` `#55624a` |
+| `katalog` | Skincare, cosmetics, any shop | `#2f5a4c` `#9a4e3a` `#6a3e5e` `#2d4a6e` |
+| `katalog-hangat` | Premium beauty, editorial | `#4a2318` `#2f4a3a` `#3d2f5a` `#8a4b22` |
+| `furnitur` | Furniture, home decor | `#8a5a3b` `#5e6b4e` `#34505f` `#1e1c1a` |
+| `furnitur-earthy` | Teak and rattan furniture, crafts | `#8b4426` `#5f6347` `#1c1a15` `#9a6b3f` |
+| `furnitur-ceria` | Modern homeware | `#0b55c4` `#14171f` `#0e7c66` `#c8442b` |
+
+*Why:* a free colour lets a shop break a theme's contrast; four colours per theme keep every
+combination readable while still giving each shop its own.
 
 ---
 
@@ -1135,4 +1161,5 @@ website to use:
 | 128 | every email | P1-225, P1-226, P1-228 |
 | 129 | storefront settings | P1-216, P1-217, P1-227 |
 | 130–135 | blog manager, storefront blog | P1-601–608 |
-| 140–142 | settings, storefront settings, hosted website | P1-701–706 |
+| 140–142 | settings, storefront settings, hosted website | P1-701–706, P1-801–805 |
+| 143 | storefront settings, hosted website, demo shops | P1-801–815 |

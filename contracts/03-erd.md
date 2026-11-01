@@ -507,12 +507,22 @@ CREATE TABLE storefront_settings (
     midtrans_server_key    bytea,
     -- Opaque id in the notification URL; how a webhook finds its tenant (BR-003).
     midtrans_webhook_id    uuid NOT NULL UNIQUE,
-    -- BR-142. The shop's look, for any website and the hosted one (BR-140). All optional.
+    -- BR-142. The shop's look, for any website and the hosted one (BR-140). All optional but
+    -- the theme (BR-143). The app keeps brand_color to one of the theme's four.
+    theme                  text NOT NULL DEFAULT 'katalog' CHECK (theme IN ('busana','clothing',
+                           'woman','katalog','katalog-hangat','furnitur','furnitur-earthy','furnitur-ceria')),
     logo_r2_key            text,                  -- {tenant}/shop/{hash}.{ext} (BR-053)
+    hero_r2_key            text,                  -- {tenant}/shop/{hash}.{ext} (BR-053)
     whatsapp_number        text CHECK (whatsapp_number ~ '^62[0-9]{8,13}$'),
     tagline                text CHECK (char_length(tagline) <= 160),
     brand_color            text CHECK (brand_color ~ '^#[0-9a-f]{6}$'),
     instagram              text CHECK (instagram ~ '^[A-Za-z0-9._]{1,30}$'),
+    address                text CHECK (char_length(address) <= 300),
+    opening_hours          text CHECK (char_length(opening_hours) <= 120),
+    shopee_url             text CHECK (char_length(shopee_url) <= 300
+                           AND shopee_url ~ '^https://([a-z0-9-]+\.)*shopee\.co\.id(/\S*)?$'),
+    tokopedia_url          text CHECK (char_length(tokopedia_url) <= 300
+                           AND tokopedia_url ~ '^https://([a-z0-9-]+\.)*tokopedia\.com(/\S*)?$'),
     updated_at             timestamptz NOT NULL DEFAULT now(),
     CHECK (NOT midtrans_enabled OR (midtrans_environment IS NOT NULL
            AND midtrans_client_key IS NOT NULL AND midtrans_server_key IS NOT NULL)),
@@ -1027,7 +1037,7 @@ variant of a product contend on one row, and erase the difference between on-han
 | Removed | `stock_locations`, `stock_ledger_entries`, `stock_balances`, `channel_events`, `reservations`, `fulfillments`, `fulfillment_lines`, `shipments`, `returns`, `return_lines`, `idempotency_keys`, `outbound_webhooks` (all from the v1.0 spec, never built) |
 | Added | `customers`, `customer_sessions`, `carts`, `cart_items`, `orders`, `order_lines`, `order_sequences`, `channels`, `channel_listings`, `audit_log`, `jobs`, in v2.1 `storefront_settings`, `payments`, and in v2.20 `blog_categories`, `blog_posts`, `blog_post_products` |
 | `users` (v2.20) | `bio` added; `UNIQUE (id, tenant_id)` added for the blog author FK (BR-133) |
-| `storefront_settings` (v2.23) | `logo_r2_key`, `whatsapp_number`, `tagline`, `brand_color`, `instagram` added (BR-142). Migration: P1-703 |
+| `storefront_settings` (v2.23) | `logo_r2_key`, `whatsapp_number`, `tagline`, `brand_color`, `instagram` added (BR-142). Migration: P1-703. v2.24 adds `theme`, `hero_r2_key`, `address`, `opening_hours`, `shopee_url`, `tokopedia_url` (BR-142, BR-143). Migration: P1-802 |
 | `users.role` | `warehouse` removed from the CHECK (BR-023). Migration: P1-017 |
 | `api_keys` | `permissions` and `key_prefix` dropped; `allowed_origin` added (one URL per key). One kind of key, no `kind` column (BR-028). Migration: P1-019. v2.12 adds `key_last4` |
 | `brands` | `channel_brand_ids` dropped (marketplace CSV export retired, BR-061) |
