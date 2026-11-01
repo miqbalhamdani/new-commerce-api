@@ -323,6 +323,15 @@ func TestStorefrontCatalog(t *testing.T) {
 		if hoodie := body["data"].([]any)[0].(map[string]any); hoodie["brand"] != nil || hoodie["image"] != nil {
 			t.Errorf("hoodie %v: brand and image should be null", hoodie)
 		}
+		// What a theme's card shows (P1-803): the archived White never counts.
+		if opts, _ := json.Marshal(tee["options"]); tee["on_sale"] != true || tee["regular_price_min"] != float64(19900000) ||
+			string(opts) != `[{"name":"Colour","values":["Black"]},{"name":"Size","values":["S","M"]}]` {
+			t.Errorf("card fields: on_sale %v, regular %v, options %s", tee["on_sale"], tee["regular_price_min"], opts)
+		}
+		if hoodie := body["data"].([]any)[0].(map[string]any); hoodie["on_sale"] != false ||
+			hoodie["regular_price_min"] != float64(30000000) || len(hoodie["options"].([]any)) != 0 {
+			t.Errorf("hoodie card fields: %v", hoodie)
+		}
 	})
 
 	t.Run("filters", func(t *testing.T) {
