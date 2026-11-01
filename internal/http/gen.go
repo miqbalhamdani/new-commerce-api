@@ -465,6 +465,7 @@ const (
 	PresignRequestPurposeBlogImage     PresignRequestPurpose = "blog_image"
 	PresignRequestPurposeProductImage  PresignRequestPurpose = "product_image"
 	PresignRequestPurposeProductImport PresignRequestPurpose = "product_import"
+	PresignRequestPurposeShopHero      PresignRequestPurpose = "shop_hero"
 	PresignRequestPurposeShopLogo      PresignRequestPurpose = "shop_logo"
 )
 
@@ -478,6 +479,8 @@ func (e PresignRequestPurpose) Valid() bool {
 	case PresignRequestPurposeProductImage:
 		return true
 	case PresignRequestPurposeProductImport:
+		return true
+	case PresignRequestPurposeShopHero:
 		return true
 	case PresignRequestPurposeShopLogo:
 		return true
@@ -588,6 +591,42 @@ func (e SettingsStatus) Valid() bool {
 	case SettingsStatusClosed:
 		return true
 	case SettingsStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ShopTheme.
+const (
+	Busana         ShopTheme = "busana"
+	Clothing       ShopTheme = "clothing"
+	Furnitur       ShopTheme = "furnitur"
+	FurniturCeria  ShopTheme = "furnitur-ceria"
+	FurniturEarthy ShopTheme = "furnitur-earthy"
+	Katalog        ShopTheme = "katalog"
+	KatalogHangat  ShopTheme = "katalog-hangat"
+	Woman          ShopTheme = "woman"
+)
+
+// Valid indicates whether the value is a known member of the ShopTheme enum.
+func (e ShopTheme) Valid() bool {
+	switch e {
+	case Busana:
+		return true
+	case Clothing:
+		return true
+	case Furnitur:
+		return true
+	case FurniturCeria:
+		return true
+	case FurniturEarthy:
+		return true
+	case Katalog:
+		return true
+	case KatalogHangat:
+		return true
+	case Woman:
 		return true
 	default:
 		return false
@@ -1849,7 +1888,7 @@ type PresignResponse struct {
 	// ExpiresIn Examples: 600
 	ExpiresIn int `json:"expires_in"`
 
-	// PublicUrl Where the image is served once uploaded; set for `blog_cover`, `blog_image` and `shop_logo`, so a body image can be linked from the post's Markdown (BR-135).
+	// PublicUrl Where the image is served once uploaded; set for `blog_cover`, `blog_image`, `shop_logo` and `shop_hero`, so a body image can be linked from the post's Markdown (BR-135).
 	PublicUrl *string `json:"public_url,omitempty"`
 	R2Key     string  `json:"r2_key"`
 	UploadUrl string  `json:"upload_url"`
@@ -2138,6 +2177,9 @@ type ShippingRatesRequest struct {
 	} `json:"lines"`
 }
 
+// ShopTheme The hosted website's theme (BR-143).
+type ShopTheme string
+
 // StaffPasswordResetConfirm defines model for StaffPasswordResetConfirm.
 type StaffPasswordResetConfirm struct {
 	Password string `json:"password"`
@@ -2153,10 +2195,13 @@ type StaffPasswordResetRequest struct {
 
 // StorefrontSettings defines model for StorefrontSettings.
 type StorefrontSettings struct {
+	Address                  *string `json:"address"`
 	BankTransferEnabled      bool    `json:"bank_transfer_enabled"`
 	BankTransferInstructions *string `json:"bank_transfer_instructions"`
 
-	// BrandColor Examples: #0a7d6e
+	// BrandColor One of the theme's four colours; `null` means its first (BR-143).
+	//
+	// Examples: #9a4e3a
 	BrandColor *string `json:"brand_color"`
 
 	// ContactEmail Reply-To on every email the shop sends (BR-128).
@@ -2164,6 +2209,12 @@ type StorefrontSettings struct {
 
 	// GoogleClientId The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
 	GoogleClientId *string `json:"google_client_id"`
+
+	// HeroR2Key A key from `POST /media/presign` with `purpose: shop_hero` (BR-142).
+	HeroR2Key *string `json:"hero_r2_key"`
+
+	// HeroUrl The hero photo on the image domain; read-only.
+	HeroUrl *string `json:"hero_url"`
 
 	// Instagram The handle, without `@`.
 	Instagram *string `json:"instagram"`
@@ -2181,11 +2232,19 @@ type StorefrontSettings struct {
 	MidtransNotificationUrl string `json:"midtrans_notification_url"`
 	MidtransServerKeySet    bool   `json:"midtrans_server_key_set"`
 
+	// OpeningHours Examples: Setiap hari 09.00–21.00
+	OpeningHours *string `json:"opening_hours"`
+
 	// OriginPostalCode Examples: 40115
 	OriginPostalCode *string       `json:"origin_postal_code"`
 	ShippingCouriers []CourierCode `json:"shipping_couriers"`
+	ShopeeUrl        *string       `json:"shopee_url"`
 	Tagline          *string       `json:"tagline"`
-	UpdatedAt        time.Time     `json:"updated_at"`
+
+	// Theme The hosted website's theme (BR-143).
+	Theme        ShopTheme `json:"theme"`
+	TokopediaUrl *string   `json:"tokopedia_url"`
+	UpdatedAt    time.Time `json:"updated_at"`
 
 	// WhatsappNumber Examples: 6281234567890
 	WhatsappNumber *string `json:"whatsapp_number"`
@@ -2196,12 +2255,18 @@ type StorefrontSettingsMidtransEnvironment string
 
 // StorefrontSettingsUpdate defines model for StorefrontSettingsUpdate.
 type StorefrontSettingsUpdate struct {
-	BankTransferEnabled      *bool                `json:"bank_transfer_enabled,omitempty"`
-	BankTransferInstructions *string              `json:"bank_transfer_instructions,omitempty"`
-	BrandColor               *string              `json:"brand_color,omitempty"`
-	ContactEmail             *openapi_types.Email `json:"contact_email,omitempty"`
-	GoogleClientId           *string              `json:"google_client_id,omitempty"`
-	Instagram                *string              `json:"instagram,omitempty"`
+	Address                  *string `json:"address,omitempty"`
+	BankTransferEnabled      *bool   `json:"bank_transfer_enabled,omitempty"`
+	BankTransferInstructions *string `json:"bank_transfer_instructions,omitempty"`
+
+	// BrandColor One of the theme's four colours (BR-143). A change of `theme` without it clears it.
+	BrandColor     *string              `json:"brand_color,omitempty"`
+	ContactEmail   *openapi_types.Email `json:"contact_email,omitempty"`
+	GoogleClientId *string              `json:"google_client_id,omitempty"`
+
+	// HeroR2Key A key from `POST /media/presign` with `purpose: shop_hero`, uploaded (BR-142).
+	HeroR2Key *string `json:"hero_r2_key,omitempty"`
+	Instagram *string `json:"instagram,omitempty"`
 
 	// LogoR2Key A key from `POST /media/presign` with `purpose: shop_logo`, uploaded (BR-142).
 	LogoR2Key           *string                                      `json:"logo_r2_key,omitempty"`
@@ -2211,10 +2276,16 @@ type StorefrontSettingsUpdate struct {
 
 	// MidtransServerKey Write-only; `null` removes it (and so needs Midtrans off).
 	MidtransServerKey *string        `json:"midtrans_server_key,omitempty"`
+	OpeningHours      *string        `json:"opening_hours,omitempty"`
 	OriginPostalCode  *string        `json:"origin_postal_code,omitempty"`
 	ShippingCouriers  *[]CourierCode `json:"shipping_couriers,omitempty"`
+	ShopeeUrl         *string        `json:"shopee_url,omitempty"`
 	Tagline           *string        `json:"tagline,omitempty"`
-	WhatsappNumber    *string        `json:"whatsapp_number,omitempty"`
+
+	// Theme The hosted website's theme (BR-143).
+	Theme          *ShopTheme `json:"theme,omitempty"`
+	TokopediaUrl   *string    `json:"tokopedia_url,omitempty"`
+	WhatsappNumber *string    `json:"whatsapp_number,omitempty"`
 }
 
 // StorefrontSettingsUpdateMidtransEnvironment defines model for StorefrontSettingsUpdate.MidtransEnvironment.

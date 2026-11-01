@@ -252,6 +252,42 @@ func (e StorefrontConfigPaymentMethods) Valid() bool {
 	}
 }
 
+// Defines values for StorefrontConfigTheme.
+const (
+	Busana         StorefrontConfigTheme = "busana"
+	Clothing       StorefrontConfigTheme = "clothing"
+	Furnitur       StorefrontConfigTheme = "furnitur"
+	FurniturCeria  StorefrontConfigTheme = "furnitur-ceria"
+	FurniturEarthy StorefrontConfigTheme = "furnitur-earthy"
+	Katalog        StorefrontConfigTheme = "katalog"
+	KatalogHangat  StorefrontConfigTheme = "katalog-hangat"
+	Woman          StorefrontConfigTheme = "woman"
+)
+
+// Valid indicates whether the value is a known member of the StorefrontConfigTheme enum.
+func (e StorefrontConfigTheme) Valid() bool {
+	switch e {
+	case Busana:
+		return true
+	case Clothing:
+		return true
+	case Furnitur:
+		return true
+	case FurniturCeria:
+		return true
+	case FurniturEarthy:
+		return true
+	case Katalog:
+		return true
+	case KatalogHangat:
+		return true
+	case Woman:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListProductsParamsSort.
 const (
 	MinusPriceMin  ListProductsParamsSort = "-price_min"
@@ -754,6 +790,12 @@ type ProductListItem struct {
 	Categories []ProductCategory `json:"categories"`
 	Image      *Image            `json:"image"`
 
+	// OnSale True when any visible variant is on sale (BR-046); `regular_price_min`, the lowest regular price among the visible variants, is then the one to cross out.
+	OnSale bool `json:"on_sale"`
+
+	// Options Each option name in the product's order, with its distinct values in the order the visible variants first use them; empty for a product without options.
+	Options []ProductOption `json:"options"`
+
 	// PriceMax Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
 	// Examples: 19900000
@@ -762,9 +804,14 @@ type ProductListItem struct {
 	// PriceMin Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
 	// Examples: 19900000
-	PriceMin Money  `json:"price_min"`
-	Slug     string `json:"slug"`
-	Title    string `json:"title"`
+	PriceMin Money `json:"price_min"`
+
+	// RegularPriceMin Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
+	//
+	// Examples: 19900000
+	RegularPriceMin Money  `json:"regular_price_min"`
+	Slug            string `json:"slug"`
+	Title           string `json:"title"`
 
 	// WeightGramsMax The heaviest visible variant's `weight_grams`.
 	//
@@ -775,6 +822,15 @@ type ProductListItem struct {
 	//
 	// Examples: 200
 	WeightGramsMin int `json:"weight_grams_min"`
+}
+
+// ProductOption defines model for ProductOption.
+type ProductOption struct {
+	// Name Examples: Warna
+	Name string `json:"name"`
+
+	// Values Examples: ["Hitam","Krem"]
+	Values []string `json:"values"`
 }
 
 // ProductPage defines model for ProductPage.
@@ -869,23 +925,34 @@ type ShippingRatesRequest struct {
 
 // StorefrontConfig defines model for StorefrontConfig.
 type StorefrontConfig struct {
+	// Address Examples: Jl. Braga No. 10, Bandung
+	Address                  *string `json:"address"`
 	BankTransferInstructions *string `json:"bank_transfer_instructions"`
 
-	// BrandColor `#rrggbb`, lower case.
+	// BrandColor One of the theme's four colours, `#rrggbb` in lower case; its first when the owner picked none (BR-143).
 	//
-	// Examples: #0a7d6e
-	BrandColor     *string `json:"brand_color"`
+	// Examples: #2f5a4c
+	BrandColor     string  `json:"brand_color"`
 	GoogleClientId *string `json:"google_client_id"`
+	HeroUrl        *string `json:"hero_url"`
 
 	// Instagram The handle, without `@`.
-	Instagram      *string                          `json:"instagram"`
-	LogoUrl        *string                          `json:"logo_url"`
-	Midtrans       *MidtransConfig                  `json:"midtrans"`
+	Instagram *string         `json:"instagram"`
+	LogoUrl   *string         `json:"logo_url"`
+	Midtrans  *MidtransConfig `json:"midtrans"`
+
+	// OpeningHours Examples: Setiap hari 09.00–21.00
+	OpeningHours   *string                          `json:"opening_hours"`
 	PaymentMethods []StorefrontConfigPaymentMethods `json:"payment_methods"`
 
 	// ShopName Examples: Toko ABC
-	ShopName string  `json:"shop_name"`
-	Tagline  *string `json:"tagline"`
+	ShopName  string  `json:"shop_name"`
+	ShopeeUrl *string `json:"shopee_url"`
+	Tagline   *string `json:"tagline"`
+
+	// Theme The hosted website's theme (BR-143).
+	Theme        StorefrontConfigTheme `json:"theme"`
+	TokopediaUrl *string               `json:"tokopedia_url"`
 
 	// WhatsappNumber Where an order button sends shoppers, as `wa.me/{whatsapp_number}`.
 	//
@@ -895,6 +962,9 @@ type StorefrontConfig struct {
 
 // StorefrontConfigPaymentMethods defines model for StorefrontConfig.PaymentMethods.
 type StorefrontConfigPaymentMethods string
+
+// StorefrontConfigTheme The hosted website's theme (BR-143).
+type StorefrontConfigTheme string
 
 // Tokens `access_token` is a 15-minute JWT to send as `Authorization: Bearer`. `refresh_token` is
 // the long-lived credential: keep it out of reach of other scripts, and swap it at

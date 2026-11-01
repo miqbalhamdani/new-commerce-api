@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.13.0
+  version: 0.14.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -32,7 +32,9 @@ info:
     Belli serves every shop's website at `{slug}.belli.id` from its own server, which sends a
     platform key with `X-Shop: {slug}` in place of a shop's key. That key works only from a server
     (no `Origin`), only on `GET`, and only for an active shop; a slug no active shop holds is
-    `404`. It is not available to shops: a shop's own website uses its own key.
+    `404`. It is not available to shops: a shop's own website uses its own key. `/config` tells
+    it which of the eight themes, and which of that theme's four colours, to draw the shop in
+    (BR-142, BR-143).
 
     ## Conventions
 
@@ -1034,7 +1036,8 @@ components:
 
     ProductListItem:
       type: object
-      required: [slug, title, brand, categories, price_min, price_max, weight_grams_min, weight_grams_max, image]
+      required: [slug, title, brand, categories, price_min, price_max, on_sale, regular_price_min, options,
+                 weight_grams_min, weight_grams_max, image]
       properties:
         slug:
           type: string
@@ -1053,6 +1056,20 @@ components:
           $ref: "#/components/schemas/Money"
         price_max:
           $ref: "#/components/schemas/Money"
+        on_sale:
+          description: >-
+            True when any visible variant is on sale (BR-046); `regular_price_min`, the lowest
+            regular price among the visible variants, is then the one to cross out.
+          type: boolean
+        regular_price_min:
+          $ref: "#/components/schemas/Money"
+        options:
+          description: >-
+            Each option name in the product's order, with its distinct values in the order the
+            visible variants first use them; empty for a product without options.
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductOption"
         weight_grams_min:
           description: The lightest visible variant's `weight_grams`.
           type: integer
@@ -1065,6 +1082,19 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Image"
             - type: "null"
+
+    ProductOption:
+      type: object
+      required: [name, values]
+      properties:
+        name:
+          type: string
+          examples: ["Warna"]
+        values:
+          type: array
+          items:
+            type: string
+          examples: [["Hitam", "Krem"]]
 
     ProductPage:
       type: object
@@ -1761,7 +1791,8 @@ components:
     StorefrontConfig:
       type: object
       required: [shop_name, google_client_id, payment_methods, bank_transfer_instructions, midtrans,
-                 logo_url, whatsapp_number, tagline, brand_color, instagram]
+                 theme, brand_color, logo_url, hero_url, whatsapp_number, tagline, instagram, address,
+                 opening_hours, shopee_url, tokopedia_url]
       properties:
         shop_name:
           type: string
@@ -1779,7 +1810,18 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MidtransConfig"
             - type: "null"
+        theme:
+          description: The hosted website's theme (BR-143).
+          type: string
+          enum: [busana, clothing, woman, katalog, katalog-hangat, furnitur, furnitur-earthy, furnitur-ceria]
+        brand_color:
+          type: string
+          description: "One of the theme's four colours, `#rrggbb` in lower case; its first when the owner picked none (BR-143)."
+          examples: ["#2f5a4c"]
         logo_url:
+          type: [string, "null"]
+          format: uri
+        hero_url:
           type: [string, "null"]
           format: uri
         whatsapp_number:
@@ -1788,13 +1830,21 @@ components:
           examples: ["6281234567890"]
         tagline:
           type: [string, "null"]
-        brand_color:
-          type: [string, "null"]
-          description: "`#rrggbb`, lower case."
-          examples: ["#0a7d6e"]
         instagram:
           type: [string, "null"]
           description: The handle, without `@`.
+        address:
+          type: [string, "null"]
+          examples: ["Jl. Braga No. 10, Bandung"]
+        opening_hours:
+          type: [string, "null"]
+          examples: ["Setiap hari 09.00–21.00"]
+        shopee_url:
+          type: [string, "null"]
+          format: uri
+        tokopedia_url:
+          type: [string, "null"]
+          format: uri
 
     MidtransConfig:
       type: object

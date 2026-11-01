@@ -33,16 +33,33 @@ var postalCodeRe = regexp.MustCompile(`^[0-9]{5}$`)
 
 // The shop's look (BR-142).
 var (
-	whatsappRe   = regexp.MustCompile(`^62[0-9]{8,13}$`)
-	brandColorRe = regexp.MustCompile(`^#[0-9a-f]{6}$`)
-	instagramRe  = regexp.MustCompile(`^[A-Za-z0-9._]{1,30}$`)
-	logoTypes    = map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+	whatsappRe     = regexp.MustCompile(`^62[0-9]{8,13}$`)
+	brandColorRe   = regexp.MustCompile(`^#[0-9a-f]{6}$`)
+	instagramRe    = regexp.MustCompile(`^[A-Za-z0-9._]{1,30}$`)
+	shopeeURLRe    = regexp.MustCompile(`^https://([a-z0-9-]+\.)*shopee\.co\.id(/\S*)?$`)
+	tokopediaURLRe = regexp.MustCompile(`^https://([a-z0-9-]+\.)*tokopedia\.com(/\S*)?$`)
+	logoTypes      = map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 )
 
 const (
 	maxTaglineRunes = 160
-	maxLogoBytes    = 2 << 20
+	maxAddressRunes = 300
+	maxHoursRunes   = 120
+	maxShopURLRunes = 300
 	logoPresignTTL  = 10 * time.Minute
+)
+
+// shopImage is an image the look keeps under {tenant}/shop/: the logo and the
+// hero photo (BR-053, BR-142).
+type shopImage struct {
+	field, name string
+	max         int64
+	limit       string
+}
+
+var (
+	logoImage = shopImage{field: "logo_r2_key", name: "logo", max: 2 << 20, limit: "2 MB"}
+	heroImage = shopImage{field: "hero_r2_key", name: "hero photo", max: 5 << 20, limit: "5 MB"}
 )
 
 // Change is one field of a PATCH: Set means it was sent, and a nil Value
@@ -57,9 +74,11 @@ type Change[T any] struct {
 type StorefrontPatch struct {
 	ContactEmail, GoogleClientID, OriginPostalCode, BankTransferInstructions Change[string]
 	MidtransEnvironment, MidtransClientKey, MidtransServerKey                Change[string]
-	LogoR2Key, WhatsappNumber, Tagline, BrandColor, Instagram                Change[string]
+	LogoR2Key, HeroR2Key, WhatsappNumber, Tagline, BrandColor, Instagram     Change[string]
+	Address, OpeningHours, ShopeeURL, TokopediaURL                           Change[string]
 	ShippingCouriers                                                         *[]string
 	BankTransferEnabled, MidtransEnabled                                     *bool
+	Theme                                                                    *string
 }
 
 // StorefrontSettings is the shop's row, made on first use for a shop that
@@ -85,9 +104,11 @@ func (s *Service) UpdateStorefrontSettings(ctx context.Context, p StorefrontPatc
 	if err := validStorefrontPatch(p); err != nil {
 		return StorefrontSettings{}, err
 	}
-	if v := p.LogoR2Key.Value; v != nil {
-		if err := s.checkLogo(ctx, strings.TrimSpace(*v)); err != nil {
-			return StorefrontSettings{}, err
+	for img, c := range map[shopImage]Change[string]{logoImage: p.LogoR2Key, heroImage: p.HeroR2Key} {
+		if c.Value != nil {
+			if err := s.checkShopImage(ctx, img, strings.TrimSpace(*c.Value)); err != nil {
+				return StorefrontSettings{}, err
+			}
 		}
 	}
 	tenantID, _ := tenant.FromContext(ctx)
@@ -114,9 +135,23 @@ func (s *Service) UpdateStorefrontSettings(ctx context.Context, p StorefrontPatc
 			BankTransferEnabled: before.BankTransferEnabled, BankTransferInstructions: pick(p.BankTransferInstructions, before.BankTransferInstructions),
 			MidtransEnabled: before.MidtransEnabled, MidtransEnvironment: pick(p.MidtransEnvironment, before.MidtransEnvironment),
 			MidtransClientKey: pick(p.MidtransClientKey, before.MidtransClientKey), MidtransServerKey: before.MidtransServerKey,
-			LogoR2Key: pick(p.LogoR2Key, before.LogoR2Key), WhatsappNumber: pick(p.WhatsappNumber, before.WhatsappNumber),
-			Tagline: pick(p.Tagline, before.Tagline), BrandColor: pick(p.BrandColor, before.BrandColor),
-			Instagram: pick(p.Instagram, before.Instagram),
+			Theme: before.Theme, BrandColor: pick(p.BrandColor, before.BrandColor),
+			LogoR2Key: pick(p.LogoR2Key, before.LogoR2Key), HeroR2Key: pick(p.HeroR2Key, before.HeroR2Key),
+			WhatsappNumber: pick(p.WhatsappNumber, before.WhatsappNumber), Tagline: pick(p.Tagline, before.Tagline),
+			Instagram: pick(p.Instagram, before.Instagram), Address: pick(p.Address, before.Address),
+			OpeningHours: pick(p.OpeningHours, before.OpeningHours), ShopeeUrl: pick(p.ShopeeURL, before.ShopeeUrl),
+			TokopediaUrl: pick(p.TokopediaURL, before.TokopediaUrl),
+		}
+		// A colour belongs to its theme: another theme without a colour starts on
+		// that theme's first (BR-142, BR-143).
+		if p.Theme != nil && *p.Theme != before.Theme {
+			next.Theme = *p.Theme
+			if !p.BrandColor.Set {
+				next.BrandColor = nil
+			}
+		}
+		if colors := Themes[next.Theme]; next.BrandColor != nil && !slices.Contains(colors[:], *next.BrandColor) {
+			return fieldError("brand_color", "brand_color is one of the "+next.Theme+" theme's colours: "+strings.Join(colors[:], ", "))
 		}
 		if p.ShippingCouriers != nil {
 			next.ShippingCouriers = *p.ShippingCouriers
@@ -165,6 +200,11 @@ func validStorefrontPatch(p StorefrontPatch) error {
 			}
 		}
 	}
+	if v := p.Theme; v != nil {
+		if _, ok := Themes[*v]; !ok {
+			return fieldError("theme", *v+" is not a theme: busana, clothing, woman, katalog, katalog-hangat, furnitur, furnitur-earthy or furnitur-ceria")
+		}
+	}
 	if v := p.MidtransEnvironment.Value; v != nil && *v != "sandbox" && *v != "production" {
 		return fieldError("midtrans_environment", "midtrans_environment is sandbox or production")
 	}
@@ -180,8 +220,25 @@ func validStorefrontPatch(p StorefrontPatch) error {
 	if v := p.Instagram.Value; v != nil && !instagramRe.MatchString(strings.TrimSpace(*v)) {
 		return fieldError("instagram", "instagram is the handle without @: letters, digits, . and _")
 	}
+	if v := p.Address.Value; v != nil && utf8.RuneCountInString(strings.TrimSpace(*v)) > maxAddressRunes {
+		return fieldError("address", "address is at most 300 characters")
+	}
+	if v := p.OpeningHours.Value; v != nil && utf8.RuneCountInString(strings.TrimSpace(*v)) > maxHoursRunes {
+		return fieldError("opening_hours", "opening_hours is at most 120 characters")
+	}
+	for field, link := range map[string]struct {
+		c    Change[string]
+		re   *regexp.Regexp
+		host string
+	}{"shopee_url": {p.ShopeeURL, shopeeURLRe, "shopee.co.id"}, "tokopedia_url": {p.TokopediaURL, tokopediaURLRe, "tokopedia.com"}} {
+		if v := link.c.Value; v != nil {
+			if u := strings.TrimSpace(*v); utf8.RuneCountInString(u) > maxShopURLRunes || !link.re.MatchString(u) {
+				return fieldError(field, field+" is an https:// link on "+link.host+", at most 300 characters")
+			}
+		}
+	}
 	for field, c := range map[string]Change[string]{"google_client_id": p.GoogleClientID, "midtrans_client_key": p.MidtransClientKey,
-		"midtrans_server_key": p.MidtransServerKey, "tagline": p.Tagline} {
+		"midtrans_server_key": p.MidtransServerKey, "tagline": p.Tagline, "address": p.Address, "opening_hours": p.OpeningHours} {
 		if c.Value != nil && strings.TrimSpace(*c.Value) == "" {
 			return fieldError(field, field+" cannot be blank; send null to remove it")
 		}
@@ -219,11 +276,17 @@ func settingsDiff(a, b StorefrontSettings) (changed []string, before, after map[
 	add("midtrans_enabled", a.MidtransEnabled, b.MidtransEnabled)
 	add("midtrans_environment", a.MidtransEnvironment, b.MidtransEnvironment)
 	add("midtrans_client_key", a.MidtransClientKey, b.MidtransClientKey)
+	add("theme", a.Theme, b.Theme)
+	add("brand_color", a.BrandColor, b.BrandColor)
 	add("logo_r2_key", a.LogoR2Key, b.LogoR2Key)
+	add("hero_r2_key", a.HeroR2Key, b.HeroR2Key)
 	add("whatsapp_number", a.WhatsappNumber, b.WhatsappNumber)
 	add("tagline", a.Tagline, b.Tagline)
-	add("brand_color", a.BrandColor, b.BrandColor)
 	add("instagram", a.Instagram, b.Instagram)
+	add("address", a.Address, b.Address)
+	add("opening_hours", a.OpeningHours, b.OpeningHours)
+	add("shopee_url", a.ShopeeUrl, b.ShopeeUrl)
+	add("tokopedia_url", a.TokopediaUrl, b.TokopediaUrl)
 	if !slices.Equal(a.MidtransServerKey, b.MidtransServerKey) {
 		changed = append(changed, "midtrans_server_key")
 		before["midtrans_server_key_set"], after["midtrans_server_key_set"] = a.MidtransServerKey != nil, b.MidtransServerKey != nil
@@ -243,8 +306,8 @@ func equal(x, y any) bool {
 	}
 }
 
-// Presign is a signed direct upload of the shop's logo, and where it will be
-// served from.
+// Presign is a signed direct upload of the shop's logo or hero photo, and
+// where it will be served from.
 type Presign struct {
 	URL       string
 	Key       string
@@ -255,12 +318,22 @@ type Presign struct {
 // PresignLogo signs the logo's upload to {tenant}/shop/ (BR-053, BR-142).
 // There is no confirm: the key is saved as logo_r2_key, checked then.
 func (s *Service) PresignLogo(ctx context.Context, mime string, bytes int64, sha string) (Presign, error) {
+	return s.presignShopImage(ctx, logoImage, mime, bytes, sha)
+}
+
+// PresignHero signs the hero photo's upload, as PresignLogo, up to 5 MB; the
+// key is saved as hero_r2_key.
+func (s *Service) PresignHero(ctx context.Context, mime string, bytes int64, sha string) (Presign, error) {
+	return s.presignShopImage(ctx, heroImage, mime, bytes, sha)
+}
+
+func (s *Service) presignShopImage(ctx context.Context, img shopImage, mime string, bytes int64, sha string) (Presign, error) {
 	ext, ok := logoTypes[mime]
 	if !ok {
-		return Presign{}, fieldError("mime_type", "a logo is image/jpeg, image/png or image/webp")
+		return Presign{}, fieldError("mime_type", "a "+img.name+" is image/jpeg, image/png or image/webp")
 	}
-	if bytes > maxLogoBytes {
-		return Presign{}, fieldError("bytes", "a logo is at most 2 MB")
+	if bytes > img.max {
+		return Presign{}, fieldError("bytes", "a "+img.name+" is at most "+img.limit)
 	}
 	tenantID, _ := tenant.FromContext(ctx)
 	key := fmt.Sprintf("%s/shop/%s.%s", tenantID, sha, ext)
@@ -268,30 +341,30 @@ func (s *Service) PresignLogo(ctx context.Context, mime string, bytes int64, sha
 	return Presign{URL: u, Key: key, ExpiresIn: int(logoPresignTTL.Seconds()), PublicURL: s.Files.PublicURL(key)}, err
 }
 
-// checkLogo holds a logo key to the shop's own prefix and to an uploaded
-// image within the size limit (BR-051, BR-142).
-func (s *Service) checkLogo(ctx context.Context, key string) error {
+// checkShopImage holds a logo or hero key to the shop's own prefix and to an
+// uploaded image within the size limit (BR-051, BR-142).
+func (s *Service) checkShopImage(ctx context.Context, img shopImage, key string) error {
 	tenantID, _ := tenant.FromContext(ctx)
 	if !strings.HasPrefix(key, tenantID.String()+"/shop/") {
-		return fieldError("logo_r2_key", "the key is not a logo upload for this shop")
+		return fieldError(img.field, "the key is not a "+img.name+" upload for this shop")
 	}
 	mime, size, err := s.Files.Head(ctx, key)
 	if errors.Is(err, storage.ErrNotFound) {
-		return fieldError("logo_r2_key", "nothing was uploaded under this key")
+		return fieldError(img.field, "nothing was uploaded under this key")
 	}
 	if err != nil {
 		return err
 	}
 	if _, ok := logoTypes[mime]; !ok {
-		return fieldError("logo_r2_key", "the uploaded object is "+mime+", not an image")
+		return fieldError(img.field, "the uploaded object is "+mime+", not an image")
 	}
-	if size > maxLogoBytes {
-		return fieldError("logo_r2_key", "the uploaded logo is over 2 MB")
+	if size > img.max {
+		return fieldError(img.field, "the uploaded "+img.name+" is over "+img.limit)
 	}
 	return nil
 }
 
-// LogoURL is where a logo key is served, or nil with no logo.
+// LogoURL is where a logo or hero key is served, or nil with none.
 func (s *Service) LogoURL(key *string) *string {
 	if key == nil || s.Files == nil {
 		return nil
@@ -301,8 +374,8 @@ func (s *Service) LogoURL(key *string) *string {
 }
 
 // StorefrontConfig is what a shop's website reads once to render sign-in,
-// payment and its look (P1-224, P1-703): public by design, nothing secret in
-// it.
+// payment and its look (P1-224, P1-703, P1-802): public by design, nothing
+// secret in it.
 func (s *Service) StorefrontConfig(ctx context.Context) (sqlcgen.StorefrontConfigRow, error) {
 	var out sqlcgen.StorefrontConfigRow
 	err := s.tx(ctx, func(q *sqlcgen.Queries, _ pgx.Tx) (err error) {

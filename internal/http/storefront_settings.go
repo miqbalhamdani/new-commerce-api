@@ -10,7 +10,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
-// Storefront settings: 04-api-spec.md §4 (P1-216).
+// Storefront settings: 04-api-spec.md §4 (P1-216, P1-703, P1-802).
 
 func (s *Server) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
 	requirePermission(auth.PermSettingsRead, func(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +19,7 @@ func (s *Server) GetStorefrontSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, storefrontSettingsOut(st, s.team.LogoURL(st.LogoR2Key)))
+		writeJSON(w, http.StatusOK, s.storefrontSettingsOut(st))
 	})(w, r)
 }
 
@@ -36,17 +36,24 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			MidtransEnvironment      optional[string]   `json:"midtrans_environment"`
 			MidtransClientKey        optional[string]   `json:"midtrans_client_key"`
 			MidtransServerKey        optional[string]   `json:"midtrans_server_key"`
+			Theme                    optional[string]   `json:"theme"`
+			BrandColor               optional[string]   `json:"brand_color"`
 			LogoR2Key                optional[string]   `json:"logo_r2_key"`
+			HeroR2Key                optional[string]   `json:"hero_r2_key"`
 			WhatsappNumber           optional[string]   `json:"whatsapp_number"`
 			Tagline                  optional[string]   `json:"tagline"`
-			BrandColor               optional[string]   `json:"brand_color"`
 			Instagram                optional[string]   `json:"instagram"`
+			Address                  optional[string]   `json:"address"`
+			OpeningHours             optional[string]   `json:"opening_hours"`
+			ShopeeURL                optional[string]   `json:"shopee_url"`
+			TokopediaURL             optional[string]   `json:"tokopedia_url"`
 		}
-		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id", "logo_url") {
+		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id", "logo_url", "hero_url") {
 			return
 		}
 		if err := rejectNull(map[string]bool{"shipping_couriers": body.ShippingCouriers.Null,
-			"bank_transfer_enabled": body.BankTransferEnabled.Null, "midtrans_enabled": body.MidtransEnabled.Null}); err != nil {
+			"bank_transfer_enabled": body.BankTransferEnabled.Null, "midtrans_enabled": body.MidtransEnabled.Null,
+			"theme": body.Theme.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -55,8 +62,13 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			OriginPostalCode: change(body.OriginPostalCode), BankTransferInstructions: change(body.BankTransferInstructions),
 			MidtransEnvironment: change(body.MidtransEnvironment), MidtransClientKey: change(body.MidtransClientKey),
 			MidtransServerKey: change(body.MidtransServerKey),
-			LogoR2Key:         change(body.LogoR2Key), WhatsappNumber: change(body.WhatsappNumber), Tagline: change(body.Tagline),
-			BrandColor: change(body.BrandColor), Instagram: change(body.Instagram),
+			BrandColor:        change(body.BrandColor), LogoR2Key: change(body.LogoR2Key), HeroR2Key: change(body.HeroR2Key),
+			WhatsappNumber: change(body.WhatsappNumber), Tagline: change(body.Tagline), Instagram: change(body.Instagram),
+			Address: change(body.Address), OpeningHours: change(body.OpeningHours),
+			ShopeeURL: change(body.ShopeeURL), TokopediaURL: change(body.TokopediaURL),
+		}
+		if body.Theme.Set {
+			p.Theme = &body.Theme.Value
 		}
 		if body.ShippingCouriers.Set {
 			p.ShippingCouriers = &body.ShippingCouriers.Value
@@ -72,7 +84,7 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			writeError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, storefrontSettingsOut(st, s.team.LogoURL(st.LogoR2Key)))
+		writeJSON(w, http.StatusOK, s.storefrontSettingsOut(st))
 	})(w, r)
 }
 
@@ -83,7 +95,7 @@ func change(o optional[string]) team.Change[string] {
 	return team.Change[string]{Set: true, Value: &o.Value}
 }
 
-func storefrontSettingsOut(st team.StorefrontSettings, logoURL *string) StorefrontSettings {
+func (s *Server) storefrontSettingsOut(st team.StorefrontSettings) StorefrontSettings {
 	out := StorefrontSettings{
 		GoogleClientId: st.GoogleClientID, OriginPostalCode: st.OriginPostalCode,
 		BankTransferEnabled: st.BankTransferEnabled, BankTransferInstructions: st.BankTransferInstructions,
@@ -91,8 +103,11 @@ func storefrontSettingsOut(st team.StorefrontSettings, logoURL *string) Storefro
 		MidtransServerKeySet:    st.MidtransServerKey != nil,
 		MidtransNotificationUrl: config.APIURL() + "/v1/webhooks/midtrans/" + st.MidtransWebhookID.String(),
 		ShippingCouriers:        make([]CourierCode, 0, len(st.ShippingCouriers)),
-		LogoR2Key:               st.LogoR2Key, LogoUrl: logoURL, WhatsappNumber: st.WhatsappNumber, Tagline: st.Tagline,
-		BrandColor: st.BrandColor, Instagram: st.Instagram,
+		Theme:                   ShopTheme(st.Theme), BrandColor: st.BrandColor,
+		LogoR2Key: st.LogoR2Key, LogoUrl: s.team.LogoURL(st.LogoR2Key),
+		HeroR2Key: st.HeroR2Key, HeroUrl: s.team.LogoURL(st.HeroR2Key),
+		WhatsappNumber: st.WhatsappNumber, Tagline: st.Tagline, Instagram: st.Instagram,
+		Address: st.Address, OpeningHours: st.OpeningHours, ShopeeUrl: st.ShopeeUrl, TokopediaUrl: st.TokopediaUrl,
 		UpdatedAt: st.UpdatedAt,
 	}
 	if st.ContactEmail != nil {
