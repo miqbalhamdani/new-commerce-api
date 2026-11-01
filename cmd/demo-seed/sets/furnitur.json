@@ -1,0 +1,743 @@
+{
+ "categories": [
+  {
+   "key": "kursi",
+   "name": "Kursi",
+   "kind": "category"
+  },
+  {
+   "key": "sofa",
+   "name": "Sofa",
+   "kind": "category"
+  },
+  {
+   "key": "meja",
+   "name": "Meja",
+   "kind": "category"
+  },
+  {
+   "key": "simpan",
+   "name": "Lemari & Rak",
+   "kind": "category"
+  },
+  {
+   "key": "tidur",
+   "name": "Tempat Tidur",
+   "kind": "category"
+  },
+  {
+   "key": "dekor",
+   "name": "Dekorasi",
+   "kind": "category"
+  },
+  {
+   "key": "rotan",
+   "name": "Rotan Sumba",
+   "kind": "collection",
+   "desc": "Anyaman rotan alami yang ringan dan sejuk, untuk teras dan ruang santai."
+  },
+  {
+   "key": "jati",
+   "name": "Jati Klasik",
+   "kind": "collection",
+   "desc": "Kayu jati solid dengan sambungan pasak dan ukiran tangan pengrajin Jepara."
+  },
+  {
+   "key": "makan",
+   "name": "Ruang Makan",
+   "kind": "collection",
+   "desc": "Meja dan kursi untuk makan bersama keluarga."
+  }
+ ],
+ "products": [
+  {
+   "title": "Kursi Santai Sumba",
+   "desc": "Kursi santai dengan anyaman rotan sumba yang dikerjakan tangan. Sandaran agak rebah dan dudukan lebar membuatnya nyaman untuk membaca atau bersantai di teras. Bantal dudukan bisa dilepas dan sarungnya bisa dicuci.",
+   "cats": [
+    "kursi",
+    "rotan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Rotan sumba, rangka kayu mahoni"
+    ],
+    [
+     "Ukuran",
+     "P 72 × L 78 × T 84 cm"
+    ],
+    [
+     "Berat",
+     "9 kg"
+    ],
+    [
+     "Garansi",
+     "Rangka 1 tahun"
+    ],
+    [
+     "Produksi",
+     "10–14 hari kerja"
+    ]
+   ],
+   "price": 1850000,
+   "regular": 2150000,
+   "options": [
+    {
+     "name": "Rangka",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Cokelat Tua",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Bantal",
+     "values": [
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Abu Batu",
+       "add": 0
+      },
+      {
+       "value": "Terakota",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/8987823/pexels-photo-8987823.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/5825409/pexels-photo-5825409.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/14957889/pexels-photo-14957889.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/16647086/pexels-photo-16647086.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Sofa Arunika",
+   "desc": "Sofa berangka kayu jati dengan busa berdensitas tinggi dan per kantong, jadi dudukan tidak cepat kempis. Tersedia dua ukuran dan tiga pilihan kain. Sarung bantal sandaran bisa dilepas untuk dicuci.",
+   "cats": [
+    "sofa",
+    "jati"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Rangka jati, busa density 32, per kantong"
+    ],
+    [
+     "Ukuran",
+     "2 dudukan 160 × 85 × 78 cm; 3 dudukan 210 × 85 × 78 cm"
+    ],
+    [
+     "Garansi",
+     "Rangka 2 tahun"
+    ],
+    [
+     "Produksi",
+     "14–21 hari kerja"
+    ],
+    [
+     "Pengiriman",
+     "Kargo, dirakit di tempat (Jawa & Bali)"
+    ]
+   ],
+   "price": 6900000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "2 dudukan",
+       "add": 0
+      },
+      {
+       "value": "3 dudukan",
+       "add": 1500000
+      }
+     ]
+    },
+    {
+     "name": "Kain",
+     "values": [
+      {
+       "value": "Linen Krem",
+       "add": 0
+      },
+      {
+       "value": "Bouclé Putih",
+       "add": 350000
+      },
+      {
+       "value": "Beludru Hijau",
+       "add": 350000
+      }
+     ]
+    },
+    {
+     "name": "Kaki",
+     "values": [
+      {
+       "value": "Jati Natural",
+       "add": 0
+      },
+      {
+       "value": "Besi Hitam",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/4846087/pexels-photo-4846087.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/4846097/pexels-photo-4846097.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/8987432/pexels-photo-8987432.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/6758245/pexels-photo-6758245.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Meja Makan Lawang",
+   "desc": "Meja makan dari papan jati utuh dengan kaki trapesium. Permukaan diberi lapisan pelindung yang tahan noda air dan panas ringan, jadi aman untuk dipakai sehari-hari.",
+   "cats": [
+    "meja",
+    "makan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Papan jati utuh, kaki jati"
+    ],
+    [
+     "Tinggi",
+     "76 cm"
+    ],
+    [
+     "Kapasitas",
+     "4, 6, atau 8 orang sesuai ukuran"
+    ],
+    [
+     "Finishing",
+     "Lapisan pelindung tahan noda air"
+    ],
+    [
+     "Produksi",
+     "14–21 hari kerja"
+    ]
+   ],
+   "price": 7500000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "120 × 80 cm",
+       "add": 0
+      },
+      {
+       "value": "160 × 90 cm",
+       "add": 2000000
+      },
+      {
+       "value": "200 × 100 cm",
+       "add": 4500000
+      }
+     ]
+    },
+    {
+     "name": "Finishing",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Walnut",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/8113029/pexels-photo-8113029.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/7538106/pexels-photo-7538106.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/6908357/pexels-photo-6908357.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Meja Samping Kalang",
+   "desc": "Meja samping bundar dari kayu jati dengan rak di bagian bawah. Pas diletakkan di samping sofa atau tempat tidur.",
+   "cats": [
+    "meja",
+    "jati"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kayu jati"
+    ],
+    [
+     "Ukuran",
+     "Ø 45 × T 55 cm"
+    ],
+    [
+     "Berat",
+     "4 kg"
+    ],
+    [
+     "Produksi",
+     "7 hari kerja"
+    ]
+   ],
+   "price": 650000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Finishing",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Hitam Doff",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": []
+  },
+  {
+   "title": "Buffet Sekar Ukir",
+   "desc": "Buffet dua pintu dengan panel ukir motif sekar jagad di bagian depan. Di dalamnya ada satu rak yang tingginya bisa diatur.",
+   "cats": [
+    "simpan",
+    "jati"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kayu jati, panel ukir"
+    ],
+    [
+     "Ukuran",
+     "P 140 × L 45 × T 80 cm"
+    ],
+    [
+     "Isi",
+     "2 pintu, 1 rak dalam yang bisa diatur"
+    ],
+    [
+     "Garansi",
+     "Rangka 1 tahun"
+    ],
+    [
+     "Produksi",
+     "21 hari kerja"
+    ]
+   ],
+   "price": 4200000,
+   "regular": 4900000,
+   "options": [
+    {
+     "name": "Finishing",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Walnut",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/6963787/pexels-photo-6963787.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/279659/pexels-photo-279659.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Bangku Trembesi",
+   "desc": "Bangku dari satu lempeng kayu trembesi dengan serat kayu yang dibiarkan terlihat. Bisa dipakai di meja makan atau di lorong.",
+   "cats": [
+    "kursi",
+    "makan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kayu trembesi solid"
+    ],
+    [
+     "Ukuran",
+     "L 35 × T 45 cm"
+    ],
+    [
+     "Finishing",
+     "Minyak alami"
+    ],
+    [
+     "Produksi",
+     "10 hari kerja"
+    ]
+   ],
+   "price": 1250000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Panjang",
+     "values": [
+      {
+       "value": "120 cm",
+       "add": 0
+      },
+      {
+       "value": "160 cm",
+       "add": 450000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/27459702/pexels-photo-27459702.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/4819069/pexels-photo-4819069.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Rak Dinding Bambu",
+   "desc": "Rak dinding tiga susun dari bambu petung yang sudah diawetkan. Ringan dan dipasang dengan dua sekrup. Untuk pembelian grosir, tanyakan harga lewat WhatsApp.",
+   "cats": [
+    "simpan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Bambu petung yang sudah diawetkan"
+    ],
+    [
+     "Ukuran",
+     "3 susun, T 75 cm"
+    ],
+    [
+     "Pemasangan",
+     "2 sekrup dinding (termasuk)"
+    ],
+    [
+     "Grosir",
+     "Harga khusus mulai 10 pcs"
+    ]
+   ],
+   "price": 350000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Lebar",
+     "values": [
+      {
+       "value": "60 cm",
+       "add": 0
+      },
+      {
+       "value": "90 cm",
+       "add": 170000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/7005280/pexels-photo-7005280.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/6487947/pexels-photo-6487947.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/30947443/pexels-photo-30947443.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Ranjang Jati Prambanan",
+   "desc": "Ranjang jati solid dengan sandaran kepala tinggi. Pilih sandaran polos atau ukir tangan. Kasur dijual terpisah.",
+   "cats": [
+    "tidur",
+    "jati"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kayu jati solid"
+    ],
+    [
+     "Tinggi sandaran",
+     "120 cm"
+    ],
+    [
+     "Kasur",
+     "Tidak termasuk"
+    ],
+    [
+     "Garansi",
+     "Rangka 2 tahun"
+    ],
+    [
+     "Produksi",
+     "21–30 hari kerja"
+    ]
+   ],
+   "price": 9800000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "160 × 200 cm",
+       "add": 0
+      },
+      {
+       "value": "180 × 200 cm",
+       "add": 1200000
+      },
+      {
+       "value": "200 × 200 cm",
+       "add": 2400000
+      }
+     ]
+    },
+    {
+     "name": "Finishing",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Walnut",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Sandaran",
+     "values": [
+      {
+       "value": "Polos",
+       "add": 0
+      },
+      {
+       "value": "Ukir",
+       "add": 900000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/5644286/pexels-photo-5644286.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/5644284/pexels-photo-5644284.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/34838628/pexels-photo-34838628.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/29627918/pexels-photo-29627918.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Puf Makrame Lombok",
+   "desc": "Puf bundar dengan sarung makrame katun yang dirajut tangan dan kaki kayu mahoni.",
+   "cats": [
+    "dekor",
+    "rotan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Makrame katun, kaki mahoni"
+    ],
+    [
+     "Ukuran",
+     "Ø 45 × T 40 cm"
+    ],
+    [
+     "Perawatan",
+     "Sarung bisa dilepas dan dicuci"
+    ]
+   ],
+   "price": 480000,
+   "regular": 560000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Terakota",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/10408437/pexels-photo-10408437.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/6438762/pexels-photo-6438762.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kursi Makan Sasak",
+   "desc": "Kursi makan dengan dudukan dan sandaran anyaman cane. Harga tercantum untuk satu kursi.",
+   "cats": [
+    "kursi",
+    "makan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kayu mahoni, anyaman cane"
+    ],
+    [
+     "Ukuran",
+     "P 45 × L 50 × T 82 cm"
+    ],
+    [
+     "Harga",
+     "Per 1 kursi"
+    ],
+    [
+     "Produksi",
+     "10–14 hari kerja"
+    ]
+   ],
+   "price": 890000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Finishing",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/11363691/pexels-photo-11363691.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/4221404/pexels-photo-4221404.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/9381048/pexels-photo-9381048.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Cermin Rotan Matahari",
+   "desc": "Cermin bulat dengan bingkai rotan berbentuk sinar matahari.",
+   "cats": [
+    "dekor",
+    "rotan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Rotan, cermin 5 mm"
+    ],
+    [
+     "Pemasangan",
+     "Gantungan di belakang"
+    ]
+   ],
+   "price": 560000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Diameter",
+     "values": [
+      {
+       "value": "60 cm",
+       "add": 0
+      },
+      {
+       "value": "80 cm",
+       "add": 220000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/18266258/pexels-photo-18266258.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Lampu Meja Anyam",
+   "desc": "Lampu meja dengan kap anyaman pandan dan kaki kayu. Bohlam tidak termasuk.",
+   "cats": [
+    "dekor"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kap anyaman pandan, kaki kayu"
+    ],
+    [
+     "Ukuran",
+     "Ø 30 × T 45 cm"
+    ],
+    [
+     "Listrik",
+     "Fitting E27, kabel 1,5 m dengan saklar"
+    ]
+   ],
+   "price": 390000,
+   "regular": 0,
+   "options": [],
+   "photos": [
+    "https://images.pexels.com/photos/545012/pexels-photo-545012.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/32280848/pexels-photo-32280848.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  }
+ ],
+ "posts": [
+  {
+   "title": "Cara merawat furnitur jati agar awet puluhan tahun",
+   "tag": "Panduan",
+   "excerpt": "Jati memang kuat, tapi tetap butuh perawatan sederhana. Ini kebiasaan yang kami sarankan ke pelanggan.",
+   "body": "Kayu jati punya minyak alami yang membuatnya tahan rayap dan cuaca. Meski begitu, permukaannya tetap bisa kusam, retak rambut, atau berbercak bila sering terkena air dan sinar matahari langsung.\n\n## Bersihkan dengan kain kering\n\nLap debu dua sampai tiga kali seminggu dengan kain katun kering. Hindari cairan pembersih kaca atau pembersih lantai karena bisa mengikis lapisan finishing.\n\n## Jauhkan dari panas langsung\n\nPakai alas untuk gelas dan piring panas. Bila meja diletakkan dekat jendela, tutup tirai di siang hari agar warna kayu tidak memudar sebelah.\n\n## Oles ulang setahun sekali\n\nUntuk finishing natural, oles tipis minyak jati atau wax setiap 12 bulan. Untuk finishing melamin, cukup poles dengan kain lembut.",
+   "cover": "https://images.pexels.com/photos/14715769/pexels-photo-14715769.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Meja Makan Lawang",
+    "Buffet Sekar Ukir",
+    "Ranjang Jati Prambanan"
+   ]
+  },
+  {
+   "title": "Rotan atau kayu? Memilih kursi untuk teras",
+   "tag": "Panduan",
+   "excerpt": "Teras yang terkena tempias butuh bahan berbeda dari teras tertutup. Berikut perbandingan singkatnya.",
+   "body": "Kursi teras harus tahan perubahan suhu, lembap, dan kadang tempias hujan. Pilihan bahannya bergantung pada seberapa terbuka teras Anda.\n\n## Teras tertutup\n\nRotan alami terasa sejuk, ringan dipindah, dan cocok untuk teras beratap yang tidak terkena hujan langsung. Bantal dudukan membuatnya nyaman untuk duduk lama.\n\n## Teras terbuka\n\nKayu jati atau trembesi lebih tahan cuaca. Pilih finishing minyak agar kayu bisa bernapas, dan simpan bantal di dalam rumah saat musim hujan.\n\n## Perawatan\n\nRotan cukup dibersihkan dengan kuas lembut. Kayu sebaiknya dilap kering dan diminyaki ulang setiap enam sampai dua belas bulan.",
+   "cover": "https://images.pexels.com/photos/26793170/pexels-photo-26793170.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Kursi Santai Sumba",
+    "Puf Makrame Lombok",
+    "Bangku Trembesi"
+   ]
+  },
+  {
+   "title": "Mengukur ruang sebelum membeli meja makan",
+   "tag": "Panduan",
+   "excerpt": "Sisakan minimal 90 cm di sekeliling meja agar kursi bisa ditarik dengan leluasa.",
+   "body": "Meja makan yang terlalu besar membuat ruang terasa sempit dan kursi sulit ditarik. Sebelum memesan, ukur ruangan dengan meteran dan catat panjang serta lebarnya.\n\n## Sisakan ruang di sekeliling meja\n\nBeri jarak minimal 90 cm dari tepi meja ke dinding atau perabot lain. Jarak ini cukup untuk menarik kursi dan berjalan di belakang orang yang sedang duduk.\n\n## Hitung kursi yang dibutuhkan\n\nSetiap orang butuh lebar sekitar 60 cm. Meja 120 cm nyaman untuk empat orang, 160 cm untuk enam orang, dan 200 cm untuk delapan orang.\n\n## Tandai di lantai\n\nTempel selotip kertas di lantai sesuai ukuran meja yang Anda incar. Biarkan satu atau dua hari untuk merasakan apakah ruangnya masih lega.",
+   "cover": "https://images.pexels.com/photos/2995012/pexels-photo-2995012.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Meja Makan Lawang",
+    "Kursi Makan Sasak",
+    "Bangku Trembesi"
+   ]
+  }
+ ]
+}

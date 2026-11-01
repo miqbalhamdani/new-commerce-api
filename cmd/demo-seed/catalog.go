@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"image/color"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -34,16 +35,20 @@ type seededProduct struct {
 	variants map[string]uuid.UUID // by option values joined with "/"
 }
 
-func (sd *seeder) seedCatalog(ctx context.Context, now time.Time) (catalogResult, error) {
+func (sd *seeder) seedCatalog(ctx context.Context, data catalogData, now time.Time) (catalogResult, error) {
 	out := catalogResult{brands: map[string]uuid.UUID{}, cats: map[string]uuid.UUID{}}
-	for _, name := range append(slices.Clone(brandNames), archivedBrand) {
+	brands := slices.Clone(data.brands)
+	if data.archivedBrand != "" {
+		brands = append(brands, data.archivedBrand)
+	}
+	for _, name := range brands {
 		b, err := sd.catalog.CreateBrand(ctx, name, nil)
 		if err != nil {
 			return out, fmt.Errorf("brand %s: %w", name, err)
 		}
 		out.brands[name] = b.ID
 	}
-	for _, c := range categories {
+	for _, c := range data.categories {
 		var parent *uuid.UUID
 		if c.parent != "" {
 			p := out.cats[c.parent]
@@ -61,7 +66,7 @@ func (sd *seeder) seedCatalog(ctx context.Context, now time.Time) (catalogResult
 		return out, err
 	}
 	barcode := 0
-	for _, def := range products {
+	for _, def := range data.products {
 		p, photos, err := sd.product(ctx, fs, def, out, &barcode, now)
 		if err != nil {
 			return out, fmt.Errorf("%s: %w", def.title, err)
@@ -76,13 +81,16 @@ func (sd *seeder) seedCatalog(ctx context.Context, now time.Time) (catalogResult
 // unless it is to stay a draft. Archived products are published first: they
 // sell for a while and are archived after the orders (retire).
 func (sd *seeder) product(ctx context.Context, fs faces, def demoProduct, cat catalogResult, barcode *int, now time.Time) (seededProduct, int, error) {
-	brand := cat.brands[def.brand]
+	var brand *uuid.UUID
+	if id, ok := cat.brands[def.brand]; ok {
+		brand = &id
+	}
 	cats := make([]uuid.UUID, len(def.cats))
 	for i, k := range def.cats {
 		cats[i] = cat.cats[k]
 	}
 	view, err := sd.catalog.CreateProduct(ctx, catalog.ProductInput{Title: def.title, Description: &def.desc,
-		BrandID: &brand, CategoryIDs: cats, Attributes: def.attrs})
+		BrandID: brand, CategoryIDs: cats, Attributes: def.attrs})
 	if err != nil {
 		return seededProduct{}, 0, err
 	}
@@ -101,7 +109,16 @@ func (sd *seeder) product(ctx context.Context, fs faces, def demoProduct, cat ca
 	}
 
 	photos := 0
-	if def.gap != "photo" {
+	if def.photos != nil {
+		// A theme set's photos, the first the cover; a card stands in for one
+		// that does not download.
+		for i, url := range def.photos {
+			if err := sd.setPhoto(ctx, fs, p.id, def, url, i); err != nil {
+				return p, photos, err
+			}
+			photos++
+		}
+	} else if def.gap != "photo" {
 		// One card per colour, on that colour's first variant; the first is the
 		// cover. Then a darker detail shot of the product as a whole.
 		colours := def.colours
@@ -147,6 +164,9 @@ func (sd *seeder) product(ctx context.Context, fs faces, def demoProduct, cat ca
 // combination, each with a SKU, a barcode, a price and a weight -- or, for a
 // draft with a gap, the one field that keeps it from publishing.
 func matrix(def demoProduct, barcode *int, now time.Time) ([]string, []catalog.MatrixRow) {
+	if def.options != nil {
+		return setMatrix(def, barcode)
+	}
 	var names []string
 	var axes [][]string
 	if def.colours != nil {
@@ -186,6 +206,61 @@ func matrix(def demoProduct, barcode *int, now time.Time) ([]string, []catalog.M
 		rows = append(rows, catalog.MatrixRow{OptionValues: opts, Fields: f})
 	}
 	return names, rows
+}
+
+// setMatrix is a theme set product's grid: its option groups in order, each
+// combination priced at the product's price plus what its values add, and on
+// sale with no end when the design crosses a price out. A product without
+// options is one variant.
+func setMatrix(def demoProduct, barcode *int) ([]string, []catalog.MatrixRow) {
+	type cell struct {
+		values []string
+		add    int64
+	}
+	names := []string{}
+	combos := []cell{{}}
+	for _, o := range def.options {
+		names = append(names, o.Name)
+		var next []cell
+		for _, c := range combos {
+			for _, v := range o.Values {
+				next = append(next, cell{append(slices.Clone(c.values), v.Value), c.add + v.Add})
+			}
+		}
+		combos = next
+	}
+	rows := make([]catalog.MatrixRow, 0, len(combos))
+	for i, c := range combos {
+		*barcode++
+		price := (def.price + c.add) * 100
+		sku, code, weight := fmt.Sprintf("%s-%02d", def.sku, i+1), ean13(*barcode), def.weight
+		f := catalog.VariantFields{SKU: &sku, Barcode: &code, RegularPrice: &price, WeightGrams: &weight}
+		if def.regular > def.price {
+			regular := (def.regular + c.add) * 100
+			f.RegularPrice, f.SalePrice = &regular, &price
+		}
+		rows = append(rows, catalog.MatrixRow{OptionValues: c.values, Fields: f})
+	}
+	if rows[0].OptionValues == nil {
+		rows[0].OptionValues = []string{}
+	}
+	return names, rows
+}
+
+// setPhoto uploads one of a theme set product's photos as the admin's upload
+// would (BR-053), or a placeholder card when it cannot be fetched.
+func (sd *seeder) setPhoto(ctx context.Context, fs faces, productID uuid.UUID, def demoProduct, url string, i int) error {
+	data, err := sd.photoBytes(ctx, url)
+	if err != nil {
+		return sd.photo(ctx, fs, productID, def, fmt.Sprintf("Foto %d", i+1), swatches[orDefault(def.tone, "Krem")], nil)
+	}
+	tenantID, _ := tenant.FromContext(ctx)
+	key := fmt.Sprintf("%s/products/%s/%s.%s", tenantID, productID, sha(data), imageExt(data))
+	if err := sd.files.Put(ctx, key, bytes.NewReader(data), int64(len(data)), http.DetectContentType(data)); err != nil {
+		return err
+	}
+	_, err = sd.catalog.ConfirmMedia(ctx, productID, key, nil)
+	return err
 }
 
 // photo draws a placeholder card, uploads it where the admin's presigned
@@ -253,7 +328,10 @@ func orDefault(s, fallback string) string {
 // retire archives what a shop retires once orders exist: two products and a
 // variant that sold for a while, a brand and a collection no longer used --
 // and revokes the old website's API key.
-func (sd *seeder) retire(t *teamCtx, cat catalogResult) error {
+func (sd *seeder) retire(t *teamCtx, cat catalogResult, data catalogData) error {
+	if !data.retires {
+		return sd.team.RevokeAPIKey(t.as(t.owner), t.oldKey)
+	}
 	ctx := t.as(t.admin)
 	for _, p := range cat.products {
 		if p.def.title == archivedVariant.product {

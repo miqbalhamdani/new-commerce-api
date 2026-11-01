@@ -2,9 +2,11 @@
 // screen: a team in each role and status, settings and API keys, brands, a
 // category tree, products in each status with placeholder photos, customers,
 // and orders in every state with their payments and history
-// (deploy/README.md, "A demo shop").
+// (deploy/README.md, "A demo shop"). -theme draws its website in one of the
+// themes (BR-143), with that theme's sample catalog, photos and articles.
 //
 //	demo-seed -owner-email demo@belli.id
+//	demo-seed -theme busana -name Sahira -slug sahira -order-prefix SHR -owner-email demo+sahira@belli.id
 //
 // Like create-tenant it connects as the app (APP_DATABASE_URL) and prints one
 // password on stdout, which every active demo login shares. It also needs the
@@ -29,6 +31,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
@@ -41,7 +44,7 @@ import (
 )
 
 type shop struct {
-	Name, Slug, OrderPrefix, OwnerEmail string
+	Name, Slug, OrderPrefix, OwnerEmail, Theme string
 }
 
 var (
@@ -56,6 +59,7 @@ func main() {
 	flag.StringVar(&s.Slug, "slug", "demo", "shop slug; staff sign in at <name>@<slug>.example.com")
 	flag.StringVar(&s.OrderPrefix, "order-prefix", "DEMO", "order number prefix: 2-6 of A-Z and 0-9")
 	flag.StringVar(&s.OwnerEmail, "owner-email", "", "the demo owner's sign-in email")
+	flag.StringVar(&s.Theme, "theme", "clothing", "the website's theme, which also picks the catalog (BR-143)")
 	flag.Parse()
 
 	if err := run(s); err != nil {
@@ -85,7 +89,9 @@ func run(s shop) error {
 	defer func() { _ = q.Close() }()
 
 	password := rand.Text()
-	out, err := newSeeder(store, files, q).seed(ctx, s, password, time.Now())
+	sd := newSeeder(store, files, q)
+	sd.fetch = fetchPhoto
+	out, err := sd.seed(ctx, s, password, time.Now())
 	if err != nil {
 		return err
 	}
@@ -95,7 +101,8 @@ func run(s shop) error {
 	for _, l := range out.logins {
 		fmt.Println("  " + l)
 	}
-	fmt.Printf("%d products, %d photos, %d customers, %d orders\n", out.products, out.photos, out.customers, out.orders)
+	fmt.Printf("%d products, %d photos, %d articles, %d customers, %d orders\n", out.products, out.photos, out.posts, out.customers, out.orders)
+	fmt.Printf("website: https://%s.belli.id (theme %s)\n", s.Slug, s.Theme)
 	return nil
 }
 
@@ -113,6 +120,9 @@ func (s shop) validate() error {
 	if s.OwnerEmail == "" {
 		errs = append(errs, errors.New("-owner-email is required"))
 	}
+	if _, ok := looks[s.Theme]; !ok {
+		errs = append(errs, fmt.Errorf("-theme %q is not one of the website's themes", s.Theme))
+	}
 	return errors.Join(errs...)
 }
 
@@ -122,10 +132,14 @@ type seeder struct {
 	catalog *catalog.Service
 	team    *team.Service
 	orders  *orders.Service
+	blog    *blog.Service
+	// fetch downloads a theme's photos; nil (the tests) draws placeholder
+	// cards and leaves the hero and covers out.
+	fetch func(ctx context.Context, url string) ([]byte, error)
 }
 
 func newSeeder(store *db.Store, files *storage.Store, q *queue.Client) *seeder {
-	return &seeder{
+	sd := &seeder{
 		store:   store,
 		files:   files,
 		catalog: catalog.NewService(store, files, jobs.NewService(store, q)),
@@ -133,14 +147,17 @@ func newSeeder(store *db.Store, files *storage.Store, q *queue.Client) *seeder {
 		team: team.NewService(store, nil, nil),
 		// No mailer (Mail stays nil): no order email is queued.
 		orders: orders.NewService(store, nil, nil),
+		blog:   blog.NewService(store, files),
 	}
+	sd.team.Files = files // the hero photo is checked in the bucket
+	return sd
 }
 
 // summary is what a run made, for stdout and the test.
 type summary struct {
-	tenantID                            uuid.UUID
-	logins                              []string
-	products, photos, customers, orders int
+	tenantID                                   uuid.UUID
+	logins                                     []string
+	products, photos, posts, customers, orders int
 }
 
 // seed builds the shop in the order a real one fills up: team and settings,
@@ -148,6 +165,17 @@ type summary struct {
 // moved back to before the first order once it is in; each order is moved
 // back as it is placed. The last steps archive what a shop retires.
 func (sd *seeder) seed(ctx context.Context, s shop, password string, now time.Time) (summary, error) {
+	if s.Theme == "" {
+		s.Theme = "clothing"
+	}
+	look := looks[s.Theme]
+	data := fashionCatalog()
+	if look.set != "" {
+		var err error
+		if data, err = loadSet(look.set, look); err != nil {
+			return summary{}, err
+		}
+	}
 	t, err := sd.shopAndTeam(ctx, s, password, now)
 	if err != nil {
 		return summary{}, fmt.Errorf("shop and team: %w", err)
@@ -156,11 +184,17 @@ func (sd *seeder) seed(ctx context.Context, s shop, password string, now time.Ti
 	if err := sd.settings(t.as(t.owner), t); err != nil {
 		return out, fmt.Errorf("settings: %w", err)
 	}
-	cat, err := sd.seedCatalog(t.as(t.admin), now)
+	if err := sd.look(t.as(t.owner), s.Theme, look); err != nil {
+		return out, fmt.Errorf("look: %w", err)
+	}
+	cat, err := sd.seedCatalog(t.as(t.admin), data, now)
 	if err != nil {
 		return out, fmt.Errorf("catalog: %w", err)
 	}
 	out.products, out.photos = len(cat.products), cat.photos
+	if out.posts, err = sd.seedPosts(t.as(t.admin), data.posts, cat, now); err != nil {
+		return out, fmt.Errorf("articles: %w", err)
+	}
 	if err := sd.shiftBack(t.ctx, 98*day); err != nil {
 		return out, fmt.Errorf("backdate catalog: %w", err)
 	}
@@ -172,7 +206,7 @@ func (sd *seeder) seed(ctx context.Context, s shop, password string, now time.Ti
 	if out.orders, err = sd.seedOrders(t, cat, ids, now); err != nil {
 		return out, fmt.Errorf("orders: %w", err)
 	}
-	if err := sd.retire(t, cat); err != nil {
+	if err := sd.retire(t, cat, data); err != nil {
 		return out, fmt.Errorf("archive: %w", err)
 	}
 	slog.Info(fmt.Sprintf("seeded demo shop: %d products, %d photos, %d customers, %d orders",
