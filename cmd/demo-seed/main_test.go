@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
@@ -86,6 +88,27 @@ func TestSeed(t *testing.T) {
 	rdb := redis.NewClient(opt)
 	t.Cleanup(func() { _ = rdb.Close() })
 	emailsBefore := rdb.XLen(ctx, "emails").Val()
+	// The seeds' image jobs are left for no worker here; take them back off the
+	// shared stream at the end, or a later package's runner has to chew through
+	// a hundred images before its own job.
+	lastJob := "0"
+	if last, err := rdb.XRevRangeN(ctx, jobs.Stream, "+", "-", 1).Result(); err == nil && len(last) == 1 {
+		lastJob = last[0].ID
+	}
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(ctx)
+		seeded, err := rdb.XRange(ctx, jobs.Stream, "("+lastJob, "+").Result()
+		if err != nil {
+			return
+		}
+		ids := make([]string, 0, len(seeded))
+		for _, m := range seeded {
+			ids = append(ids, m.ID)
+		}
+		if len(ids) > 0 {
+			rdb.XDel(ctx, jobs.Stream, ids...)
+		}
+	})
 
 	suffix := strings.ToLower(rand.Text()[:8])
 	s := shop{Name: "Demo Seed Test", Slug: "demo-seed-" + suffix, OrderPrefix: "DST", OwnerEmail: "demo-" + suffix + "@example.com"}
