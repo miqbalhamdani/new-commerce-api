@@ -24,6 +24,16 @@ func TestValidate(t *testing.T) {
 	if err := ok.validate(); err != nil {
 		t.Fatalf("valid shop: %v", err)
 	}
+	admin := ok
+	admin.Theme = "" // the admin demo
+	if err := admin.validate(); err != nil {
+		t.Errorf("no theme: %v", err)
+	}
+	for theme, look := range looks {
+		if set, err := loadSet(look.set, look); err != nil || len(set.products) == 0 {
+			t.Errorf("%s: set %q: %v", theme, look.set, err)
+		}
+	}
 	for name, mutate := range map[string]func(*shop){
 		"lowercase prefix": func(s *shop) { s.OrderPrefix = "demo" },
 		"slug with space":  func(s *shop) { s.Slug = "toko demo" },

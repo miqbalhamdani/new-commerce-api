@@ -22,9 +22,9 @@ import (
 )
 
 // A demo shop per website theme (P1-804; BR-143): -theme picks the catalog
-// and the look. clothing keeps the fashion catalog in data.go; the rest come
-// from the sample shops in the themes' Claude Design files (sets/*.json),
-// photos and all.
+// and the look, from the sample shops in the themes' Claude Design files
+// (sets/*.json), photos and all. Without -theme the shop is the admin demo:
+// the fashion catalog in data.go, in the default theme.
 
 // whatsappBelli is where a demo shop's order button goes: a prospect trying
 // one reaches Belli, not a stranger.
@@ -36,8 +36,8 @@ type themeLook struct {
 }
 
 var looks = map[string]themeLook{
-	"clothing": {tagline: "Pakaian harian yang awet, dijahit di Jakarta.", address: "Jakarta Selatan, DKI Jakarta",
-		hours: "Setiap hari 09.00–21.00", hero: pexels(2475259)},
+	"clothing": {set: "clothing", tagline: "Pakaian harian yang awet, dijahit di Jakarta.", address: "Jakarta Selatan, DKI Jakarta",
+		hours: "Selasa–Minggu 11.00–21.00, Senin tutup", hero: pexels(2475259), weight: 300},
 	"busana": {set: "busana", tagline: "Busana muslim harian, dijahit rapi di Bandung.", address: "Bandung, Jawa Barat",
 		hours: "Setiap hari 09.00–21.00", hero: pexels(8995906), weight: 400},
 	"woman": {set: "woman", tagline: "Tenang dipakai, mudah dipadukan.", address: "Jakarta Selatan, DKI Jakarta",
@@ -94,7 +94,7 @@ type demoPost struct {
 }
 
 // catalogData is what seedCatalog makes: the fashion catalog with the brands
-// and archived rows a full admin demo shows, or a theme's set.
+// and archived rows the admin demo shows, or a theme's set.
 type catalogData struct {
 	brands        []string
 	archivedBrand string

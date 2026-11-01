@@ -1,0 +1,1155 @@
+{
+ "categories": [
+  {
+   "key": "kaos",
+   "name": "Kaos",
+   "kind": "category"
+  },
+  {
+   "key": "kemeja",
+   "name": "Kemeja & Polo",
+   "kind": "category"
+  },
+  {
+   "key": "hoodie",
+   "name": "Hoodie & Sweater",
+   "kind": "category"
+  },
+  {
+   "key": "jaket",
+   "name": "Jaket & Outer",
+   "kind": "category"
+  },
+  {
+   "key": "celana",
+   "name": "Celana",
+   "kind": "category"
+  },
+  {
+   "key": "aksesoris",
+   "name": "Aksesoris",
+   "kind": "category"
+  },
+  {
+   "key": "hujan",
+   "name": "Musim Hujan",
+   "kind": "collection",
+   "desc": "Jaket dan outer yang tetap ringan saat gerimis."
+  },
+  {
+   "key": "dasar",
+   "name": "Dasar Harian",
+   "kind": "collection",
+   "desc": "Kaos, polo, dan jeans untuk dipakai berulang."
+  },
+  {
+   "key": "studio",
+   "name": "Studio Jalanan",
+   "kind": "collection",
+   "desc": "Potongan longgar dan warna berani dari studio kami."
+  }
+ ],
+ "products": [
+  {
+   "title": "Kaos Oversize 24s",
+   "desc": "Kaos potongan oversize dengan bahu turun dan panjang badan pas di pinggul. Katun 24s cukup tebal untuk dipakai tanpa dalaman, tapi tetap adem.",
+   "cats": [
+    "kaos",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun combed 24s, 190 gsm"
+    ],
+    [
+     "Fit",
+     "Oversize, bahu turun"
+    ],
+    [
+     "Model",
+     "Tinggi 178 cm, memakai L"
+    ],
+    [
+     "Perawatan",
+     "Cuci terbalik, jangan pakai pemutih"
+    ]
+   ],
+   "price": 129000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Putih",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      },
+      {
+       "value": "Abu Misty",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      },
+      {
+       "value": "XXL",
+       "add": 15000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/8532638/pexels-photo-8532638.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/9558252/pexels-photo-9558252.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kaos Heavyweight 20s",
+   "desc": "Kaos berbahan katun 20s yang lebih tebal dan sedikit kaku di awal pemakaian. Kerahnya rib rapat sehingga tidak mudah melar.",
+   "cats": [
+    "kaos",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun combed 20s, 220 gsm"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Kerah",
+     "Rib 2 cm, jahitan rantai"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci, setrika suhu sedang"
+    ]
+   ],
+   "price": 159000,
+   "regular": 189000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Sage",
+       "add": 0
+      },
+      {
+       "value": "Krem",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/9594692/pexels-photo-9594692.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kaos Boxy Terakota",
+   "desc": "Potongan boxy yang lebar dan sedikit pendek. Warna terakota dicelup setelah dijahit, jadi tiap potong punya gradasi yang sedikit berbeda.",
+   "cats": [
+    "kaos",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun 24s, garment dyed"
+    ],
+    [
+     "Fit",
+     "Boxy, panjang di atas pinggul"
+    ],
+    [
+     "Perawatan",
+     "Cuci terpisah pada 2–3 cucian pertama"
+    ]
+   ],
+   "price": 139000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Terakota",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/2698844/pexels-photo-2698844.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kaos Relaxed Dusty Pink",
+   "desc": "Kaos longgar warna dusty pink yang mudah dipadukan dengan celana gelap atau denim.",
+   "cats": [
+    "kaos",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun combed 24s"
+    ],
+    [
+     "Fit",
+     "Relaxed"
+    ],
+    [
+     "Model",
+     "Tinggi 180 cm, memakai L"
+    ],
+    [
+     "Perawatan",
+     "Cuci terbalik, jemur di tempat teduh"
+    ]
+   ],
+   "price": 129000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Dusty Pink",
+       "add": 0
+      },
+      {
+       "value": "Putih",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      },
+      {
+       "value": "XXL",
+       "add": 15000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/9558265/pexels-photo-9558265.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/9558761/pexels-photo-9558761.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/8727491/pexels-photo-8727491.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Hoodie Essential",
+   "desc": "Hoodie fleece dengan bagian dalam berbulu halus, cocok untuk ruangan ber-AC dan perjalanan malam. Tali hoodie bisa dilepas.",
+   "cats": [
+    "hoodie",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Cotton fleece 280 gsm"
+    ],
+    [
+     "Fit",
+     "Reguler, sedikit longgar"
+    ],
+    [
+     "Detail",
+     "Kantong kanguru, rib di lengan dan pinggang"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci mode lembut, jangan dikeringkan dengan mesin"
+    ]
+   ],
+   "price": 289000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Putih Tulang",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Abu",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 15000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/8217416/pexels-photo-8217416.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/8217406/pexels-photo-8217406.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Sweater Crewneck",
+   "desc": "Sweater crewneck tanpa tudung dengan bordir kecil di dada.",
+   "cats": [
+    "hoodie",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Cotton fleece 260 gsm"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Detail",
+     "Bordir kecil di dada kiri"
+    ],
+    [
+     "Perawatan",
+     "Cuci terbalik"
+    ]
+   ],
+   "price": 249000,
+   "regular": 299000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Putih",
+       "add": 0
+      },
+      {
+       "value": "Abu",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/15336550/pexels-photo-15336550.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Overshirt Twill Mustard",
+   "desc": "Overshirt twill yang bisa dipakai sebagai kemeja atau dirangkap di atas kaos. Dua kantong dada berkancing.",
+   "cats": [
+    "kemeja",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun twill 8 oz"
+    ],
+    [
+     "Fit",
+     "Longgar, panjang menutup pinggul"
+    ],
+    [
+     "Detail",
+     "Kancing tanduk, dua kantong dada"
+    ],
+    [
+     "Perawatan",
+     "Setrika suhu sedang"
+    ]
+   ],
+   "price": 259000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Mustard",
+       "add": 0
+      },
+      {
+       "value": "Olive",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/7562188/pexels-photo-7562188.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Polo Knit",
+   "desc": "Polo rajut ringan dengan kerah lembut. Lebih rapi dari kaos untuk ke kantor atau acara santai.",
+   "cats": [
+    "kemeja",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun rajut pique"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Detail",
+     "Tiga kancing, ujung lengan rib"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, keringkan mendatar"
+    ]
+   ],
+   "price": 199000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Abu",
+       "add": 0
+      },
+      {
+       "value": "Navy",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/17984122/pexels-photo-17984122.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Jaket Puffer Navy",
+   "desc": "Puffer ringan berisi dakron yang tetap hangat tanpa terlalu tebal. Lapisan luarnya tahan gerimis.",
+   "cats": [
+    "jaket",
+    "hujan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Nilon taslan, isi dakron"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Detail",
+     "Kerah tinggi, dua kantong ritsleting"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, jangan disetrika"
+    ]
+   ],
+   "price": 459000,
+   "regular": 549000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Navy",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      },
+      {
+       "value": "XXL",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/29051341/pexels-photo-29051341.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Jaket Track Retro",
+   "desc": "Jaket track dengan blok warna dan resleting penuh. Bahan parasut dengan lapisan jaring di dalam.",
+   "cats": [
+    "jaket",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Parasut, furing jaring"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Detail",
+     "Resleting penuh, rib di pinggang dan lengan"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan"
+    ]
+   ],
+   "price": 329000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Biru Merah",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/2468231/pexels-photo-2468231.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Windbreaker Oranye",
+   "desc": "Windbreaker ringan yang bisa dilipat ke dalam kantongnya sendiri. Tudungnya punya tali pengatur.",
+   "cats": [
+    "jaket",
+    "hujan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Nilon ripstop, lapisan anti air"
+    ],
+    [
+     "Fit",
+     "Longgar"
+    ],
+    [
+     "Detail",
+     "Tudung bertali, ventilasi di punggung"
+    ],
+    [
+     "Perawatan",
+     "Lap atau cuci tangan, jangan diperas"
+    ]
+   ],
+   "price": 389000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Oranye",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Olive",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/10385760/pexels-photo-10385760.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Celana Kotak Relaxed",
+   "desc": "Celana motif kotak dengan pinggang karet dan tali. Potongannya lurus dan longgar sampai mata kaki.",
+   "cats": [
+    "celana",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun flanel"
+    ],
+    [
+     "Fit",
+     "Relaxed, pinggang karet"
+    ],
+    [
+     "Detail",
+     "Dua kantong samping, satu kantong belakang"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci"
+    ]
+   ],
+   "price": 219000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Kotak Coklat",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/11317811/pexels-photo-11317811.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/11317814/pexels-photo-11317814.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Jeans Straight 14 oz",
+   "desc": "Jeans potongan lurus dari denim 14 oz. Warnanya akan memudar mengikuti cara pakai.",
+   "cats": [
+    "celana",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Denim 14 oz, 100% katun"
+    ],
+    [
+     "Ukuran",
+     "Pinggang 28–34. Panjang dalam 76 cm (reguler) atau 81 cm (panjang)"
+    ],
+    [
+     "Fit",
+     "Straight"
+    ],
+    [
+     "Perawatan",
+     "Cuci terbalik dengan air dingin, sesekali saja"
+    ]
+   ],
+   "price": 349000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Indigo",
+       "add": 0
+      },
+      {
+       "value": "Light Wash",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Pinggang",
+     "values": [
+      {
+       "value": "28",
+       "add": 0
+      },
+      {
+       "value": "29",
+       "add": 0
+      },
+      {
+       "value": "30",
+       "add": 0
+      },
+      {
+       "value": "31",
+       "add": 0
+      },
+      {
+       "value": "32",
+       "add": 0
+      },
+      {
+       "value": "34",
+       "add": 10000
+      }
+     ]
+    },
+    {
+     "name": "Panjang",
+     "values": [
+      {
+       "value": "Reguler",
+       "add": 0
+      },
+      {
+       "value": "Panjang",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/2315313/pexels-photo-2315313.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Coat Wol Coklat",
+   "desc": "Coat panjang berbahan campuran wol untuk perjalanan ke tempat dingin atau ruangan ber-AC.",
+   "cats": [
+    "jaket",
+    "hujan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Wol campuran poliester"
+    ],
+    [
+     "Fit",
+     "Reguler, panjang selutut"
+    ],
+    [
+     "Detail",
+     "Furing penuh, kancing tersembunyi"
+    ],
+    [
+     "Perawatan",
+     "Dry clean"
+    ]
+   ],
+   "price": 649000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Coklat",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/21554929/pexels-photo-21554929.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Bucket Hat Kanvas",
+   "desc": "Topi bucket kanvas dengan lubang angin di kedua sisi.",
+   "cats": [
+    "aksesoris",
+    "studio"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kanvas katun"
+    ],
+    [
+     "Ukuran",
+     "Lingkar kepala 58 cm"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan"
+    ]
+   ],
+   "price": 89000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Olive",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": []
+  },
+  {
+   "title": "Kaos Putih isi 2",
+   "desc": "Dua kaos putih polos dalam satu kemasan. Cocok untuk dalaman kemeja atau dipakai sendiri.",
+   "cats": [
+    "kaos",
+    "dasar"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun combed 30s"
+    ],
+    [
+     "Isi",
+     "2 kaos"
+    ],
+    [
+     "Fit",
+     "Reguler"
+    ],
+    [
+     "Perawatan",
+     "Boleh dicuci dengan pemutih ringan"
+    ]
+   ],
+   "price": 199000,
+   "regular": 238000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Putih",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/8217431/pexels-photo-8217431.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  }
+ ],
+ "posts": [
+  {
+   "title": "Gramasi kaos: 20s, 24s, atau 30s?",
+   "tag": "Bahan",
+   "excerpt": "Angka di label kaos menentukan tebal dan jatuhnya kain. Ini bedanya sebelum kamu memilih.",
+   "body": "Angka 20s, 24s, dan 30s menunjukkan ukuran benang katun. Makin kecil angkanya, makin tebal benangnya, sehingga kaosnya juga makin tebal.\n\nKaos 30s paling tipis dan ringan. Cocok untuk dalaman atau cuaca terik, tapi warna terang bisa sedikit menerawang.\n\nKaos 24s ada di tengah. Cukup tebal untuk dipakai sendiri dan tetap adem untuk aktivitas seharian. Sebagian besar kaos kami memakai 24s.\n\nKaos 20s terasa padat dan sedikit kaku di awal. Bentuknya lebih terjaga, cocok untuk potongan boxy atau oversize.\n\nDi halaman produk kami selalu menulis jenis benang dan berat kain (gsm). Kalau ragu, tanya lewat WhatsApp dan kami kirim video kainnya.",
+   "cover": "https://images.pexels.com/photos/9850405/pexels-photo-9850405.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Kaos Oversize 24s",
+    "Kaos Heavyweight 20s",
+    "Kaos Putih isi 2"
+   ]
+  },
+  {
+   "title": "Memilih ukuran oversize tanpa kebesaran",
+   "tag": "Ukuran",
+   "excerpt": "Kaos oversize sudah dibuat lebih lebar. Ukur kaos favoritmu, lalu cocokkan dengan tabel.",
+   "body": "Kaos oversize dibuat lebih lebar dari ukuran badan. Jadi kamu tidak perlu naik ukuran untuk mendapatkan tampilan longgar.\n\nCara paling mudah: ambil kaos yang paling kamu suka, bentangkan, lalu ukur lebar dada dari ketiak ke ketiak. Cocokkan angka itu dengan tabel di halaman produk.\n\nPerhatikan juga panjang badan. Untuk tinggi di bawah 165 cm, pilih ukuran dengan panjang tidak lebih dari 72 cm.\n\nBahu turun memang bagian dari potongannya. Jahitan bahu yang jatuh 4–6 cm di bawah bahu asli itu normal.\n\nTulis tinggi dan berat badan di pesan WhatsApp. Kami bantu sarankan ukuran sebelum pesanan dikirim.",
+   "cover": "https://images.pexels.com/photos/9775431/pexels-photo-9775431.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Kaos Oversize 24s",
+    "Hoodie Essential",
+    "Celana Kotak Relaxed"
+   ]
+  },
+  {
+   "title": "Cara mencuci jaket nilon dan puffer",
+   "tag": "Perawatan",
+   "excerpt": "Jaket nilon tidak perlu sering dicuci. Kalau harus, ikuti langkah ini supaya lapisannya awet.",
+   "body": "Jaket nilon dan puffer tidak perlu sering dicuci. Noda kecil cukup dilap dengan kain lembap dan sedikit sabun.\n\nKalau harus dicuci, tutup semua resleting dan kancing, lalu rendam di air dingin dengan deterjen cair. Hindari pemutih dan pelembut.\n\nJangan diperas. Tekan perlahan untuk membuang air, lalu gantung di tempat teduh. Puffer perlu ditepuk-tepuk saat setengah kering supaya isinya merata lagi.\n\nJangan menyetrika bagian luar nilon. Kalau kusut, gantung di kamar mandi saat mandi air hangat; uapnya cukup untuk merapikan.\n\nSimpan dengan digantung, bukan dilipat rapat, supaya lapisan anti airnya tidak retak.",
+   "cover": "https://images.pexels.com/photos/7116579/pexels-photo-7116579.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Jaket Puffer Navy",
+    "Windbreaker Oranye",
+    "Jaket Track Retro"
+   ]
+  }
+ ]
+}
