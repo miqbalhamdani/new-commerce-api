@@ -1,4 +1,5 @@
-# admin.{domain} and api.{domain} (04-api-spec.md §1, P1-001).
+# admin.{domain} and api.{domain} (04-api-spec.md §1, P1-001), and every
+# shop's website at {slug}.{domain} (BR-140, P1-706).
 {
 	servers {
 		# Cloudflare's ranges in production: only they may say who the
@@ -65,4 +66,14 @@
 	handle {
 		import api
 	}
+}
+
+# Any other name under the domain is a shop's website; the hosts above are
+# more specific and win. An unknown slug is the website's own 404 page. The
+# origin certificate must name *.{domain} as well.
+*.{$ROOT_DOMAIN} {
+	import tls
+	import headers
+	encode zstd gzip
+	reverse_proxy storefront:3000
 }

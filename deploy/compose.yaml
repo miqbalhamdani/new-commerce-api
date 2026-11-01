@@ -43,6 +43,8 @@ x-api: &api
     BITESHIP_API_KEY: ${BITESHIP_API_KEY:?}
     BITESHIP_URL: ${BITESHIP_URL:-https://api.biteship.com}
     API_URL: https://${API_HOST:?}
+    # The hosted website's key (BR-141). Empty accepts none.
+    STOREFRONT_PLATFORM_KEY: ${STOREFRONT_PLATFORM_KEY:-}
     # Caddy, and only Caddy, is believed for X-Real-IP (04-api-spec.md §1).
     TRUSTED_PROXIES: 172.30.0.2/32
   depends_on: *app-deps
@@ -64,6 +66,7 @@ services:
     environment:
       ADMIN_HOST: ${ADMIN_HOST:?}
       API_HOST: ${API_HOST:?}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?}
       TLS: ${TLS:?}
       CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:?}
     volumes:
@@ -80,6 +83,19 @@ services:
   web:
     image: ${WEB_IMAGE:-ghcr.io/miqbalhamdani/new-commerce-web:main}
     restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 512m
+
+  # Every shop's website, {slug}.{ROOT_DOMAIN} (belli-storefront, P1-705). It
+  # reads the storefront API through the public host, as any shop's website
+  # does, so both replicas serve it and a rolling deploy drops nothing.
+  storefront:
+    image: ${STOREFRONT_IMAGE:-ghcr.io/miqbalhamdani/belli-storefront:main}
+    restart: unless-stopped
+    environment:
+      API_URL: https://${API_HOST:?}/v1/storefront
+      API_KEY: ${STOREFRONT_PLATFORM_KEY:?}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?}
     cpus: 0.5
     mem_limit: 512m
 

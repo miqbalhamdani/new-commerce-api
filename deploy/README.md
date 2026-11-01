@@ -5,10 +5,10 @@ The production stack: one VPS, Docker Compose, Caddy in front (P1-001, P1-002;
 
 | File | What |
 |---|---|
-| `compose.yaml` | Caddy, web, api ×2, worker, migrate (one-shot), PostgreSQL 18, Redis 8 |
-| `Caddyfile` | `admin.{domain}` (the admin, and `/v1/*` to the API) and `api.{domain}` |
-| `deploy.sh <tag>` | Migrate, then roll api-1, api-2, web and the worker without dropping a request |
-| `auto-deploy.sh` | What CI runs over SSH on every push to main of either repo: pull, then `deploy.sh main` |
+| `compose.yaml` | Caddy, web, storefront, api ×2, worker, migrate (one-shot), PostgreSQL 18, Redis 8 |
+| `Caddyfile` | `admin.{domain}` (the admin, and `/v1/*` to the API), `api.{domain}`, and `*.{domain}`, every shop's website |
+| `deploy.sh <tag>` | Migrate, then roll api-1, api-2, web, storefront and the worker without dropping a request |
+| `auto-deploy.sh` | What CI runs over SSH on every push to main of any of the three repos: pull, then `deploy.sh main` |
 | `check.sh` | What the running stack is tuned to: Postgres and Redis settings, each container's limits (P1-002) |
 | `.env.example` | Every setting; copy to `.env` on the box |
 | `compose.local.yaml`, `local.env`, `local/` | The same stack on a developer machine |
@@ -24,8 +24,9 @@ cp .env.example .env && chmod 600 .env   # fill it in
 ./deploy.sh sha-<commit>                 # CI pushes an image per merge to main
 ```
 
-`deploy.sh` takes one tag for both images, and the two repos' shas differ:
-`./deploy.sh main` deploys the newest of each.
+`deploy.sh` takes one tag for the API and admin images, and the two repos'
+shas differ: `./deploy.sh main` deploys the newest of each. The website
+(`belli-storefront`) is `main` unless `STOREFRONT_TAG` names another tag.
 
 ### Auto-deploy
 
@@ -56,6 +57,26 @@ no local commits, or the pull refuses and the deploy fails.
 
 To roll back, revert on main and push. A hand-run `deploy.sh` lasts until the
 next push; to hold it, take the keys' lines out of `~/.ssh/authorized_keys`.
+
+### The shops' websites
+
+Every active shop is `https://{slug}.{ROOT_DOMAIN}` (BR-140), served by the
+`storefront` service (`belli-storefront`), which reads the storefront API with
+`STOREFRONT_PLATFORM_KEY` and `X-Shop` (BR-141). Once, before the first deploy
+that has it:
+
+1. The origin certificate in `certs/` names `*.{ROOT_DOMAIN}` as well as the
+   apex: `openssl x509 -in certs/origin.pem -noout -ext subjectAltName`. If
+   not, issue a new Cloudflare Origin certificate for both names.
+2. `.env` gets `ROOT_DOMAIN` and `STOREFRONT_PLATFORM_KEY` (`openssl rand -hex 32`).
+   Compose refuses to start without them.
+3. The box can pull `ghcr.io/miqbalhamdani/belli-storefront`, a private package:
+   `docker login ghcr.io` with a token that can read packages.
+4. A third deploy key, as above, for the `belli-storefront` repo's secrets.
+5. The image domain's WAF rule lets `/shop/` through, as it does `/products/`
+   and `/blogs/`, or logos answer 403 (BR-053).
+6. Last, a proxied `*` record in Cloudflare to the box. Until then no shop's
+   name resolves.
 
 ### Managed database
 
@@ -149,9 +170,10 @@ Rehearsed on PostgreSQL 16 as a role with no CREATEROLE or BYPASSRLS.
 
 ## On a developer machine
 
-Docker Desktop running, both repos checked out side by side. Caddy signs
-`admin.localhost` and `api.localhost` with its own CA; MinIO stands in for R2
-and a fixed-rate stub for Biteship.
+Docker Desktop running, the three repos checked out side by side. Caddy
+signs `admin.localhost`, `api.localhost` and `*.localhost` with its own CA;
+MinIO stands in for R2 and a fixed-rate stub for Biteship. A shop's website is
+`https://{slug}.localhost`.
 
 ```bash
 cd deploy

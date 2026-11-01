@@ -1,5 +1,5 @@
 # What a developer machine adds to compose.yaml (README.md): images built
-# from the two repos, MinIO in place of R2, a fixed-rate Biteship, Caddy's
+# from the three repos, MinIO in place of R2, a fixed-rate Biteship, Caddy's
 # own CA, and Postgres on 127.0.0.1:55432 so dev-seed can reach it.
 services:
   api-1:
@@ -11,6 +11,11 @@ services:
       storage-init: { condition: service_completed_successfully }
   web:
     build: ../../new-commerce-web
+  storefront:
+    build: ../../belli-storefront
+    # api.localhost is the container itself in here; go round Caddy instead.
+    environment:
+      API_URL: http://api-1:8080/v1/storefront
 
   postgres:
     ports: ["127.0.0.1:55432:5432"]
