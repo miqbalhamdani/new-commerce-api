@@ -54,11 +54,15 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 }
 
 // productListItem is a product card: the list's rows, and a blog post's
-// products (P1-605).
+// products (P1-605), with what a theme's card shows (P1-803).
 func productListItem(p catalog.ShopProduct) ProductListItem {
 	item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax,
+		OnSale: p.OnSale, RegularPriceMin: p.RegularMin, Options: make([]ProductOption, 0, len(p.Options)),
 		WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax),
 		Categories: make([]ProductCategory, 0, len(p.Categories))}
+	for _, o := range p.Options {
+		item.Options = append(item.Options, ProductOption{Name: o.Name, Values: o.Values})
+	}
 	for _, c := range p.Categories {
 		item.Categories = append(item.Categories, ProductCategory{Kind: CategoryKind(c.Kind), Name: c.Name, Path: c.Path})
 	}

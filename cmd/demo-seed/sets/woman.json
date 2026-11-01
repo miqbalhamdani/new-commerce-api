@@ -1,0 +1,980 @@
+{
+ "categories": [
+  {
+   "key": "atasan",
+   "name": "Atasan",
+   "kind": "category"
+  },
+  {
+   "key": "rajut",
+   "name": "Rajut",
+   "kind": "category"
+  },
+  {
+   "key": "bawahan",
+   "name": "Bawahan",
+   "kind": "category"
+  },
+  {
+   "key": "outer",
+   "name": "Outer",
+   "kind": "category"
+  },
+  {
+   "key": "set",
+   "name": "Dress & Set",
+   "kind": "category"
+  },
+  {
+   "key": "hijab",
+   "name": "Hijab & Aksesoris",
+   "kind": "category"
+  },
+  {
+   "key": "kerja",
+   "name": "Kerja Santai",
+   "kind": "collection",
+   "desc": ""
+  },
+  {
+   "key": "tonal",
+   "name": "Warna Tanah",
+   "kind": "collection",
+   "desc": ""
+  },
+  {
+   "key": "voal",
+   "name": "Voal & Pashmina",
+   "kind": "collection",
+   "desc": ""
+  }
+ ],
+ "products": [
+  {
+   "title": "Sweater Rajut Crop",
+   "desc": "Sweater rajut potongan crop dengan rib di leher dan ujung lengan. Pas dipadukan dengan celana atau rok berpinggang tinggi.",
+   "cats": [
+    "rajut",
+    "tonal"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Rajut katun campuran, tidak gatal"
+    ],
+    [
+     "Ukuran",
+     "All size, lingkar dada hingga 104 cm, panjang 52 cm"
+    ],
+    [
+     "Potongan",
+     "Crop, lengan panjang"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, keringkan mendatar"
+    ]
+   ],
+   "price": 229000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Mocca",
+       "add": 0
+      },
+      {
+       "value": "Off White",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "All size",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/9604191/pexels-photo-9604191.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kemeja Hitam Oversize",
+   "desc": "Kemeja longgar dengan bahu turun dan panjang menutup pinggul. Bisa dipakai tertutup atau terbuka sebagai outer tipis.",
+   "cats": [
+    "atasan",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun twill, sedikit tebal"
+    ],
+    [
+     "Potongan",
+     "Oversize, bahu turun"
+    ],
+    [
+     "Detail",
+     "Kancing depan, saku dada"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci, setrika suhu sedang"
+    ]
+   ],
+   "price": 199000,
+   "regular": 249000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Off White",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/19456445/pexels-photo-19456445.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Celana Kulot Coklat",
+   "desc": "Kulot pinggang tinggi dengan lipit depan. Lebar di bawah, tetap rapi saat duduk dan salat.",
+   "cats": [
+    "bawahan",
+    "tonal"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Wool peach, jatuh"
+    ],
+    [
+     "Potongan",
+     "Kulot lebar, pinggang tinggi"
+    ],
+    [
+     "Detail",
+     "Karet belakang, dua saku samping"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan atau mesin mode lembut"
+    ]
+   ],
+   "price": 219000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Coklat Tua",
+       "add": 0
+      },
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/39705635/pexels-photo-39705635.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Setelan Linen Putih",
+   "desc": "Setelan linen atasan dan celana lebar. Satu set sudah lengkap untuk kerja, tapi tiap potong juga mudah dipakai terpisah.",
+   "cats": [
+    "set",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Linen rami campuran"
+    ],
+    [
+     "Isi",
+     "Atasan dan celana panjang"
+    ],
+    [
+     "Potongan",
+     "Atasan lurus, celana lebar"
+    ],
+    [
+     "Perawatan",
+     "Setrika uap, makin lembut setelah dicuci"
+    ]
+   ],
+   "price": 389000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Off White",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S–M",
+       "add": 0
+      },
+      {
+       "value": "L–XL",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/31649570/pexels-photo-31649570.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Trench Coat Blush",
+   "desc": "Trench coat panjang warna blush dengan sabuk pinggang. Lapisan luarnya sedikit tahan gerimis.",
+   "cats": [
+    "outer",
+    "tonal"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun gabardin, sedikit tahan air"
+    ],
+    [
+     "Potongan",
+     "Panjang di bawah lutut, sabuk pinggang"
+    ],
+    [
+     "Detail",
+     "Kancing ganda, belahan belakang"
+    ],
+    [
+     "Perawatan",
+     "Dry clean"
+    ]
+   ],
+   "price": 529000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Blush",
+       "add": 0
+      },
+      {
+       "value": "Krem",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/22634830/pexels-photo-22634830.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kemeja Linen Longgar",
+   "desc": "Kemeja linen ringan dengan kancing tertutup. Bisa dimasukkan ke celana atau dibiarkan jatuh di luar.",
+   "cats": [
+    "atasan",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Linen katun"
+    ],
+    [
+     "Potongan",
+     "Longgar, panjang menutup pinggul"
+    ],
+    [
+     "Detail",
+     "Kancing tertutup, manset bisa digulung"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci mode lembut"
+    ]
+   ],
+   "price": 249000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Off White",
+       "add": 0
+      },
+      {
+       "value": "Taupe",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/7945666/pexels-photo-7945666.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/18138596/pexels-photo-18138596.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/6694760/pexels-photo-6694760.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Blazer Krem Longgar",
+   "desc": "Blazer longgar yang bisa dipakai di atas kaos atau kemeja. Bahunya lembut, tidak terlalu kaku.",
+   "cats": [
+    "outer",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Polyester wool, furing satin"
+    ],
+    [
+     "Potongan",
+     "Longgar, bahu lembut tanpa bantalan tebal"
+    ],
+    [
+     "Detail",
+     "Satu kancing, dua saku tutup"
+    ],
+    [
+     "Perawatan",
+     "Dry clean"
+    ]
+   ],
+   "price": 459000,
+   "regular": 529000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/7671167/pexels-photo-7671167.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Coat Teddy Coklat",
+   "desc": "Coat teddy hangat untuk perjalanan ke tempat dingin atau ruangan ber-AC.",
+   "cats": [
+    "outer",
+    "tonal"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Teddy fleece"
+    ],
+    [
+     "Potongan",
+     "Lurus, panjang sepaha"
+    ],
+    [
+     "Detail",
+     "Kerah lebar, saku tempel"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan dengan air dingin"
+    ]
+   ],
+   "price": 589000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Coklat",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/16008693/pexels-photo-16008693.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Pashmina Voal",
+   "desc": "Pashmina voal yang ringan, mudah dibentuk, dan tidak licin. Delapan warna tampil di sini; warna lain bisa ditanyakan lewat WhatsApp.",
+   "cats": [
+    "hijab",
+    "voal"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Voal ultrafine, tidak licin"
+    ],
+    [
+     "Ukuran",
+     "75 × 180 cm"
+    ],
+    [
+     "Tepi",
+     "Jahit tepi rapi"
+    ],
+    [
+     "Warna lain",
+     "20 warna tersedia, tanyakan lewat WhatsApp"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, setrika suhu rendah"
+    ]
+   ],
+   "price": 79000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Peach",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Mocca",
+       "add": 0
+      },
+      {
+       "value": "Taupe",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      },
+      {
+       "value": "Dusty Pink",
+       "add": 0
+      },
+      {
+       "value": "Navy",
+       "add": 0
+      },
+      {
+       "value": "Off White",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/32206595/pexels-photo-32206595.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/5206281/pexels-photo-5206281.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Rok Midi Hitam",
+   "desc": "Rok A-line panjang dengan furing penuh. Jatuhnya lembut dan tidak menerawang.",
+   "cats": [
+    "bawahan",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Crepe premium"
+    ],
+    [
+     "Potongan",
+     "A-line, panjang semata kaki"
+    ],
+    [
+     "Detail",
+     "Resleting samping, furing"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci mode lembut"
+    ]
+   ],
+   "price": 199000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Navy",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/13966360/pexels-photo-13966360.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kaos Basic Putih",
+   "desc": "Kaos dasar yang tidak menerawang, untuk dalaman blazer atau dipakai sendiri.",
+   "cats": [
+    "atasan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun combed 24s"
+    ],
+    [
+     "Potongan",
+     "Reguler"
+    ],
+    [
+     "Perawatan",
+     "Cuci terbalik"
+    ]
+   ],
+   "price": 119000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Off White",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Abu",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/17428502/pexels-photo-17428502.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Celana Wide Leg Hitam",
+   "desc": "Celana lebar berbahan sedikit melar sehingga nyaman dipakai seharian.",
+   "cats": [
+    "bawahan",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Scuba crepe, sedikit melar"
+    ],
+    [
+     "Potongan",
+     "Wide leg, pinggang tinggi"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci"
+    ]
+   ],
+   "price": 239000,
+   "regular": 279000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/7871177/pexels-photo-7871177.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Set Airy Anti UV",
+   "desc": "Set atasan dan celana berbahan airy crinkle yang tidak perlu disetrika. Tersedia dua pilihan panjang sesuai tinggi badan.",
+   "cats": [
+    "set",
+    "kerja"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Airy crinkle dengan lapisan anti UV"
+    ],
+    [
+     "Isi",
+     "Atasan dan celana"
+    ],
+    [
+     "Panjang",
+     "Regular untuk tinggi 150–162 cm, Long untuk 163–175 cm"
+    ],
+    [
+     "Perawatan",
+     "Tidak perlu disetrika"
+    ]
+   ],
+   "price": 329000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Taupe Grey",
+       "add": 0
+      },
+      {
+       "value": "Mauve",
+       "add": 0
+      },
+      {
+       "value": "Night Forest",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S–M",
+       "add": 0
+      },
+      {
+       "value": "L–XL",
+       "add": 15000
+      }
+     ]
+    },
+    {
+     "name": "Panjang",
+     "values": [
+      {
+       "value": "Regular",
+       "add": 0
+      },
+      {
+       "value": "Long",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/35644532/pexels-photo-35644532.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Tote Kanvas",
+   "desc": "Tote kanvas tebal dengan saku dalam. Muat laptop 14 inci.",
+   "cats": [
+    "hijab"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Kanvas 12 oz"
+    ],
+    [
+     "Ukuran",
+     "40 × 36 × 12 cm"
+    ],
+    [
+     "Detail",
+     "Saku dalam beresleting"
+    ]
+   ],
+   "price": 149000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Natural",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": []
+  }
+ ],
+ "posts": [
+  {
+   "title": "Lima potong dasar untuk lemari kerja",
+   "tag": "Gaya",
+   "excerpt": "Kemeja longgar, celana lebar, blazer, rajut, dan kaos polos. Ini cara memadukannya untuk lima hari kerja.",
+   "body": "Lemari kerja tidak perlu penuh. Lima potong yang warnanya saling cocok sudah cukup untuk dipadukan berbeda setiap hari.\n\nMulai dari kemeja linen longgar warna terang dan celana lebar hitam. Keduanya bisa dipakai bersama atau dipisah dengan potongan lain.\n\nTambahkan blazer krem untuk rapat, sweater rajut untuk ruangan dingin, dan kaos polos sebagai dalaman.\n\nPilih warna dari satu keluarga, misalnya hitam, krem, dan mocca. Dengan begitu hampir semua kombinasi akan terlihat serasi.\n\nKalau ragu memilih ukuran, tulis tinggi dan berat badan di pesan WhatsApp. Kami bantu sarankan sebelum pesanan dikirim.",
+   "cover": "https://images.pexels.com/photos/4641824/pexels-photo-4641824.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Kemeja Linen Longgar",
+    "Celana Wide Leg Hitam",
+    "Blazer Krem Longgar"
+   ]
+  },
+  {
+   "title": "Memilih panjang Regular atau Long",
+   "tag": "Ukuran",
+   "excerpt": "Beberapa produk kami punya dua pilihan panjang. Patokannya cukup dari tinggi badan.",
+   "body": "Set dan celana kami tersedia dalam dua pilihan panjang supaya jatuhnya pas di mata kaki, bukan menumpuk di lantai.\n\nRegular dibuat untuk tinggi sekitar 150–162 cm. Long untuk tinggi 163–175 cm.\n\nKalau kamu sering memakai sepatu berhak, pilih satu tingkat lebih panjang.\n\nPanjang tiap produk tertulis di bagian Detail, bahan & perawatan. Ukur juga celana favoritmu dari pinggang ke ujung kaki untuk perbandingan.\n\nMasih ragu? Kirim foto celana yang biasa kamu pakai lewat WhatsApp.",
+   "cover": "https://images.pexels.com/photos/8581033/pexels-photo-8581033.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Set Airy Anti UV",
+    "Celana Kulot Coklat",
+    "Rok Midi Hitam"
+   ]
+  },
+  {
+   "title": "Merawat rajut supaya tidak melar",
+   "tag": "Perawatan",
+   "excerpt": "Rajut paling cepat rusak karena digantung dan diperas. Ini cara mencuci dan menyimpannya.",
+   "body": "Rajut tidak perlu dicuci setiap kali dipakai. Angin-anginkan semalam, lalu lipat kembali.\n\nSaat dicuci, rendam di air dingin dengan sabun lembut selama sepuluh menit. Jangan disikat dan jangan diperas.\n\nTekan perlahan dengan handuk untuk membuang air, lalu keringkan mendatar di atas handuk kering.\n\nSimpan dengan dilipat. Digantung terlalu lama membuat bahu dan panjangnya melar.\n\nBulu kecil yang muncul setelah beberapa kali pakai bisa dirapikan dengan sisir rajut.",
+   "cover": "https://images.pexels.com/photos/10838789/pexels-photo-10838789.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Sweater Rajut Crop",
+    "Coat Teddy Coklat",
+    "Trench Coat Blush"
+   ]
+  }
+ ]
+}

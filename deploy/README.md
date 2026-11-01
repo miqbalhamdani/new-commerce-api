@@ -130,6 +130,27 @@ inserted, not invited, and its orders carry no customer address -- except
 `~/demo-account.txt` has the logins and their one password. A second run with
 the same `-slug` (default `demo`) changes nothing.
 
+**A demo shop per website theme** (BR-143). `-theme` draws the shop's website in
+that theme and gives it the theme's sample catalog, collections, articles and
+look from its Claude Design file. The photos are downloaded from Pexels and
+Unsplash as it runs; one that fails becomes a placeholder card. Each shop gets its own password: `>>` keeps
+them all in one file.
+
+```bash
+seed() { (umask 077; docker compose run --rm --no-deps --entrypoint demo-seed api-1 "$@" >> ~/demo-account.txt); }
+seed -theme busana          -name Sahira      -slug sahira     -order-prefix SHR -owner-email demo+sahira@belli.id
+seed -theme clothing        -name "Lantai Dua" -slug lantaidua -order-prefix LTD -owner-email demo+lantaidua@belli.id
+seed -theme woman           -name Kirana      -slug kirana     -order-prefix KRN -owner-email demo+kirana@belli.id
+seed -theme katalog         -name Seruni      -slug seruni     -order-prefix SRN -owner-email demo+seruni@belli.id
+seed -theme katalog-hangat  -name "Sekar Ayu" -slug sekarayu   -order-prefix SKA -owner-email demo+sekarayu@belli.id
+seed -theme furnitur        -name Kayuna      -slug kayuna     -order-prefix KYN -owner-email demo+kayuna@belli.id
+seed -theme furnitur-earthy -name Wanajati    -slug wanajati   -order-prefix WNJ -owner-email demo+wanajati@belli.id
+seed -theme furnitur-ceria  -name "Ruang Rotan" -slug ruangrotan -order-prefix RRT -owner-email demo+ruangrotan@belli.id
+```
+
+The `demo` shop above stays the admin demo, in the default theme; it is not
+one of the eight.
+
 ### Backups (managed database)
 
 The provider's backups first; `backup.sh` keeps an encrypted copy in a

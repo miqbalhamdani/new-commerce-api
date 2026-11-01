@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.23.0
+  version: 2.24.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -1083,8 +1083,9 @@ paths:
         required, `blog:write`; there is no confirm, the key is set on the post (BR-135).
         `blog_image`: the same, for an image in the post's body, which links it by the returned
         `public_url`. `shop_logo`: JPEG, PNG or WebP up to 2 MB, neither id, `settings:write`;
-        the key is set as the storefront settings' `logo_r2_key` (BR-142). The key contains the
-        content hash (BR-053). The URL lives 10 minutes.
+        the key is set as the storefront settings' `logo_r2_key` (BR-142). `shop_hero`: the same,
+        up to 5 MB, set as `hero_r2_key`. The key contains the content hash (BR-053). The URL
+        lives 10 minutes.
       requestBody:
         required: true
         content:
@@ -3202,7 +3203,7 @@ components:
       properties:
         purpose:
           type: string
-          enum: [product_image, product_import, blog_cover, blog_image, shop_logo]
+          enum: [product_image, product_import, blog_cover, blog_image, shop_logo, shop_hero]
         product_id:
           type: string
           format: uuid
@@ -3234,8 +3235,9 @@ components:
         public_url:
           type: string
           description: >-
-            Where the image is served once uploaded; set for `blog_cover`, `blog_image` and
-            `shop_logo`, so a body image can be linked from the post's Markdown (BR-135).
+            Where the image is served once uploaded; set for `blog_cover`, `blog_image`,
+            `shop_logo` and `shop_hero`, so a body image can be linked from the post's Markdown
+            (BR-135).
 
     ConfirmMedia:
       type: object
@@ -3866,13 +3868,19 @@ components:
       description: A Biteship courier code (BR-120).
       enum: [jne, jnt, sicepat, anteraja, pos, tiki, ninja, lion, idexpress, sap, rpx, wahana]
 
+    ShopTheme:
+      type: string
+      description: The hosted website's theme (BR-143).
+      enum: [busana, clothing, woman, katalog, katalog-hangat, furnitur, furnitur-earthy, furnitur-ceria]
+
     StorefrontSettings:
       type: object
       required: [contact_email, google_client_id, origin_postal_code, shipping_couriers,
                  bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled,
                  midtrans_environment, midtrans_client_key, midtrans_server_key_set,
-                 midtrans_notification_url, logo_r2_key, logo_url, whatsapp_number, tagline,
-                 brand_color, instagram, updated_at]
+                 midtrans_notification_url, theme, brand_color, logo_r2_key, logo_url,
+                 hero_r2_key, hero_url, whatsapp_number, tagline, instagram, address,
+                 opening_hours, shopee_url, tokopedia_url, updated_at]
       properties:
         contact_email:
           type: [string, "null"]
@@ -3907,6 +3915,12 @@ components:
           type: string
           format: uri
           description: Where Midtrans tells the API about payments; sent with every Snap transaction (BR-124).
+        theme:
+          $ref: "#/components/schemas/ShopTheme"
+        brand_color:
+          type: [string, "null"]
+          description: One of the theme's four colours; `null` means its first (BR-143).
+          examples: ["#9a4e3a"]
         logo_r2_key:
           type: [string, "null"]
           description: "A key from `POST /media/presign` with `purpose: shop_logo` (BR-142)."
@@ -3914,17 +3928,32 @@ components:
           type: [string, "null"]
           format: uri
           description: The logo on the image domain; read-only.
+        hero_r2_key:
+          type: [string, "null"]
+          description: "A key from `POST /media/presign` with `purpose: shop_hero` (BR-142)."
+        hero_url:
+          type: [string, "null"]
+          format: uri
+          description: The hero photo on the image domain; read-only.
         whatsapp_number:
           type: [string, "null"]
           examples: ["6281234567890"]
         tagline:
           type: [string, "null"]
-        brand_color:
-          type: [string, "null"]
-          examples: ["#0a7d6e"]
         instagram:
           type: [string, "null"]
           description: The handle, without `@`.
+        address:
+          type: [string, "null"]
+        opening_hours:
+          type: [string, "null"]
+          examples: ["Setiap hari 09.00–21.00"]
+        shopee_url:
+          type: [string, "null"]
+          format: uri
+        tokopedia_url:
+          type: [string, "null"]
+          format: uri
         updated_at:
           type: string
           format: date-time
@@ -3962,21 +3991,42 @@ components:
           type: [string, "null"]
           writeOnly: true
           description: Write-only; `null` removes it (and so needs Midtrans off).
+        theme:
+          $ref: "#/components/schemas/ShopTheme"
+        brand_color:
+          type: [string, "null"]
+          pattern: "^#[0-9a-f]{6}$"
+          description: >-
+            One of the theme's four colours (BR-143). A change of `theme` without it clears it.
         logo_r2_key:
           type: [string, "null"]
           description: "A key from `POST /media/presign` with `purpose: shop_logo`, uploaded (BR-142)."
+        hero_r2_key:
+          type: [string, "null"]
+          description: "A key from `POST /media/presign` with `purpose: shop_hero`, uploaded (BR-142)."
         whatsapp_number:
           type: [string, "null"]
           pattern: "^62[0-9]{8,13}$"
         tagline:
           type: [string, "null"]
           maxLength: 160
-        brand_color:
-          type: [string, "null"]
-          pattern: "^#[0-9a-f]{6}$"
         instagram:
           type: [string, "null"]
           pattern: "^[A-Za-z0-9._]{1,30}$"
+        address:
+          type: [string, "null"]
+          maxLength: 300
+        opening_hours:
+          type: [string, "null"]
+          maxLength: 120
+        shopee_url:
+          type: [string, "null"]
+          maxLength: 300
+          pattern: "^https://([a-z0-9-]+\\.)*shopee\\.co\\.id(/\\S*)?$"
+        tokopedia_url:
+          type: [string, "null"]
+          maxLength: 300
+          pattern: "^https://([a-z0-9-]+\\.)*tokopedia\\.com(/\\S*)?$"
 
     ApiKey:
       type: object

@@ -1,0 +1,1023 @@
+{
+ "categories": [
+  {
+   "key": "gamis",
+   "name": "Gamis & Abaya",
+   "kind": "category"
+  },
+  {
+   "key": "atasan",
+   "name": "Atasan & Tunik",
+   "kind": "category"
+  },
+  {
+   "key": "hijab",
+   "name": "Hijab",
+   "kind": "category"
+  },
+  {
+   "key": "setelan",
+   "name": "Setelan",
+   "kind": "category"
+  },
+  {
+   "key": "outer",
+   "name": "Outer",
+   "kind": "category"
+  },
+  {
+   "key": "aksesoris",
+   "name": "Aksesoris",
+   "kind": "category"
+  },
+  {
+   "key": "ramadan",
+   "name": "Ramadan 1448 H",
+   "kind": "collection",
+   "desc": "Gamis, abaya, dan khimar untuk tarawih sampai hari raya."
+  },
+  {
+   "key": "harian",
+   "name": "Seri Harian",
+   "kind": "collection",
+   "desc": "Bahan adem untuk kerja, kuliah, dan jalan sore."
+  },
+  {
+   "key": "nusantara",
+   "name": "Motif Nusantara",
+   "kind": "collection",
+   "desc": "Batik cap dan motif kembang dari perajin Pekalongan."
+  }
+ ],
+ "products": [
+  {
+   "title": "Gamis Floral Mira",
+   "desc": "Gamis potongan A dengan motif bunga kecil yang tidak ramai. Kancing depan sampai pinggang memudahkan ibu menyusui.",
+   "cats": [
+    "gamis",
+    "ramadan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun rayon premium, tidak menerawang"
+    ],
+    [
+     "Ukuran",
+     "LD 96–112 cm, panjang 135–140 cm"
+    ],
+    [
+     "Model",
+     "Kancing depan, busui friendly, saku kiri-kanan"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, setrika suhu sedang"
+    ]
+   ],
+   "price": 329000,
+   "regular": 389000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Gading",
+       "add": 0
+      },
+      {
+       "value": "Polkadot Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/37347163/pexels-photo-37347163.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    "https://images.pexels.com/photos/37347339/pexels-photo-37347339.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Abaya Kaftan Nadia",
+   "desc": "Abaya kaftan longgar dengan tali dalam yang bisa diatur. Cocok untuk tarawih dan acara keluarga.",
+   "cats": [
+    "gamis",
+    "ramadan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Jetblack crepe, jatuh dan tidak mudah kusut"
+    ],
+    [
+     "Ukuran",
+     "All size, LD hingga 130 cm, panjang 140 cm"
+    ],
+    [
+     "Model",
+     "Kaftan lengan lebar, tali pinggang di dalam"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan atau mesin mode lembut"
+    ]
+   ],
+   "price": 459000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Coklat Tua",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "All size",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/34884852/pexels-photo-34884852.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kemeja Tunik Rayya",
+   "desc": "Tunik kemeja dengan panjang di bawah pinggul. Mudah dipadukan dengan rok plisket atau kulot.",
+   "cats": [
+    "atasan",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun toyobo"
+    ],
+    [
+     "Ukuran",
+     "LD 100–118 cm, panjang 74–80 cm"
+    ],
+    [
+     "Model",
+     "Kerah shanghai, menutup pinggul"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci, setrika suhu sedang"
+    ]
+   ],
+   "price": 219000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Marun",
+       "add": 0
+      },
+      {
+       "value": "Putih",
+       "add": 0
+      },
+      {
+       "value": "Navy",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/34511782/pexels-photo-34511782.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Gamis Plisket Hana",
+   "desc": "Gamis plisket ringan yang bergerak lembut saat berjalan. Furing penuh, jadi tidak perlu inner tambahan.",
+   "cats": [
+    "gamis",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Ceruty babydoll dengan furing penuh"
+    ],
+    [
+     "Ukuran",
+     "All size, fit to XL, panjang 138 cm"
+    ],
+    [
+     "Model",
+     "Plisket dari pinggang, karet di belakang"
+    ],
+    [
+     "Perawatan",
+     "Jangan diperas, jemur di tempat teduh"
+    ]
+   ],
+   "price": 279000,
+   "regular": 319000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Abu",
+       "add": 0
+      },
+      {
+       "value": "Mocca",
+       "add": 0
+      },
+      {
+       "value": "Dusty Pink",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "All size",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/14696275/pexels-photo-14696275.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Setelan Tunik Batik Laras",
+   "desc": "Setelan tunik dan kulot bermotif batik cap. Warna tiap potong bisa sedikit berbeda karena diwarnai manual.",
+   "cats": [
+    "setelan",
+    "nusantara"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun primisima, batik cap Pekalongan"
+    ],
+    [
+     "Isi",
+     "Tunik dan celana kulot"
+    ],
+    [
+     "Ukuran",
+     "LD 104–116 cm, celana 98–100 cm"
+    ],
+    [
+     "Perawatan",
+     "Cuci terpisah, jangan direndam"
+    ]
+   ],
+   "price": 349000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 15000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/3754156/pexels-photo-3754156.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Outer Kimono Saira",
+   "desc": "Outer kimono panjang untuk melapisi gamis polos atau setelan kerja.",
+   "cats": [
+    "outer",
+    "nusantara"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Rayon twill motif bunga"
+    ],
+    [
+     "Ukuran",
+     "All size, panjang 110 cm"
+    ],
+    [
+     "Model",
+     "Tanpa kancing, lengan 7/8"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan"
+    ]
+   ],
+   "price": 259000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Motif",
+     "values": [
+      {
+       "value": "Kembang",
+       "add": 0
+      },
+      {
+       "value": "Gading",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "All size",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/38244092/pexels-photo-38244092.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Abaya Putih Zahra",
+   "desc": "Abaya putih untuk hari raya dan akad. Bahannya jatuh dan tidak menerawang meski berwarna terang.",
+   "cats": [
+    "gamis",
+    "ramadan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Maxmara silk, sedikit mengilap"
+    ],
+    [
+     "Ukuran",
+     "LD 96–112 cm, panjang 135–140 cm"
+    ],
+    [
+     "Model",
+     "Resleting depan, manset kancing"
+    ],
+    [
+     "Perawatan",
+     "Dry clean atau cuci tangan"
+    ]
+   ],
+   "price": 499000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Putih Tulang",
+       "add": 0
+      },
+      {
+       "value": "Broken White",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 25000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/31049717/pexels-photo-31049717.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Pashmina Ceruty Babydoll",
+   "desc": "Pashmina ringan yang mudah dibentuk dan tidak licin. Warnanya doff dan nyaman dipakai seharian.",
+   "cats": [
+    "hijab",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Ceruty babydoll"
+    ],
+    [
+     "Ukuran",
+     "75 × 180 cm"
+    ],
+    [
+     "Tepi",
+     "Jahit tepi rapi (som)"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan, setrika suhu rendah"
+    ]
+   ],
+   "price": 69000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Olive",
+       "add": 0
+      },
+      {
+       "value": "Mocca",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Abu",
+       "add": 0
+      },
+      {
+       "value": "Dusty",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/6070105/pexels-photo-6070105.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Hijab Voal Segiempat",
+   "desc": "Segiempat voal yang tegak di dahi tanpa banyak jarum. Ukuran 130 cm untuk tampilan yang lebih menutup dada.",
+   "cats": [
+    "hijab"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Voal ultrafine"
+    ],
+    [
+     "Ukuran",
+     "115 × 115 cm atau 130 × 130 cm"
+    ],
+    [
+     "Tepi",
+     "Lasercut"
+    ],
+    [
+     "Perawatan",
+     "Cuci tangan"
+    ]
+   ],
+   "price": 79000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Mauve",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      },
+      {
+       "value": "Pasir",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "115 cm",
+       "add": 0
+      },
+      {
+       "value": "130 cm",
+       "add": 10000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/6070103/pexels-photo-6070103.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Khimar Instan Aqila",
+   "desc": "Khimar instan dua lapis yang langsung pakai. Pilih versi pet agar bagian dahi tetap rapi seharian.",
+   "cats": [
+    "hijab",
+    "ramadan"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Jersey premium, adem"
+    ],
+    [
+     "Ukuran",
+     "M: depan 70 cm, belakang 90 cm. L: depan 80 cm, belakang 100 cm"
+    ],
+    [
+     "Model",
+     "Dua lapis, pilih pet antem atau tanpa pet"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci mode lembut"
+    ]
+   ],
+   "price": 129000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      },
+      {
+       "value": "Abu",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 10000
+      }
+     ]
+    },
+    {
+     "name": "Model",
+     "values": [
+      {
+       "value": "Non-pet",
+       "add": 0
+      },
+      {
+       "value": "Pet",
+       "add": 5000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/34285641/pexels-photo-34285641.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Kemeja Linen Oversize",
+   "desc": "Kemeja longgar berbahan linen campuran. Makin lembut setelah beberapa kali dicuci.",
+   "cats": [
+    "atasan",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Linen rami campuran"
+    ],
+    [
+     "Ukuran",
+     "LD 100–118 cm, panjang 74–80 cm"
+    ],
+    [
+     "Model",
+     "Oversize, kancing depan, lengan bisa digulung"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci, setrika uap"
+    ]
+   ],
+   "price": 239000,
+   "regular": 279000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Krem",
+       "add": 0
+      },
+      {
+       "value": "Putih",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/30775416/pexels-photo-30775416.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Gamis Daily Alma",
+   "desc": "Gamis harian potongan lurus dengan resleting depan. Bahannya sedikit tebal sehingga tidak perlu dalaman.",
+   "cats": [
+    "gamis",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun rayon twill"
+    ],
+    [
+     "Ukuran",
+     "LD 96–118 cm, panjang 135–140 cm"
+    ],
+    [
+     "Model",
+     "Potongan lurus, resleting depan, saku"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci"
+    ]
+   ],
+   "price": 269000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Coklat",
+       "add": 0
+      },
+      {
+       "value": "Hitam",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      },
+      {
+       "value": "XL",
+       "add": 20000
+      },
+      {
+       "value": "XXL",
+       "add": 20000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/38560278/pexels-photo-38560278.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Setelan Kulot Ayla",
+   "desc": "Setelan kulot untuk bepergian. Kulotnya lebar sehingga tetap rapi saat duduk dan salat.",
+   "cats": [
+    "setelan",
+    "harian"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Linen rayon"
+    ],
+    [
+     "Isi",
+     "Atasan dan celana kulot"
+    ],
+    [
+     "Ukuran",
+     "LD 100–110 cm, pinggang karet 64–90 cm"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci"
+    ]
+   ],
+   "price": 299000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Pasir",
+       "add": 0
+      },
+      {
+       "value": "Sage",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/17907026/pexels-photo-17907026.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  },
+  {
+   "title": "Bros Hijab Mutiara (isi 3)",
+   "desc": "Bros kecil untuk merapikan lipatan hijab tanpa jarum pentul.",
+   "cats": [
+    "aksesoris"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Mutiara sintetis, jarum stainless"
+    ],
+    [
+     "Isi",
+     "3 bros per kemasan"
+    ],
+    [
+     "Ukuran",
+     "Diameter 1,5 cm"
+    ]
+   ],
+   "price": 35000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Emas",
+       "add": 0
+      },
+      {
+       "value": "Perak",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": []
+  },
+  {
+   "title": "Dress Midi Biru Laut",
+   "desc": "Dress midi longgar dengan lengan balon. Bisa dipakai sebagai gamis dengan rok dalam atau celana.",
+   "cats": [
+    "gamis"
+   ],
+   "attrs": [
+    [
+     "Bahan",
+     "Katun linen"
+    ],
+    [
+     "Ukuran",
+     "LD 96–106 cm, panjang 135–138 cm"
+    ],
+    [
+     "Model",
+     "Lengan balon, karet di pergelangan"
+    ],
+    [
+     "Perawatan",
+     "Mesin cuci"
+    ]
+   ],
+   "price": 249000,
+   "regular": 299000,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Biru Laut",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Ukuran",
+     "values": [
+      {
+       "value": "S",
+       "add": 0
+      },
+      {
+       "value": "M",
+       "add": 0
+      },
+      {
+       "value": "L",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.pexels.com/photos/33160301/pexels-photo-33160301.jpeg?auto=compress&cs=tinysrgb&w=1200"
+   ]
+  }
+ ],
+ "posts": [
+  {
+   "title": "Memilih bahan gamis untuk cuaca panas",
+   "tag": "Bahan",
+   "excerpt": "Linen, katun rayon, dan ceruty punya karakter berbeda. Ini cara membedakannya sebelum memesan.",
+   "body": "Udara di Indonesia lembap hampir sepanjang tahun, jadi bahan yang menyerap keringat dan cepat kering lebih penting daripada tampilan di foto. Tiga bahan yang paling sering kami pakai adalah linen, katun rayon, dan ceruty.\n\nLinen terasa sedikit kasar di awal dan makin lembut setelah beberapa kali dicuci. Seratnya renggang sehingga udara mudah lewat. Kekurangannya, linen gampang kusut, jadi cocok untuk kamu yang tidak keberatan dengan tampilan santai.\n\nKatun rayon lebih jatuh dan dingin di kulit. Bahan ini pilihan aman untuk gamis harian karena tidak menerawang dan mudah disetrika. Pilih yang gramasinya sedang supaya tidak terlalu tipis.\n\nCeruty ringan dan melayang, biasanya dipakai untuk hijab atau lapisan luar gamis pesta. Karena tipis, ceruty perlu furing atau inner agar tidak menerawang.\n\nKalau masih ragu, kirim pertanyaan lewat WhatsApp. Kami bisa kirim foto dan video bahan dari dekat sebelum kamu memesan.",
+   "cover": "https://images.pexels.com/photos/9218527/pexels-photo-9218527.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Gamis Floral Mira",
+    "Gamis Plisket Hana",
+    "Gamis Daily Alma"
+   ]
+  },
+  {
+   "title": "Cara mengukur badan sebelum pesan online",
+   "tag": "Ukuran",
+   "excerpt": "Cukup pita ukur dan lima menit. Tiga ukuran ini yang paling menentukan pas atau tidaknya gamis.",
+   "body": "Sebagian besar penukaran ukuran terjadi karena pembeli menebak dari ukuran baju lama. Padahal tiap toko memakai pola yang berbeda. Lebih aman mengukur badan sendiri lalu mencocokkan dengan tabel ukuran di halaman produk.\n\nLingkar dada: lingkarkan pita ukur di bagian dada paling penuh, sejajar lantai. Tambahkan 6–10 cm untuk ruang gerak, lalu cari ukuran dengan lingkar dada yang paling dekat.\n\nPanjang badan: ukur dari bahu tertinggi sampai mata kaki. Untuk gamis, pilih panjang yang menyentuh punggung kaki saat memakai sandal.\n\nLingkar lengan: ukur bagian lengan atas yang paling besar. Ukuran ini penting untuk model lengan lurus yang tidak melebar.\n\nTulis ketiga angka ini di pesan WhatsApp saat memesan. Kami akan bantu cek ukuran mana yang paling pas.",
+   "cover": "https://images.pexels.com/photos/9218419/pexels-photo-9218419.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Abaya Putih Zahra",
+    "Kemeja Tunik Rayya",
+    "Kemeja Linen Oversize"
+   ]
+  },
+  {
+   "title": "Tiga gaya pashmina untuk ke kantor",
+   "tag": "Gaya",
+   "excerpt": "Rapi tanpa banyak jarum. Gaya sederhana yang tahan dari rapat pagi sampai pulang kerja.",
+   "body": "Pashmina ceruty mudah dibentuk dan tidak licin, jadi cocok dipakai seharian. Ketiga gaya di bawah ini hanya butuh dua jarum pentul dan satu ciput.\n\nGaya lilit satu sisi: sematkan pashmina di bawah dagu dengan sisi kanan lebih panjang. Lilitkan sisi panjang ke belakang kepala, lalu jatuhkan ke bahu kiri.\n\nGaya menutup dada: biarkan kedua sisi jatuh ke depan, lalu sematkan salah satu sisi ke bahu yang berlawanan. Gaya ini cocok dipadukan dengan kemeja atau blazer.\n\nGaya simpul belakang: lilitkan kedua sisi ke belakang leher dan ikat simpul kecil. Hasilnya ringkas dan tidak mengganggu saat bekerja di depan laptop.\n\nWarna netral seperti mocca, abu, dan hitam paling mudah dipadukan dengan pakaian kerja.",
+   "cover": "https://images.pexels.com/photos/39287043/pexels-photo-39287043.jpeg?auto=compress&cs=tinysrgb&w=1200",
+   "products": [
+    "Pashmina Ceruty Babydoll",
+    "Hijab Voal Segiempat",
+    "Khimar Instan Aqila"
+   ]
+  }
+ ]
+}

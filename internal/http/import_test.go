@@ -207,9 +207,12 @@ func waitForJob(t *testing.T, s seeded, id string) map[string]any {
 	defer stop()
 	go func() { _ = runner.Run(ctx) }()
 
+	// One client for the whole wait: each apiClient opens a server with its own
+	// pool, held until the test ends, and a slow queue meant dozens of them.
+	get := apiClient(t, s)
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
-		_, j := apiClient(t, s)("GET", "/v1/jobs/"+id, nil)
+		_, j := get("GET", "/v1/jobs/"+id, nil)
 		if j["state"] == "done" || j["state"] == "failed" {
 			return j
 		}

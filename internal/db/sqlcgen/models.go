@@ -328,6 +328,12 @@ type StorefrontSetting struct {
 	Tagline                  *string
 	BrandColor               *string
 	Instagram                *string
+	Theme                    string
+	HeroR2Key                *string
+	Address                  *string
+	OpeningHours             *string
+	ShopeeUrl                *string
+	TokopediaUrl             *string
 }
 
 type StorefrontVariant struct {

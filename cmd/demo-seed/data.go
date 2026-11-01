@@ -79,8 +79,13 @@ type demoProduct struct {
 	tone                    string   // the card colour when there is no Warna axis
 	price                   int64    // rupiah
 	weight                  int32    // grams
-	sale                    saleKind
-	state                   string // active, draft or archived
+	// A theme set's product (themes.go): its own option groups with what each
+	// value adds, the crossed-out price when on sale, and its photos' URLs.
+	options []demoOption
+	regular int64
+	photos  []string
+	sale    saleKind
+	state   string // active, draft or archived
 	// gap is what keeps a draft from passing the publish check (BR-038):
 	// "photo", "weight", "price" or "category". Empty is a draft that would pass.
 	gap string

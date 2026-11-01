@@ -82,16 +82,20 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, PresignResponse{UploadUrl: c.URL, R2Key: c.Key, ExpiresIn: c.ExpiresIn,
 			PublicUrl: &c.PublicURL})
 		return
-	case "shop_logo":
+	case "shop_logo", "shop_hero":
 		if !auth.Can(role, auth.PermSettingsWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermSettingsWrite))
 			return
 		}
 		if body.ProductID.Set {
-			writeError(w, r, fieldErr("product_id", "a logo belongs to no product"))
+			writeError(w, r, fieldErr("product_id", "a shop image belongs to no product"))
 			return
 		}
-		c, err := s.team.PresignLogo(r.Context(), body.MimeType.Value, body.Bytes.Value, body.SHA256.Value)
+		presign := s.team.PresignLogo
+		if body.Purpose.Value == "shop_hero" {
+			presign = s.team.PresignHero
+		}
+		c, err := presign(r.Context(), body.MimeType.Value, body.Bytes.Value, body.SHA256.Value)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -120,7 +124,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		p, err = s.catalog.PresignImport(r.Context(), body.MimeType.Value, body.Bytes.Value)
 	default:
-		writeError(w, r, fieldErr("purpose", "purpose is product_image, product_import, blog_cover, blog_image or shop_logo"))
+		writeError(w, r, fieldErr("purpose", "purpose is product_image, product_import, blog_cover, blog_image, shop_logo or shop_hero"))
 		return
 	}
 	if err != nil {

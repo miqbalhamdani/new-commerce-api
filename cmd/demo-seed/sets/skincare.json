@@ -1,0 +1,682 @@
+{
+ "categories": [
+  {
+   "key": "pembersih",
+   "name": "Pembersih",
+   "kind": "category"
+  },
+  {
+   "key": "toner",
+   "name": "Toner & Essence",
+   "kind": "category"
+  },
+  {
+   "key": "serum",
+   "name": "Serum",
+   "kind": "category"
+  },
+  {
+   "key": "pelembap",
+   "name": "Pelembap",
+   "kind": "category"
+  },
+  {
+   "key": "tabir-surya",
+   "name": "Tabir Surya",
+   "kind": "category"
+  },
+  {
+   "key": "masker",
+   "name": "Masker",
+   "kind": "category"
+  },
+  {
+   "key": "riasan",
+   "name": "Riasan",
+   "kind": "category"
+  },
+  {
+   "key": "tubuh",
+   "name": "Tubuh",
+   "kind": "category"
+  },
+  {
+   "key": "paket",
+   "name": "Paket Hadiah",
+   "kind": "category"
+  },
+  {
+   "key": "pegagan",
+   "name": "Seri Pegagan",
+   "kind": "collection",
+   "desc": "Untuk kulit sensitif dan mudah kemerahan. Ekstrak pegagan menenangkan, niacinamide membantu memperkuat lapisan pelindung kulit."
+  },
+  {
+   "key": "bengkoang",
+   "name": "Seri Bengkoang",
+   "kind": "collection",
+   "desc": "Mencerahkan kulit kusam secara bertahap dengan ekstrak bengkoang, kunyit, dan rumput laut."
+  },
+  {
+   "key": "pagi",
+   "name": "Rutinitas Pagi",
+   "kind": "collection",
+   "desc": "Tiga langkah sebelum beraktivitas: bersihkan, lembapkan, lalu lindungi dari matahari."
+  }
+ ],
+ "products": [
+  {
+   "title": "Serum Pegagan Menenangkan",
+   "desc": "Serum ringan berbahan ekstrak pegagan dan niacinamide. Membantu menenangkan kemerahan dan menjaga kelembapan kulit sepanjang hari.",
+   "cats": [
+    "serum",
+    "pegagan"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Sensitif, berjerawat"
+    ],
+    [
+     "Bahan utama",
+     "Ekstrak pegagan 5%, niacinamide 2%"
+    ],
+    [
+     "Isi",
+     "20 ml, 50 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100123"
+    ]
+   ],
+   "price": 89000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "20 ml",
+       "add": 0
+      },
+      {
+       "value": "50 ml",
+       "add": 90000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1573461160327-b450ce3d8e7f?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1629198688000-71f23e745b6e?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Pembersih Gel Beras",
+   "desc": "Gel pembersih lembut dengan air tajin beras. Mengangkat kotoran dan sisa tabir surya tanpa membuat kulit terasa ketarik.",
+   "cats": [
+    "pembersih",
+    "pagi"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Semua jenis kulit"
+    ],
+    [
+     "Bahan utama",
+     "Air tajin beras, gliserin"
+    ],
+    [
+     "Isi",
+     "100 ml, 200 ml"
+    ],
+    [
+     "Masa simpan",
+     "18 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100456"
+    ]
+   ],
+   "price": 65000,
+   "regular": 79000,
+   "options": [
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "100 ml",
+       "add": 0
+      },
+      {
+       "value": "200 ml",
+       "add": 45000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1745133035248-044f76c40507?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1749599018738-b8fb6c4a83e0?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Toner Bengkoang Cerah",
+   "desc": "Toner bening berbahan ekstrak bengkoang untuk membantu meratakan warna kulit. Tidak lengket dan cepat meresap.",
+   "cats": [
+    "toner",
+    "bengkoang"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Normal, kusam"
+    ],
+    [
+     "Bahan utama",
+     "Ekstrak bengkoang, alpha arbutin"
+    ],
+    [
+     "Isi",
+     "120 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100789"
+    ]
+   ],
+   "price": 75000,
+   "regular": 0,
+   "options": [],
+   "photos": [
+    "https://images.unsplash.com/photo-1617897903246-719242758050?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1627811015433-368c148f6c3c?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Pelembap Gel Lidah Buaya",
+   "desc": "Pelembap bertekstur gel yang terasa sejuk di kulit. Cocok untuk kulit berminyak dan cuaca lembap.",
+   "cats": [
+    "pelembap",
+    "pegagan"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Berminyak, kombinasi"
+    ],
+    [
+     "Bahan utama",
+     "Lidah buaya 70%, ekstrak pegagan"
+    ],
+    [
+     "Isi",
+     "30 g, 50 g"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100234"
+    ]
+   ],
+   "price": 82000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "30 g",
+       "add": 0
+      },
+      {
+       "value": "50 g",
+       "add": 38000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1585945037805-5fd82c2e60b1?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1608068811588-3a67006b7489?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Tabir Surya Berwarna SPF 50 PA++++",
+   "desc": "Tabir surya dengan sedikit warna untuk meratakan tampilan kulit. Tidak meninggalkan efek putih dan nyaman dipakai di bawah riasan.",
+   "cats": [
+    "tabir-surya",
+    "pagi"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Semua jenis kulit"
+    ],
+    [
+     "Perlindungan",
+     "SPF 50 PA++++"
+    ],
+    [
+     "Isi",
+     "30 ml, 50 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100567"
+    ]
+   ],
+   "price": 89000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Light",
+       "add": 0
+      },
+      {
+       "value": "Medium",
+       "add": 0
+      },
+      {
+       "value": "Tan",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "30 ml",
+       "add": 0
+      },
+      {
+       "value": "50 ml",
+       "add": 50000
+      }
+     ]
+    },
+    {
+     "name": "Hasil akhir",
+     "values": [
+      {
+       "value": "Matte",
+       "add": 0
+      },
+      {
+       "value": "Dewy",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1613803745799-ba6c10aace85?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1741896136071-3f8c1d472aa8?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1608068811588-3a67006b7489?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Masker Tanah Liat Kunyit",
+   "desc": "Masker kaolin dengan kunyit untuk membersihkan pori. Pakai 1–2 kali seminggu selama 10 menit.",
+   "cats": [
+    "masker",
+    "bengkoang"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Berminyak, kusam"
+    ],
+    [
+     "Bahan utama",
+     "Kaolin, ekstrak kunyit"
+    ],
+    [
+     "Isi",
+     "50 g, 100 g"
+    ],
+    [
+     "Masa simpan",
+     "6 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100678"
+    ]
+   ],
+   "price": 70000,
+   "regular": 85000,
+   "options": [
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "50 g",
+       "add": 0
+      },
+      {
+       "value": "100 g",
+       "add": 40000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1552046122-03184de85e08?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1739949816834-893c498203a1?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Lip & Cheek Tint",
+   "desc": "Pewarna bibir dan pipi bertekstur air. Warna bisa dibangun tipis atau tebal dengan hasil akhir alami.",
+   "cats": [
+    "riasan"
+   ],
+   "attrs": [
+    [
+     "Bahan utama",
+     "Minyak biji anggur, vitamin E"
+    ],
+    [
+     "Isi",
+     "8 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100891"
+    ]
+   ],
+   "price": 59000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Warna",
+     "values": [
+      {
+       "value": "Mawar",
+       "add": 0
+      },
+      {
+       "value": "Bata",
+       "add": 0
+      },
+      {
+       "value": "Coklat Susu",
+       "add": 0
+      },
+      {
+       "value": "Persik",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1583209814683-c023dd293cc6?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Body Lotion Temulawak",
+   "desc": "Losion tubuh yang cepat meresap dengan ekstrak temulawak dan shea butter.",
+   "cats": [
+    "tubuh"
+   ],
+   "attrs": [
+    [
+     "Bahan utama",
+     "Ekstrak temulawak, shea butter"
+    ],
+    [
+     "Isi",
+     "200 ml, 400 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ],
+    [
+     "No. BPOM",
+     "NA18230100345"
+    ]
+   ],
+   "price": 68000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Aroma",
+     "values": [
+      {
+       "value": "Melati",
+       "add": 0
+      },
+      {
+       "value": "Sereh",
+       "add": 0
+      }
+     ]
+    },
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "200 ml",
+       "add": 0
+      },
+      {
+       "value": "400 ml",
+       "add": 42000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1619451427882-6aaaded0cc61?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1729952620303-4dc47fb5d93a?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Paket Rutinitas Pagi",
+   "desc": "Isi tiga produk: Pembersih Gel Beras 100 ml, Pelembap Gel Lidah Buaya 30 g, dan Tabir Surya Berwarna 30 ml.",
+   "cats": [
+    "paket",
+    "pagi"
+   ],
+   "attrs": [
+    [
+     "Isi paket",
+     "3 produk ukuran reguler"
+    ],
+    [
+     "Masa simpan",
+     "Mengikuti tiap produk"
+    ],
+    [
+     "Cocok untuk",
+     "Hadiah, pemula"
+    ]
+   ],
+   "price": 229000,
+   "regular": 269000,
+   "options": [
+    {
+     "name": "Kemasan",
+     "values": [
+      {
+       "value": "Kotak kraft",
+       "add": 0
+      },
+      {
+       "value": "Kotak hadiah + kartu",
+       "add": 15000
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1779142077668-fe26a95f459c?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?fm=jpg&fit=crop&w=1200&q=75",
+    "https://images.unsplash.com/photo-1739949816834-893c498203a1?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  },
+  {
+   "title": "Essence Rumput Laut",
+   "desc": "Essence berbahan ekstrak rumput laut untuk menghidrasi kulit sebelum serum.",
+   "cats": [
+    "toner",
+    "bengkoang"
+   ],
+   "attrs": [
+    [
+     "Jenis kulit",
+     "Kering, normal"
+    ],
+    [
+     "Bahan utama",
+     "Ekstrak rumput laut, panthenol"
+    ],
+    [
+     "Isi",
+     "50 ml, 100 ml"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ]
+   ],
+   "price": 79000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Isi",
+     "values": [
+      {
+       "value": "50 ml",
+       "add": 0
+      },
+      {
+       "value": "100 ml",
+       "add": 36000
+      }
+     ]
+    }
+   ],
+   "photos": []
+  },
+  {
+   "title": "Lip Balm Madu Kelulut",
+   "desc": "Pelembap bibir dengan madu kelulut dan beeswax. Melembutkan bibir kering tanpa rasa lengket.",
+   "cats": [
+    "riasan"
+   ],
+   "attrs": [
+    [
+     "Bahan utama",
+     "Madu kelulut, beeswax"
+    ],
+    [
+     "Isi",
+     "4,5 g"
+    ],
+    [
+     "Masa simpan",
+     "12 bulan setelah dibuka"
+    ]
+   ],
+   "price": 39000,
+   "regular": 0,
+   "options": [
+    {
+     "name": "Aroma",
+     "values": [
+      {
+       "value": "Madu",
+       "add": 0
+      },
+      {
+       "value": "Mint",
+       "add": 0
+      }
+     ]
+    }
+   ],
+   "photos": [
+    "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?fm=jpg&fit=crop&w=1200&q=75"
+   ]
+  }
+ ],
+ "posts": [
+  {
+   "title": "Urutan skincare pagi untuk pemula",
+   "tag": "Panduan",
+   "excerpt": "Tiga langkah dasar sudah cukup: bersihkan, lembapkan, lalu lindungi dari matahari.",
+   "body": "Rutinitas pagi tidak perlu panjang. Untuk kulit yang baru mulai dirawat, tiga langkah dasar sudah cukup untuk menjaga kulit tetap bersih, lembap, dan terlindungi selama beraktivitas.\n\n## 1. Bersihkan dengan lembut\n\nPakai pembersih bertekstur gel yang tidak membuat kulit terasa ketarik. Usapkan selama 30 detik, lalu bilas dengan air bersuhu ruang.\n\n## 2. Lembapkan\n\nPilih pelembap sesuai jenis kulit. Kulit berminyak cocok dengan tekstur gel, kulit kering dengan tekstur krim. Oleskan selagi kulit masih sedikit lembap.\n\n## 3. Lindungi dari matahari\n\nTabir surya adalah langkah terakhir dan paling penting. Gunakan kira-kira dua ruas jari untuk wajah dan leher, lalu ulangi setiap dua sampai tiga jam saat berada di luar ruangan.\n\nSetelah rutinitas ini terasa nyaman, serum atau toner bisa ditambahkan di antara langkah pertama dan kedua.",
+   "cover": "https://images.unsplash.com/photo-1612817288484-6f916006741a?fm=jpg&fit=crop&w=1200&q=75",
+   "products": [
+    "Pembersih Gel Beras",
+    "Pelembap Gel Lidah Buaya",
+    "Tabir Surya Berwarna SPF 50 PA++++"
+   ]
+  },
+  {
+   "title": "Mengenal pegagan, tanaman liar yang menenangkan kulit",
+   "tag": "Bahan",
+   "excerpt": "Dari lalapan dan jamu, pegagan kini jadi bahan andalan untuk kulit sensitif.",
+   "body": "Pegagan (Centella asiatica) tumbuh liar di pematang sawah dan pekarangan di hampir seluruh Indonesia. Daunnya sudah lama dipakai sebagai lalapan dan jamu.\n\n## Kenapa cocok untuk kulit sensitif\n\nEkstrak pegagan mengandung asiatikosida dan madekasosida yang membantu menenangkan kulit kemerahan dan mendukung pemulihan lapisan pelindung kulit.\n\nPegagan bisa dipakai pagi dan malam, dan umumnya cocok dipadukan dengan niacinamide atau pelembap berbahan lidah buaya.",
+   "cover": "https://images.unsplash.com/photo-1573461160327-b450ce3d8e7f?fm=jpg&fit=crop&w=1200&q=75",
+   "products": [
+    "Serum Pegagan Menenangkan",
+    "Pelembap Gel Lidah Buaya"
+   ]
+  },
+  {
+   "title": "Memilih tabir surya untuk cuaca panas dan lembap",
+   "tag": "Panduan",
+   "excerpt": "Tekstur, angka SPF dan PA, dan berapa banyak yang perlu dipakai.",
+   "body": "Udara panas dan lembap membuat tabir surya mudah terasa berat. Tekstur gel atau cair biasanya lebih nyaman untuk dipakai sehari-hari.\n\n## Perhatikan SPF dan PA\n\nSPF menunjukkan perlindungan dari sinar UVB, sedangkan PA dari sinar UVA. Untuk aktivitas luar ruangan, pilih minimal SPF 30 dengan PA+++.\n\n## Pakai cukup banyak\n\nSebagian besar orang memakai tabir surya terlalu sedikit. Gunakan kira-kira dua ruas jari untuk wajah dan leher.",
+   "cover": "https://images.unsplash.com/photo-1555820585-c5ae44394b79?fm=jpg&fit=crop&w=1200&q=75",
+   "products": [
+    "Tabir Surya Berwarna SPF 50 PA++++",
+    "Pembersih Gel Beras"
+   ]
+  },
+  {
+   "title": "Cara melakukan patch test sebelum mencoba produk baru",
+   "tag": "Tips",
+   "excerpt": "Cara sederhana untuk tahu apakah kulitmu cocok dengan produk baru.",
+   "body": "Patch test membantu mengetahui apakah kulit cocok dengan produk baru sebelum dipakai di seluruh wajah.\n\n## Langkahnya\n\nOleskan sedikit produk di belakang telinga atau di bawah rahang. Biarkan selama 24 sampai 48 jam tanpa dicuci.\n\nJika muncul gatal, perih, atau kemerahan, hentikan pemakaian. Jika tidak ada reaksi, produk bisa mulai dipakai bertahap.",
+   "cover": "https://images.unsplash.com/photo-1620916297397-a4a5402a3c6c?fm=jpg&fit=crop&w=1200&q=75",
+   "products": [
+    "Serum Pegagan Menenangkan",
+    "Toner Bengkoang Cerah"
+   ]
+  }
+ ]
+}

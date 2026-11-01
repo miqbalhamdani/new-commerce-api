@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/storage"
@@ -18,15 +20,26 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	ok := shop{Name: "Toko Demo", Slug: "demo", OrderPrefix: "DEMO", OwnerEmail: "demo@belli.id"}
+	ok := shop{Name: "Toko Demo", Slug: "demo", OrderPrefix: "DEMO", OwnerEmail: "demo@belli.id", Theme: "clothing"}
 	if err := ok.validate(); err != nil {
 		t.Fatalf("valid shop: %v", err)
+	}
+	admin := ok
+	admin.Theme = "" // the admin demo
+	if err := admin.validate(); err != nil {
+		t.Errorf("no theme: %v", err)
+	}
+	for theme, look := range looks {
+		if set, err := loadSet(look.set, look); err != nil || len(set.products) == 0 {
+			t.Errorf("%s: set %q: %v", theme, look.set, err)
+		}
 	}
 	for name, mutate := range map[string]func(*shop){
 		"lowercase prefix": func(s *shop) { s.OrderPrefix = "demo" },
 		"slug with space":  func(s *shop) { s.Slug = "toko demo" },
 		"no name":          func(s *shop) { s.Name = "" },
 		"no email":         func(s *shop) { s.OwnerEmail = "" },
+		"unknown theme":    func(s *shop) { s.Theme = "minimal" },
 	} {
 		s := ok
 		mutate(&s)
@@ -85,6 +98,27 @@ func TestSeed(t *testing.T) {
 	rdb := redis.NewClient(opt)
 	t.Cleanup(func() { _ = rdb.Close() })
 	emailsBefore := rdb.XLen(ctx, "emails").Val()
+	// The seeds' image jobs are left for no worker here; take them back off the
+	// shared stream at the end, or a later package's runner has to chew through
+	// a hundred images before its own job.
+	lastJob := "0"
+	if last, err := rdb.XRevRangeN(ctx, jobs.Stream, "+", "-", 1).Result(); err == nil && len(last) == 1 {
+		lastJob = last[0].ID
+	}
+	t.Cleanup(func() {
+		ctx := context.WithoutCancel(ctx)
+		seeded, err := rdb.XRange(ctx, jobs.Stream, "("+lastJob, "+").Result()
+		if err != nil {
+			return
+		}
+		ids := make([]string, 0, len(seeded))
+		for _, m := range seeded {
+			ids = append(ids, m.ID)
+		}
+		if len(ids) > 0 {
+			rdb.XDel(ctx, jobs.Stream, ids...)
+		}
+	})
 
 	suffix := strings.ToLower(rand.Text()[:8])
 	s := shop{Name: "Demo Seed Test", Slug: "demo-seed-" + suffix, OrderPrefix: "DST", OwnerEmail: "demo-" + suffix + "@example.com"}
@@ -180,5 +214,90 @@ func TestSeed(t *testing.T) {
 
 	if _, err := newSeeder(store, files, q).seed(ctx, s, "x", time.Now()); err == nil || !strings.Contains(err.Error(), "insert shop") {
 		t.Errorf("second run with the same slug: err = %v, want an insert shop error", err)
+	}
+
+	// The theme shops share this pool: a second one per test runs the CI
+	// database out of connections next to the other packages.
+	for _, theme := range []string{"busana", "furnitur-ceria"} {
+		t.Run(theme, func(t *testing.T) { seedTheme(t, store, files, q, theme) })
+	}
+}
+
+// seedTheme seeds a demo shop in one theme (P1-804; BR-143) and checks the
+// set's catalog with its prices, sales and drafts, its articles with their
+// products, and the shop drawn in the theme. Photos are not fetched here, so
+// each is a placeholder card and the hero and covers stay out.
+func seedTheme(t *testing.T, store *db.Store, files *storage.Store, q *queue.Client, theme string) {
+	ctx := t.Context()
+	look := looks[theme]
+	set, err := loadSet(look.set, look)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suffix := strings.ToLower(rand.Text()[:8])
+	s := shop{Name: "Tema " + theme, Slug: "tema-" + suffix, OrderPrefix: "TM", OwnerEmail: "tema-" + suffix + "@example.com", Theme: theme}
+	out, err := newSeeder(store, files, q).seed(ctx, s, "a-password-for-tests", time.Now())
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	tctx := tenant.NewContext(ctx, out.tenantID)
+	count := func(query string, args ...any) int {
+		t.Helper()
+		var n int
+		if err := store.InTenantTx(tctx, func(tx pgx.Tx) error { return tx.QueryRow(ctx, query, args...).Scan(&n) }); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+		return n
+	}
+	drafts, photos := 0, 0
+	for _, p := range set.products {
+		if p.state == "draft" {
+			drafts++
+		}
+		photos += len(p.photos)
+	}
+	if got := count(`SELECT count(*) FROM products WHERE status = 'active'`); got != len(set.products)-drafts {
+		t.Errorf("active products = %d, want %d", got, len(set.products)-drafts)
+	}
+	if got := count(`SELECT count(*) FROM products WHERE status = 'draft'`); got != drafts {
+		t.Errorf("drafts = %d, want %d (the design's product without a photo)", got, drafts)
+	}
+	if out.photos != photos || count(`SELECT count(*) FROM product_media`) != photos {
+		t.Errorf("photos = %d, want %d", out.photos, photos)
+	}
+	if got := count(`SELECT count(*) FROM categories WHERE kind = 'collection'`); got != 3 {
+		t.Errorf("collections = %d, want the design's 3", got)
+	}
+	if got := count(`SELECT count(*) FROM variants WHERE sale_price_amount IS NOT NULL`); got == 0 {
+		t.Error("no variant is on sale; the design crosses prices out")
+	}
+	if got := count(`SELECT count(*) FROM blog_posts WHERE status = 'published'`); got != len(set.posts) || out.posts != len(set.posts) {
+		t.Errorf("published articles = %d, want %d", got, len(set.posts))
+	}
+	if got := count(`SELECT count(*) FROM blog_post_products`); got == 0 {
+		t.Error("no article links its products")
+	}
+	if got := count(`SELECT count(*) FROM storefront_settings WHERE theme = $1 AND brand_color IS NULL
+		AND whatsapp_number = $2 AND tagline = $3`, theme, whatsappBelli, look.tagline); got != 1 {
+		t.Errorf("look: want theme %s, its first colour, Belli's WhatsApp and the tagline", theme)
+	}
+}
+
+// TestSetMatrix: a value's surcharge lands on every variant it is in
+// (furnitur: Sofa Arunika, 3 dudukan +Rp1.500.000, Bouclé Putih +Rp350.000).
+func TestSetMatrix(t *testing.T) {
+	n := 0
+	_, rows := setMatrix(demoProduct{sku: "SA2", price: 6900000, weight: 1, options: []demoOption{
+		{Name: "Ukuran", Values: []struct {
+			Value string `json:"value"`
+			Add   int64  `json:"add"`
+		}{{"2 dudukan", 0}, {"3 dudukan", 1500000}}},
+		{Name: "Kain", Values: []struct {
+			Value string `json:"value"`
+			Add   int64  `json:"add"`
+		}{{"Linen Krem", 0}, {"Bouclé Putih", 350000}}},
+	}}, &n)
+	if len(rows) != 4 || *rows[3].Fields.RegularPrice != 875000000 || *rows[3].Fields.SKU != "SA2-04" {
+		t.Errorf("last row = %v %d", rows[3].OptionValues, *rows[3].Fields.RegularPrice)
 	}
 }

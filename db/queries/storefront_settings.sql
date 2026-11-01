@@ -28,23 +28,30 @@ UPDATE storefront_settings SET
     midtrans_environment = sqlc.narg(midtrans_environment),
     midtrans_client_key = sqlc.narg(midtrans_client_key),
     midtrans_server_key = sqlc.narg(midtrans_server_key),
+    theme = sqlc.arg(theme),
+    brand_color = sqlc.narg(brand_color),
     logo_r2_key = sqlc.narg(logo_r2_key),
+    hero_r2_key = sqlc.narg(hero_r2_key),
     whatsapp_number = sqlc.narg(whatsapp_number),
     tagline = sqlc.narg(tagline),
-    brand_color = sqlc.narg(brand_color),
     instagram = sqlc.narg(instagram),
+    address = sqlc.narg(address),
+    opening_hours = sqlc.narg(opening_hours),
+    shopee_url = sqlc.narg(shopee_url),
+    tokopedia_url = sqlc.narg(tokopedia_url),
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
 
 -- name: StorefrontConfig :one
--- What a website renders sign-in, payment and its look from (P1-224, P1-703).
--- A shop with no settings row yet has the defaults: bank transfer on, nothing
--- else.
+-- What a website renders sign-in, payment and its look from (P1-224, P1-703,
+-- P1-802). A shop with no settings row yet has the defaults: bank transfer on,
+-- the katalog theme, nothing else.
 SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
        coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
-       s.logo_r2_key, s.whatsapp_number, s.tagline, s.brand_color, s.instagram
+       coalesce(s.theme, 'katalog')::text AS theme, s.brand_color, s.logo_r2_key, s.hero_r2_key,
+       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid;

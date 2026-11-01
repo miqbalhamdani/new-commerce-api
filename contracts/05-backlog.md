@@ -8,7 +8,7 @@ Acceptance cites the rules it proves (`BR-xxx`, `02-business-rules.md`); the rul
 there. Section references (`§7.3`) point into `04-api-spec.md` unless another file is named.
 
 **Status** `todo` · `wip` · `review` · `done` · `blocked` · `dropped`
-**Repo** `BE` backend · `FE` frontend · `SF` hosted website (`belli-storefront`) · `CT` contracts · `OPS` infrastructure
+**Repo** `BE` backend · `FE` frontend · `SF` hosted website (`belli-storefront`) · `LP` landing page (`landing-page`) · `CT` contracts · `OPS` infrastructure
 
 Ids keep the `P1-` prefix from v1 so branches, commits and PR history stay readable. Phases follow
 the v2 delivery plan (about 28 weeks).
@@ -399,6 +399,38 @@ and blog at `https://{slug}.belli.id`, with an order button that opens WhatsApp.
 > needs `ROOT_DOMAIN` and `STOREFRONT_PLATFORM_KEY`; the box must be able to pull
 > `ghcr.io/miqbalhamdani/belli-storefront`; the image domain's WAF rule must let `/shop/` through
 > (as it does `/products/` and `/blogs/`); the `*.belli.id` DNS record goes in last.
+
+---
+
+## Phase 9 · Shop themes
+
+Added in v2.24 so a shop's website looks made for it: eight themes from Claude Design, each with four
+colours, picked by the owner (BR-143), and a demo shop per theme to show on belli.id.
+
+**Exit:** an owner picks a theme and one of its colours in the admin and sees `{slug}.belli.id`
+redrawn within a minute; belli.id links to eight demo shops, one per theme.
+
+| ID | Item | Repo | Depends | Acceptance | Status | Owner |
+|---|---|---|---|---|---|---|
+| P1-801 | Theme contracts | CT | 703 | v2.24.0: BR-142 adds the theme, hero photo, address, opening hours and marketplace links; BR-143 lists the eight themes and their colours; `storefront.yaml` 0.14.0 adds them to `/config` and `on_sale`, `regular_price_min`, `options` to the product list | review | Iqbal Hamdani |
+| P1-802 | Themes and the rest of the look | BE | 801 | Migration `000030_storefront_themes` matches `03-erd.md` §3.5; storefront settings read and write the theme, colour (one of the theme's four, else `422`; a theme change without a colour clears it), hero photo, address, opening hours and marketplace links as §4; `shop_hero` presign as §8 (5 MB, `settings:write`); `/config` returns the theme and always a colour (BR-142, BR-143) | review | Iqbal Hamdani |
+| P1-803 | Card fields in the product list | BE | 801 | `/v1/storefront/products` items carry `on_sale`, `regular_price_min` and `options` as §11.4 (BR-046, BR-143) | review | Iqbal Hamdani |
+| P1-804 | A demo shop per theme | BE | 802, 803 | `demo-seed -theme {key}` seeds a shop drawn in that theme: catalog, collections, photos, articles and look; the fashion catalog stays the default (BR-143) | review | Iqbal Hamdani |
+| P1-805 | Theme picker in the admin | FE | 802 | Storefront settings shows the eight themes, each with what it suits and a link to its demo shop, then the chosen theme's four colours; uploads a hero photo and edits address, opening hours and marketplace links (BR-142, BR-143) | review | Iqbal Hamdani |
+| P1-806 | Themes in the hosted website | SF | 802, 803 | The website draws each shop in the theme and colour from `/config`, an unknown theme as `katalog`; catalog filters, variant prices, the WhatsApp message and the mobile order bar are shared by every theme (BR-142, BR-143) | review | Iqbal Hamdani |
+| P1-807 | Theme `busana` | SF | 806 | Busana: home, catalog, product page, articles and article follow `Belli Store.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-808 | Theme `clothing` | SF | 806 | Clothing: home, catalog, product page, articles and article follow `Belli Store Clothing.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-809 | Theme `woman` | SF | 806 | Woman: home, catalog, product page, articles and article follow `Belli Store Woman.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-810 | Theme `katalog` | SF | 806 | Katalog: home, catalog, product page, articles and article follow `Belli Katalog.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-811 | Theme `katalog-hangat` | SF | 806 | Katalog Hangat: home, catalog, product page, articles and article follow `Belli Katalog Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-812 | Theme `furnitur` | SF | 806 | Furnitur Klasik: home, catalog, product page, articles and article follow `Belli Katalog Furnitur.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-813 | Theme `furnitur-earthy` | SF | 806 | Furnitur Earthy: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-814 | Theme `furnitur-ceria` | SF | 806 | Furnitur Ceria: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 3.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
+| P1-815 | Demo shops on belli.id | LP | 804, 807–814 | The landing page's examples show the eight demo shops with screenshots and live links; ACL Cosm and Sleep Project are gone | review | Iqbal Hamdani |
+
+> **Production steps for `P1-804`:** after the API, admin and website are deployed, run `demo-seed`
+> once per new theme on the box (`deploy/README.md`), then set the existing `demo` shop's theme to
+> `clothing` in the admin.
 
 ---
 

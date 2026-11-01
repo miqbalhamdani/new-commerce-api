@@ -178,9 +178,11 @@ func TestShopLook(t *testing.T) {
 	do := apiClient(t, owner)
 
 	look := map[string]any{"whatsapp_number": "6281234567890", "tagline": "Sprei katun lokal",
-		"brand_color": "#0a7d6e", "instagram": "toko.abc_"}
+		"brand_color": "#9a4e3a", "instagram": "toko.abc_", "address": "Jl. Braga No. 10, Bandung",
+		"opening_hours": "Setiap hari 09.00–21.00", "shopee_url": "https://shopee.co.id/tokoabc",
+		"tokopedia_url": "https://www.tokopedia.com/tokoabc"}
 	code, st := do("PATCH", "/v1/storefront-settings", look)
-	if code != 200 || st["logo_url"] != nil {
+	if code != 200 || st["logo_url"] != nil || st["hero_url"] != nil || st["theme"] != "katalog" {
 		t.Fatalf("look: %d %v", code, st)
 	}
 	for field, want := range look {
@@ -189,7 +191,9 @@ func TestShopLook(t *testing.T) {
 		}
 	}
 	for field, bad := range map[string]any{"whatsapp_number": "081234567890", "brand_color": "#0A7D6E",
-		"instagram": "@tokoabc", "tagline": strings.Repeat("a", 161), "logo_url": "https://x.test/a.png"} {
+		"instagram": "@tokoabc", "tagline": strings.Repeat("a", 161), "logo_url": "https://x.test/a.png",
+		"hero_url": "https://x.test/a.png", "address": strings.Repeat("a", 301), "opening_hours": "  ",
+		"shopee_url": "https://shopee.co.id.evil.test/x", "tokopedia_url": "http://tokopedia.com/x"} {
 		code, p := do("PATCH", "/v1/storefront-settings", map[string]any{field: bad})
 		assertProblem(t, code, p, 422, "validation_failed", field)
 	}
@@ -221,8 +225,30 @@ func TestShopLook(t *testing.T) {
 	code, p = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": uuid.NewString() + "/shop/x.png"})
 	assertProblem(t, code, p, 422, "validation_failed", "logo_r2_key")
 
-	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": nil, "tagline": nil})
-	if code != 200 || st["logo_url"] != nil || st["tagline"] != nil || st["brand_color"] != "#0a7d6e" {
+	// The hero photo goes the logo's way, up to 5 MB.
+	code, e = do("POST", "/v1/media/presign", map[string]any{"purpose": "shop_hero",
+		"mime_type": "image/jpeg", "bytes": 5 << 20, "sha256": strings.Repeat("ab", 32)})
+	hero, _ := e["r2_key"].(string)
+	if code != 200 || hero != tenantID.String()+"/shop/"+strings.Repeat("ab", 32)+".jpg" {
+		t.Fatalf("hero presign: %d %v", code, e)
+	}
+	code, p = do("POST", "/v1/media/presign", map[string]any{"purpose": "shop_hero",
+		"mime_type": "image/jpeg", "bytes": 5<<20 + 1, "sha256": strings.Repeat("ab", 32)})
+	assertProblem(t, code, p, 422, "validation_failed", "bytes")
+	if err := testFiles(t).Put(ctx, hero, strings.NewReader("\xff\xd8\xff"), 3, "image/jpeg"); err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"hero_r2_key": hero})
+	if u, _ := st["hero_url"].(string); code != 200 || !strings.HasSuffix(u, "/"+hero) {
+		t.Fatalf("hero: %d %v", code, st)
+	}
+	code, p = do("PATCH", "/v1/storefront-settings", map[string]any{"hero_r2_key": key + ".missing"})
+	assertProblem(t, code, p, 422, "validation_failed", "hero_r2_key")
+
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"logo_r2_key": nil, "hero_r2_key": nil,
+		"tagline": nil, "shopee_url": nil})
+	if code != 200 || st["logo_url"] != nil || st["hero_url"] != nil || st["tagline"] != nil || st["shopee_url"] != nil ||
+		st["brand_color"] != "#9a4e3a" {
 		t.Errorf("clear: %d %v", code, st)
 	}
 
@@ -231,6 +257,48 @@ func TestShopLook(t *testing.T) {
 	code, p = apiClient(t, admin)("POST", "/v1/media/presign", map[string]any{"purpose": "shop_logo",
 		"mime_type": "image/png", "bytes": 4, "sha256": strings.Repeat("ef", 32)})
 	assertProblem(t, code, p, 403, "permission_denied", "")
+}
+
+// TestShopTheme is P1-802's theme half (04-api-spec.md §4; BR-142, BR-143):
+// every shop starts on katalog, a colour must be one of its theme's four, and
+// another theme without a colour starts on that theme's first.
+func TestShopTheme(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	tenantID := uuid.Must(uuid.NewV7())
+	owner := seedSignedInUserWithRole(ctx, t, store, tenantID, auth.RoleOwner)
+	cleanSettings(t, store, tenantID)
+	do := apiClient(t, owner)
+
+	code, st := do("GET", "/v1/storefront-settings", nil)
+	if code != 200 || st["theme"] != "katalog" || st["brand_color"] != nil {
+		t.Fatalf("default: %d %v", code, st)
+	}
+	code, p := do("PATCH", "/v1/storefront-settings", map[string]any{"brand_color": "#0a7d6e"})
+	assertProblem(t, code, p, 422, "validation_failed", "brand_color") // a colour, not katalog's
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"brand_color": "#2d4a6e"})
+	if code != 200 || st["brand_color"] != "#2d4a6e" {
+		t.Fatalf("katalog colour: %d %v", code, st)
+	}
+
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"theme": "furnitur-ceria"})
+	if code != 200 || st["theme"] != "furnitur-ceria" || st["brand_color"] != nil {
+		t.Errorf("another theme clears the colour: %d %v", code, st)
+	}
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"theme": "busana", "brand_color": "#7a3e52"})
+	if code != 200 || st["theme"] != "busana" || st["brand_color"] != "#7a3e52" {
+		t.Errorf("theme and colour together: %d %v", code, st)
+	}
+	code, st = do("PATCH", "/v1/storefront-settings", map[string]any{"theme": "busana", "tagline": "Gamis harian"})
+	if code != 200 || st["brand_color"] != "#7a3e52" {
+		t.Errorf("the same theme keeps its colour: %d %v", code, st)
+	}
+	code, p = do("PATCH", "/v1/storefront-settings", map[string]any{"theme": "clothing", "brand_color": "#7a3e52"})
+	assertProblem(t, code, p, 422, "validation_failed", "brand_color")
+	for _, bad := range []any{"minimal", nil} {
+		code, p := do("PATCH", "/v1/storefront-settings", map[string]any{"theme": bad})
+		assertProblem(t, code, p, 422, "validation_failed", "theme")
+	}
 }
 
 // TestServerKeyNeverLogged extends P1-227's log scan over the route that

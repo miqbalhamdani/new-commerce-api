@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,9 +66,35 @@ type ShopProduct struct {
 	Brand                *ShopBrand
 	Categories           []sqlcgen.StorefrontProductCategoriesRow
 	PriceMin, PriceMax   int64
+	OnSale               bool
+	RegularMin           int64
+	Options              []ShopOption
 	WeightMin, WeightMax int32
 	Image                *ShopImage
 	UpdatedAt            time.Time
+}
+
+// ShopOption is one option name with its distinct values, in the order the
+// visible variants first use them: what a product card summarises (P1-803).
+type ShopOption struct {
+	Name   string
+	Values []string
+}
+
+// shopOptions pairs a product's option names with its variants' positional
+// values (BR-040).
+func shopOptions(names []string, variants [][]string) []ShopOption {
+	out := make([]ShopOption, 0, len(names))
+	for i, name := range names {
+		o := ShopOption{Name: name, Values: []string{}}
+		for _, v := range variants {
+			if i < len(v) && !slices.Contains(o.Values, v[i]) {
+				o.Values = append(o.Values, v[i])
+			}
+		}
+		out = append(out, o)
+	}
+	return out
 }
 
 // categoryPath is an ltree path as categories store it; anything else would
@@ -151,17 +178,20 @@ func (s *Service) ShopProducts(ctx context.Context, f ShopFilter) (ShopPage, err
 	// sorts are by price; the image and brand are then looked up for the
 	// page's rows only.
 	sql := `WITH priced AS (
-	  SELECT sp.id, sp.slug, sp.title, sp.brand_id, sp.updated_at,
+	  SELECT sp.id, sp.slug, sp.title, sp.brand_id, sp.updated_at, sp.option_names,
 	         min(sv.price_amount) AS lo, max(sv.price_amount) AS hi,
-	         min(sv.weight_grams) AS wlo, max(sv.weight_grams) AS whi
+	         bool_or(sv.on_sale) AS sale, min(sv.regular_price_amount) AS rlo,
+	         min(sv.weight_grams) AS wlo, max(sv.weight_grams) AS whi,
+	         jsonb_agg(sv.option_values ORDER BY sv.id) AS ov
 	    FROM storefront_products sp
 	    JOIN storefront_variants sv ON sv.product_id = sp.id
 	   WHERE ` + cond + `
-	   GROUP BY sp.id, sp.slug, sp.title, sp.brand_id, sp.updated_at
+	   GROUP BY sp.id, sp.slug, sp.title, sp.brand_id, sp.updated_at, sp.option_names
 	), page AS (
 	  SELECT * FROM priced WHERE ` + after + ` ORDER BY ` + order + ` ` + limit + `
 	)
-	SELECT p.id, p.slug, p.title, p.updated_at, p.lo, p.hi, p.wlo, p.whi, b.slug, b.name, m.r2_key, m.derivatives
+	SELECT p.id, p.slug, p.title, p.updated_at, p.lo, p.hi, p.sale, p.rlo, p.option_names, p.ov, p.wlo, p.whi,
+	       b.slug, b.name, m.r2_key, m.derivatives
 	  FROM page p
 	  LEFT JOIN brands b ON b.id = p.brand_id AND b.archived_at IS NULL
 	  LEFT JOIN LATERAL (SELECT r2_key, derivatives FROM product_media
@@ -187,11 +217,14 @@ func (s *Service) ShopProducts(ctx context.Context, f ShopFilter) (ShopPage, err
 				brandSlug, brandName *string
 				imageKey             *string
 				derivatives          []byte
+				optionNames          []string
+				optionValues         [][]string
 			)
-			if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.UpdatedAt, &p.PriceMin, &p.PriceMax,
-				&p.WeightMin, &p.WeightMax, &brandSlug, &brandName, &imageKey, &derivatives); err != nil {
+			if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.UpdatedAt, &p.PriceMin, &p.PriceMax, &p.OnSale, &p.RegularMin,
+				&optionNames, &optionValues, &p.WeightMin, &p.WeightMax, &brandSlug, &brandName, &imageKey, &derivatives); err != nil {
 				return err
 			}
+			p.Options = shopOptions(optionNames, optionValues)
 			if brandSlug != nil {
 				p.Brand = &ShopBrand{Slug: *brandSlug, Name: *brandName}
 			}
