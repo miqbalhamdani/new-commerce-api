@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # backend — Go API
 
-Phases 0–3 (foundation, catalog, orders, storefront API) are built and mostly in `review`;
-Phase 6a (CI, the Compose stack) is under way, Phase 4 (Shopee import) is next in the backlog.
+Phases 0–3 and 7–10 are built and `done`, live at `admin.belli.id` since November 2026. Still open:
+the rest of Phase 6 (restore drill, alerts, load test, runbooks, pilot) and Phases 4–5 (marketplace
+import, parked on partner access, P1-080).
 Go 1.26 · PostgreSQL 18 · Redis 8 · Cloudflare R2 (MinIO locally).
 
 **The contract lives in `contracts/`** (`contracts/VERSION`). This repo owns it; `new-commerce-web`
