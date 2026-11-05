@@ -98,6 +98,19 @@ func TrustedProxies() ([]netip.Prefix, error) {
 // website's server sends with X-Shop (BR-141). Unset accepts no platform key.
 func StorefrontPlatformKey() string { return os.Getenv("STOREFRONT_PLATFORM_KEY") }
 
+// PlatformAdminEmails is PLATFORM_ADMIN_EMAILS, comma-separated: the staff who
+// may open the platform admin report (BR-150), lower-cased. Empty, the default,
+// lets no one.
+func PlatformAdminEmails() []string {
+	var out []string
+	for _, e := range strings.Split(os.Getenv("PLATFORM_ADMIN_EMAILS"), ",") {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // JWTSecret returns the access-token signing key.
 //
 // Outside development there is no default and no fallback: a missing secret is

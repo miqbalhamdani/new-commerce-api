@@ -100,9 +100,24 @@ backup. It is weaker -- the app owns its tables -- and fixed by the first
 migrate: moving to a provider with the real roles means a fresh schema in the
 default mode and a data-only restore, not a switch.
 
+### The platform admin page
+
+Belli's own team sees every shop at `admin.{domain}/platform` (BR-150). Put
+the founder's email in `.env`, then redeploy:
+
+```bash
+PLATFORM_ADMIN_EMAILS=founder@example.com   # comma-separated; empty lets no one
+./deploy.sh main
+```
+
+The email must be an `active` staff account on the admin (register a shop for
+it if needed), never a `@demo.belli.id` one: their password is public. The page
+is read-only, and the route answers `403` to everyone else.
+
 ### A new shop
 
-There is no signup; the platform team opens a shop. As the app's role
+Anyone can sign up at `admin.{domain}/register`; the platform team can still
+open a shop by hand. As the app's role
 (`app_user`; the owner in limited mode), inside the new shop's own transaction:
 
 ```bash

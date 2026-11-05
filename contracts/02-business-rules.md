@@ -82,7 +82,9 @@ function; every query after it runs in that shop's tenant transaction like any s
 Work that spans shops, such as the nightly retention sweep (BR-096), crosses no boundary in a
 query and has no role of its own: it lists shop ids from `tenants`, which has no RLS, then does
 each shop's work inside that shop's own tenant transaction as the application role, so RLS holds
-as it does for a request. It is audit-logged per shop and never reachable from a request. A PII
+as it does for a request. It is audit-logged per shop and never reachable from a request. The one
+exception is the platform admin report (BR-150): read-only, for the staff emails the server names,
+and made of the same shop-by-shop reads. A PII
 purge (BR-097) is not cross-tenant at all: the owner asks for it, and the tenant comes from their
 token.
 
@@ -1114,6 +1116,38 @@ combination readable while still giving each shop its own.
 
 ---
 
+## 12. Platform admin
+
+### BR-150 The platform admin report
+Belli's own team sees every shop on one admin page, read-only. Only a signed-in, `active` staff user
+whose email is in the server's `PLATFORM_ADMIN_EMAILS` (comma-separated, any case) may open it;
+anyone else gets `403`, and an empty setting turns it off. It is not a role and grants nothing in the
+user's own shop. The session says `platform_admin: true` so the admin can show the page, and the
+server checks the email again on every request.
+
+The report lists the shops from `tenants`, then reads each shop in that shop's own tenant
+transaction as the application role, as the retention sweep does (BR-003). It writes nothing and
+needs no `SECURITY DEFINER` function, so it works the same in BR-001's limited-roles mode. Per shop:
+
+| Field | From |
+|---|---|
+| Shop | name, slug, status, signed up at |
+| Source | `email` or `google`, from the shop's `tenant.register` audit row; `cli` when there is none (`create-tenant`, `demo-seed`) |
+| Owner | the first owner: name, email, status (`invited` until the email is confirmed), last sign-in |
+| Website | theme, whether a logo and a WhatsApp number are set; set up means a logo, WhatsApp number or tagline is |
+| Products | active, total (not archived), first created |
+| Orders | total, placed in the last 30 days, first and last placed |
+| Last activity | the latest staff sign-in or audit-log entry |
+
+The summary counts only shops whose source is `email` or `google`: shops, new in the last 7 and 30
+days, verified (owner `active`), website set up, with a product, with an order, active in the last 7
+days, and sleeping (verified, no activity in 14 days).
+
+*Why:* the founder needs to see who signed up and who got stuck without a database console.
+Reading shop by shop keeps RLS doing for this page what it does for every other request.
+
+---
+
 ## Traceability
 
 | BR | Shows up in | Proven by |
@@ -1163,3 +1197,4 @@ combination readable while still giving each shop its own.
 | 130–135 | blog manager, storefront blog | P1-601–608 |
 | 140–142 | settings, storefront settings, hosted website | P1-701–706, P1-801–805 |
 | 143 | storefront settings, hosted website, demo shops | P1-801–815 |
+| 150 | platform admin page | P1-901–903 |

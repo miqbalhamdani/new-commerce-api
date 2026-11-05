@@ -205,7 +205,9 @@ work without that role; in production it would not.
 **Work that spans shops** (the nightly retention sweep, `internal/retention`) has no role of its
 own: `Store.TenantIDs` lists shop ids (`tenants` has no RLS), then each shop's work runs in that
 shop's own `InTenantTx` as `app_user`, audit-logged, never reachable from a request (BR-003). Do
-not add a `BYPASSRLS` pool for it.
+not add a `BYPASSRLS` pool for it. The one exception is `GET /v1/platform/shops`
+(`internal/platformadmin`, BR-150): read-only, the same shop-by-shop reads, and only for an active
+user whose email is in `PLATFORM_ADMIN_EMAILS`, checked per request.
 
 **Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
 `cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the
