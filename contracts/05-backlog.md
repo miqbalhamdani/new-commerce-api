@@ -54,13 +54,13 @@ exists in 18 can never reach a 16 server (`P1-002`). Revisit only once the machi
 | P1-012 | RBAC: seeded roles, `resource:action` check at the handler boundary | BE | 011 | `403` names the required permission in `detail` (BR-023, BR-024). Shipped with five roles; `P1-017` makes it four | done | Iqbal Hamdani |
 | P1-013 | Error envelope (RFC 9457), `trace_id`, OpenTelemetry wiring | BE | 007 | Every error carries a `trace_id` traceable to a span (BR-011) | done | Iqbal Hamdani |
 | P1-014 | App shell, routing, auth screens, session handling | FE | 005, 011 | Access token in memory, refresh in an httpOnly cookie (BR-022) | done | Iqbal Hamdani |
-| P1-015 | Admin rate limits, `RateLimit-*` headers | BE | 012 | Over 100 req/min/user → `429 rate_limited` with `Retry-After`; headers on every response; per-process fallback when Redis is down (BR-014). Storefront limits are `P1-209` | review | Iqbal Hamdani |
-| P1-016 | Log field allow-list | BE | 013 | Fields not on the allow-list are redacted on every log line; `Authorization`, `X-Api-Key`, `X-Order-Token` and cookies never appear (BR-013) | review | Iqbal Hamdani |
-| P1-017 | Four roles: drop `warehouse`, v2 permission matrix | BE/FE | 012 | Migration removes `warehouse` from the `users.role` CHECK and fails loudly if any user holds it; seeded permissions equal §3; `GET /v1/roles` returns four; generated clients pick up the enum from contracts `v2.0.0` (BR-023) | review | Iqbal Hamdani |
-| P1-018 | `audit_log` table and recorder | BE | 007 | As `03-erd.md` §3.2. Every mutating admin route writes exactly one row in the same transaction, none if it rolls back; asserted over every registered mutating route (BR-018) | review | Iqbal Hamdani |
-| P1-019 | `api_keys` v2 shape and `resolve_api_key` | BE | 010 | As `03-erd.md` §3.2: `allowed_origin` (one URL) added, `permissions` and `key_prefix` dropped, no `kind`; `resolve_api_key` is `SECURITY DEFINER` and returns only its four columns (BR-003, BR-028) | review | Iqbal Hamdani |
-| P1-081 | Time in WIB everywhere | BE | 007, 013 | The pool sets `TimeZone = 'Asia/Jakarta'` on every connection; every JSON timestamp ends in `+07:00`; a timestamp sent without an offset → `422`; a test asserts no response contains a `Z` timestamp (BR-007) | review | Iqbal Hamdani |
-| P1-082 | Drop `tenants.currency` | BE/FE | 010, 011 | Migration drops the column; the login query, `Session.tenant` and settings no longer carry `currency`; money columns still say `IDR` while the wire is a plain integer; the web app's generated types and session fixture updated (BR-006, BR-029) | review | Iqbal Hamdani |
+| P1-015 | Admin rate limits, `RateLimit-*` headers | BE | 012 | Over 100 req/min/user → `429 rate_limited` with `Retry-After`; headers on every response; per-process fallback when Redis is down (BR-014). Storefront limits are `P1-209` | done | Iqbal Hamdani |
+| P1-016 | Log field allow-list | BE | 013 | Fields not on the allow-list are redacted on every log line; `Authorization`, `X-Api-Key`, `X-Order-Token` and cookies never appear (BR-013) | done | Iqbal Hamdani |
+| P1-017 | Four roles: drop `warehouse`, v2 permission matrix | BE/FE | 012 | Migration removes `warehouse` from the `users.role` CHECK and fails loudly if any user holds it; seeded permissions equal §3; `GET /v1/roles` returns four; generated clients pick up the enum from contracts `v2.0.0` (BR-023) | done | Iqbal Hamdani |
+| P1-018 | `audit_log` table and recorder | BE | 007 | As `03-erd.md` §3.2. Every mutating admin route writes exactly one row in the same transaction, none if it rolls back; asserted over every registered mutating route (BR-018) | done | Iqbal Hamdani |
+| P1-019 | `api_keys` v2 shape and `resolve_api_key` | BE | 010 | As `03-erd.md` §3.2: `allowed_origin` (one URL) added, `permissions` and `key_prefix` dropped, no `kind`; `resolve_api_key` is `SECURITY DEFINER` and returns only its four columns (BR-003, BR-028) | done | Iqbal Hamdani |
+| P1-081 | Time in WIB everywhere | BE | 007, 013 | The pool sets `TimeZone = 'Asia/Jakarta'` on every connection; every JSON timestamp ends in `+07:00`; a timestamp sent without an offset → `422`; a test asserts no response contains a `Z` timestamp (BR-007) | done | Iqbal Hamdani |
+| P1-082 | Drop `tenants.currency` | BE/FE | 010, 011 | Migration drops the column; the login query, `Session.tenant` and settings no longer carry `currency`; money columns still say `IDR` while the wire is a plain integer; the web app's generated types and session fixture updated (BR-006, BR-029) | done | Iqbal Hamdani |
 
 ---
 
@@ -76,39 +76,41 @@ needs them.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-020 | `brands` schema + composite FK to tenant | BE | 010 | As `03-erd.md` §3.3; unique slug per tenant including archived (BR-004, BR-030) | review | Iqbal Hamdani |
-| P1-021 | Brand CRUD API | BE | 020 | As §6.1; no `version`, no `If-Match` (BR-010, BR-012, BR-030) | review | Iqbal Hamdani |
-| P1-022 | `categories` schema, ltree, slugify, path trigger | BE | 010 | As `03-erd.md` §3.7; a move rewrites every descendant path in one statement (BR-032) | review | Iqbal Hamdani |
-| P1-023 | Category cycle guard + same-name sibling handling | BE | 022 | Moving a node beneath its own descendant errors; siblings named alike get `_1` labels (BR-034, BR-035) | review | Iqbal Hamdani |
-| P1-024 | Category API, `kind` filter, depth-limited fetch | BE | 022 | As §6.2; sending `path` → `422`; deleting a category with children → `409 category_in_use` with the count (BR-008, BR-036) | review | Iqbal Hamdani |
-| P1-025 | `products` schema incl. `slug`, `attributes`, `option_names` | BE | 020 | As `03-erd.md` §3.3; no quantity column anywhere (BR-017, BR-042) | review | Iqbal Hamdani |
-| P1-026 | `variants` schema, partial unique SKU index, composite FK | BE | 025 | Many null SKUs allowed; non-null unique per tenant; one live variant per option combination; `variant_price()` returns the sale price only inside its schedule, and a sale price not below the regular price is refused (BR-039, BR-040, BR-046) | review | Iqbal Hamdani |
-| P1-027 | `product_categories` join, multi-`kind` membership | BE | 022, 025 | One product in 3 trees of different kinds at once; a cross-tenant link is refused (BR-004, BR-031) | review | Iqbal Hamdani |
-| P1-028 | Product CRUD, `If-Match`, slug, server-managed fields refused | BE | 025, 027 | As §7.1; changing the title never changes the slug (BR-008, BR-009, BR-010, BR-012, BR-042) | review | Iqbal Hamdani |
-| P1-029 | Variant CRUD | BE | 026 | As §7.2; a duplicate SKU → `409 duplicate_sku` naming the holder; `regular_price`, `sale_price` and schedule writable, `price`/`on_sale` read-only (BR-039, BR-046) | review | Iqbal Hamdani |
-| P1-030 | Product list: trigram search, filters, cursor pagination | BE | 028 | p95 < 600 ms with 10k products, categories included; each row lists its main-tree (`kind = category`) categories; `category_id` includes descendants; exact SKU matches | review | Iqbal Hamdani |
-| P1-060 | Job runner (Redis Streams) + `jobs` table + `GET /v1/jobs/{id}` | BE | 007 | As §9 and `03-erd.md` §3.2; a job killed mid-run is redelivered and finishes once (BR-060, BR-063) | review | Iqbal Hamdani |
-| P1-040 | `PUT /variant-matrix`: server-side diff, one transaction | BE | 029 | As §7.3: created, updated, restored and archived counted correctly (BR-040, BR-041) | review | Iqbal Hamdani |
-| P1-041 | Partial-failure semantics in the matrix | BE | 040 | One duplicate SKU fails only its row; the rest save; 100 cells save in < 2 s (BR-041) | review | Iqbal Hamdani |
-| P1-042 | `product_media` schema | BE | 025 | As `03-erd.md` §3.3 (BR-004, BR-050) | review | Iqbal Hamdani |
-| P1-043 | Media API: presign, confirm with `HEAD` check, attach, reorder, delete | BE | 042 | As §8; a key never uploaded → `422`; keys carry the content hash (BR-051, BR-053) | review | Iqbal Hamdani |
-| P1-044 | Worker: WebP derivatives 1600/800/200 via libvips | BE | 043, 060 | Derivatives ready in < 15 s p95; uploading never blocks the form (BR-052) | review | Iqbal Hamdani |
-| P1-045 | R2 bucket, tenant prefixes, lifecycle rules, image domain Worker | OPS | 042 | Product images served public and edge-cached from the image domain (a dev domain until `P1-001`); `errors.csv` deleted after 30 days, exports after 7 (BR-053) | blocked | |
-| P1-049 | Publish check on `draft → active` | BE | 040, 043 | `422 publish_check_failed` lists every failure, including zero weight, with its variant id (BR-038) | review | Iqbal Hamdani |
-| P1-072 | `POST /v1/products/bulk` | BE | 029, 049 | As §7.5: up to 500 rows, per-row results by index, one bad row rolls back nothing (BR-043) | review | Iqbal Hamdani |
-| P1-073 | CSV import job: server-side parse, column mapping, `errors.csv` | BE | 060, 072 | 10,000 variants in < 5 min; `,` and `;` delimiters and BOM handled; every error cites its original line number (BR-044) | review | Iqbal Hamdani |
-| P1-031 | Brand manager screen | FE | 021 | `01-product-requirements.md` §4 | review | Iqbal Hamdani |
-| P1-032 | Category manager: tree, drag-to-move, confirmation dialog | FE | 024 | The move dialog states descendant and product counts (BR-033) | review | Iqbal Hamdani |
-| P1-033 | Product list screen: search, filters, saved state | FE | 030 | A Category column shows each product's main-tree categories; filters survive navigation and reload | review | Iqbal Hamdani |
-| P1-034 | Product editor: fields, slug, brand picker, category multi-select | FE | 028 | Unsaved-changes prompt; editing a slug warns that old links break (BR-042) | review | Iqbal Hamdani |
-| P1-046 | **Variant matrix editor**: grid, paste from Excel, fill-down | FE | 040 | A 2×5 grid renders 10 cells and saves in one request; a failed row is highlighted with its error (BR-041) | review | Iqbal Hamdani |
-| P1-047 | Bulk price adjustment in the matrix (± amount / %) | FE | 046 | Applies to regular or sale price, chosen by the user; a preview shows before it applies (BR-046) | review | Iqbal Hamdani |
-| P1-048 | Media library: drag-drop, direct R2 upload, reorder, attach to variant | FE | 043 | Image bytes never pass through the API (BR-051) | review | Iqbal Hamdani |
-| P1-075 | Publish flow in the editor | FE | 049, 046 | Every publish-check failure links to its field or matrix cell (BR-038) | review | Iqbal Hamdani |
-| P1-076 | Product list bulk actions (status, price) via bulk upsert | FE | 033, 072 | Per-row failures shown inline; successes stay applied (BR-043) | review | Iqbal Hamdani |
-| P1-074 | Bulk import wizard: upload, 50-row preview, column mapping, progress, error download | FE | 073 | The browser parses only the preview (BR-044) | review | Iqbal Hamdani |
+| P1-020 | `brands` schema + composite FK to tenant | BE | 010 | As `03-erd.md` §3.3; unique slug per tenant including archived (BR-004, BR-030) | done | Iqbal Hamdani |
+| P1-021 | Brand CRUD API | BE | 020 | As §6.1; no `version`, no `If-Match` (BR-010, BR-012, BR-030) | done | Iqbal Hamdani |
+| P1-022 | `categories` schema, ltree, slugify, path trigger | BE | 010 | As `03-erd.md` §3.7; a move rewrites every descendant path in one statement (BR-032) | done | Iqbal Hamdani |
+| P1-023 | Category cycle guard + same-name sibling handling | BE | 022 | Moving a node beneath its own descendant errors; siblings named alike get `_1` labels (BR-034, BR-035) | done | Iqbal Hamdani |
+| P1-024 | Category API, `kind` filter, depth-limited fetch | BE | 022 | As §6.2; sending `path` → `422`; deleting a category with children → `409 category_in_use` with the count (BR-008, BR-036) | done | Iqbal Hamdani |
+| P1-025 | `products` schema incl. `slug`, `attributes`, `option_names` | BE | 020 | As `03-erd.md` §3.3; no quantity column anywhere (BR-017, BR-042) | done | Iqbal Hamdani |
+| P1-026 | `variants` schema, partial unique SKU index, composite FK | BE | 025 | Many null SKUs allowed; non-null unique per tenant; one live variant per option combination; `variant_price()` returns the sale price only inside its schedule, and a sale price not below the regular price is refused (BR-039, BR-040, BR-046) | done | Iqbal Hamdani |
+| P1-027 | `product_categories` join, multi-`kind` membership | BE | 022, 025 | One product in 3 trees of different kinds at once; a cross-tenant link is refused (BR-004, BR-031) | done | Iqbal Hamdani |
+| P1-028 | Product CRUD, `If-Match`, slug, server-managed fields refused | BE | 025, 027 | As §7.1; changing the title never changes the slug (BR-008, BR-009, BR-010, BR-012, BR-042) | done | Iqbal Hamdani |
+| P1-029 | Variant CRUD | BE | 026 | As §7.2; a duplicate SKU → `409 duplicate_sku` naming the holder; `regular_price`, `sale_price` and schedule writable, `price`/`on_sale` read-only (BR-039, BR-046) | done | Iqbal Hamdani |
+| P1-030 | Product list: trigram search, filters, cursor pagination | BE | 028 | p95 < 600 ms with 10k products, categories included; each row lists its main-tree (`kind = category`) categories; `category_id` includes descendants; exact SKU matches | done | Iqbal Hamdani |
+| P1-060 | Job runner (Redis Streams) + `jobs` table + `GET /v1/jobs/{id}` | BE | 007 | As §9 and `03-erd.md` §3.2; a job killed mid-run is redelivered and finishes once (BR-060, BR-063) | done | Iqbal Hamdani |
+| P1-040 | `PUT /variant-matrix`: server-side diff, one transaction | BE | 029 | As §7.3: created, updated, restored and archived counted correctly (BR-040, BR-041) | done | Iqbal Hamdani |
+| P1-041 | Partial-failure semantics in the matrix | BE | 040 | One duplicate SKU fails only its row; the rest save; 100 cells save in < 2 s (BR-041) | done | Iqbal Hamdani |
+| P1-042 | `product_media` schema | BE | 025 | As `03-erd.md` §3.3 (BR-004, BR-050) | done | Iqbal Hamdani |
+| P1-043 | Media API: presign, confirm with `HEAD` check, attach, reorder, delete | BE | 042 | As §8; a key never uploaded → `422`; keys carry the content hash (BR-051, BR-053) | done | Iqbal Hamdani |
+| P1-044 | Worker: WebP derivatives 1600/800/200 via libvips | BE | 043, 060 | Derivatives ready in < 15 s p95; uploading never blocks the form (BR-052) | done | Iqbal Hamdani |
+| P1-045 | R2 bucket, tenant prefixes, lifecycle rules, image domain Worker | OPS | 042 | Product images served public and edge-cached from the image domain (a dev domain until `P1-001`); `errors.csv` deleted after 30 days, exports after 7 (BR-053) | done | |
+| P1-049 | Publish check on `draft → active` | BE | 040, 043 | `422 publish_check_failed` lists every failure, including zero weight, with its variant id (BR-038) | done | Iqbal Hamdani |
+| P1-072 | `POST /v1/products/bulk` | BE | 029, 049 | As §7.5: up to 500 rows, per-row results by index, one bad row rolls back nothing (BR-043) | done | Iqbal Hamdani |
+| P1-073 | CSV import job: server-side parse, column mapping, `errors.csv` | BE | 060, 072 | 10,000 variants in < 5 min; `,` and `;` delimiters and BOM handled; every error cites its original line number (BR-044) | done | Iqbal Hamdani |
+| P1-031 | Brand manager screen | FE | 021 | `01-product-requirements.md` §4 | done | Iqbal Hamdani |
+| P1-032 | Category manager: tree, drag-to-move, confirmation dialog | FE | 024 | The move dialog states descendant and product counts (BR-033) | done | Iqbal Hamdani |
+| P1-033 | Product list screen: search, filters, saved state | FE | 030 | A Category column shows each product's main-tree categories; filters survive navigation and reload | done | Iqbal Hamdani |
+| P1-034 | Product editor: fields, slug, brand picker, category multi-select | FE | 028 | Unsaved-changes prompt; editing a slug warns that old links break (BR-042) | done | Iqbal Hamdani |
+| P1-046 | **Variant matrix editor**: grid, paste from Excel, fill-down | FE | 040 | A 2×5 grid renders 10 cells and saves in one request; a failed row is highlighted with its error (BR-041) | done | Iqbal Hamdani |
+| P1-047 | Bulk price adjustment in the matrix (± amount / %) | FE | 046 | Applies to regular or sale price, chosen by the user; a preview shows before it applies (BR-046) | done | Iqbal Hamdani |
+| P1-048 | Media library: drag-drop, direct R2 upload, reorder, attach to variant | FE | 043 | Image bytes never pass through the API (BR-051) | done | Iqbal Hamdani |
+| P1-075 | Publish flow in the editor | FE | 049, 046 | Every publish-check failure links to its field or matrix cell (BR-038) | done | Iqbal Hamdani |
+| P1-076 | Product list bulk actions (status, price) via bulk upsert | FE | 033, 072 | Per-row failures shown inline; successes stay applied (BR-043) | done | Iqbal Hamdani |
+| P1-074 | Bulk import wizard: upload, 50-row preview, column mapping, progress, error download | FE | 073 | The browser parses only the preview (BR-044) | done | Iqbal Hamdani |
 
-> **`P1-045` is blocked** on a Cloudflare account. The local half is done: `make storage-init`
+> **`P1-045` was blocked** on a Cloudflare account. **Done 6 Nov 2026:** the `belli-images` R2
+> bucket has both expiry rules and CORS `PUT` from `https://admin.belli.id`, and images are served
+> from `img.belli.id`. The local half is done: `make storage-init`
 > gives MinIO the same layout, public read on `*/products/*`, and the two expiry rules. Cutover,
 > for the account owner:
 > 1. Create the R2 bucket and an API token with object read/write on it.
@@ -122,24 +124,26 @@ needs them.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-225 | Resend: account, sending domain, DKIM/SPF/DMARC | OPS | — | A test email from `no-reply@{domain}` reaches an outside inbox and passes DKIM. Until the domain exists (`P1-001`), Resend's test sender (`onboarding@resend.dev`, which only delivers to the account owner's address) is enough to build against (BR-128) | blocked | |
-| P1-226 | Email sender in the worker + invitation template | BE | 225, 060 | Emails go through Resend from `"{shop name}" <no-reply@{domain}>` with Reply-To; sent after commit; a rolled-back change sends nothing (BR-128) | review | Iqbal Hamdani |
-| P1-064 | Users: invite, accept, resend, set role, disable | BE | 017, 018, 226 | As §2 and §4; the invitation email arrives (BR-026, BR-027) | review | Iqbal Hamdani |
-| P1-071 | Settings API: `GET`/`PATCH /v1/settings` | BE | 017 | As §4; only `owner` can `PATCH` (BR-023, BR-029) | review | Iqbal Hamdani |
-| P1-077 | Audit log API: `GET /v1/audit-log` | BE | 018 | As §4; newest first, filterable by subject and actor (BR-018) | review | Iqbal Hamdani |
-| P1-066 | Team & roles screen | FE | 064 | `ops` sees no user-management navigation at all (BR-025) | review | Iqbal Hamdani |
-| P1-068 | Onboarding wizard: settings, brands, category tree, first product | FE | 021, 024, 028, 040, 071 | `01-product-requirements.md` §4; defaults pre-filled (BR-029); the brand and category steps add to and show the shop's real lists and name the page they live on; the product step creates a draft with one price | review | Iqbal Hamdani |
-| P1-078 | Audit log screen | FE | 077 | Shows actor, action, before/after per row (BR-018) | review | Iqbal Hamdani |
-| P1-079 | Accept invitation screen | FE | 064 | The invite link opens a form for a password (the name was set at invite); submitting `POST /v1/auth/accept-invite` signs the user in. An expired or used token says so and tells them to ask for a new invitation (BR-026) | review | Iqbal Hamdani |
-| P1-083 | Settings screen | FE | 071 | Name, time zone and order prefix, per `01-product-requirements.md` §4; only `owner` sees save; a changed prefix says it applies to new orders only (BR-025, BR-029, BR-077) | review | Iqbal Hamdani |
-| P1-084 | Self-service signup: `POST /v1/auth/register` | CT/BE | 064, 226 | As §2; always `202`; a new email gets a shop and an `invited` owner whose confirmation link signs them in through `accept-invite`; registering again resends it while unconfirmed (BR-003, BR-014, BR-020, BR-026) | review | Iqbal Hamdani |
-| P1-085 | Register screen; the signup link lands on onboarding | FE | 084, 068, 079 | Shop name, name and email, then "check your inbox"; the confirmation link asks for a password and opens the onboarding wizard | review | Iqbal Hamdani |
-| P1-086 | Signup email codes and staff Google sign-in / sign-up | CT/BE | 084 | As §2: `verify-code` exchanges the emailed code for the invitation token, `resend-code` always `202`, `providers`, `google` and `register/google` (BR-003, BR-014, BR-020, BR-026) | review | Iqbal Hamdani |
-| P1-087 | Sign-in, sign-up and verify screens in the TailAdmin style, with Google | FE | 086, 085 | Split layout with a brand panel; Google's button when `providers` names a client ID; sign-up goes to a 6-digit code screen, then a password, then onboarding; Google sign-up asks only the shop name | review | Iqbal Hamdani |
-| P1-088 | Staff password reset | CT/BE | 086 | As §2: `password-reset` always `202` and mails only an `active` user; `password-reset/confirm` sets the password once, revokes every refresh token, audits and signs in; a customer's reset token is `422`; a Google-only owner adds a password this way (BR-003, BR-014, BR-094) | review | Iqbal Hamdani |
-| P1-089 | Forgot and reset password screens | FE | 088, 087 | "Forgot password?" on sign-in; an email form, then "check your inbox"; the link's page asks for the password twice and signs in; an expired link says to ask for a new one (BR-094) | review | Iqbal Hamdani |
+| P1-225 | Resend: account, sending domain, DKIM/SPF/DMARC | OPS | — | A test email from `no-reply@{domain}` reaches an outside inbox and passes DKIM. Until the domain exists (`P1-001`), Resend's test sender (`onboarding@resend.dev`, which only delivers to the account owner's address) is enough to build against (BR-128) | done | |
+| P1-226 | Email sender in the worker + invitation template | BE | 225, 060 | Emails go through Resend from `"{shop name}" <no-reply@{domain}>` with Reply-To; sent after commit; a rolled-back change sends nothing (BR-128) | done | Iqbal Hamdani |
+| P1-064 | Users: invite, accept, resend, set role, disable | BE | 017, 018, 226 | As §2 and §4; the invitation email arrives (BR-026, BR-027) | done | Iqbal Hamdani |
+| P1-071 | Settings API: `GET`/`PATCH /v1/settings` | BE | 017 | As §4; only `owner` can `PATCH` (BR-023, BR-029) | done | Iqbal Hamdani |
+| P1-077 | Audit log API: `GET /v1/audit-log` | BE | 018 | As §4; newest first, filterable by subject and actor (BR-018) | done | Iqbal Hamdani |
+| P1-066 | Team & roles screen | FE | 064 | `ops` sees no user-management navigation at all (BR-025) | done | Iqbal Hamdani |
+| P1-068 | Onboarding wizard: settings, brands, category tree, first product | FE | 021, 024, 028, 040, 071 | `01-product-requirements.md` §4; defaults pre-filled (BR-029); the brand and category steps add to and show the shop's real lists and name the page they live on; the product step creates a draft with one price | done | Iqbal Hamdani |
+| P1-078 | Audit log screen | FE | 077 | Shows actor, action, before/after per row (BR-018) | done | Iqbal Hamdani |
+| P1-079 | Accept invitation screen | FE | 064 | The invite link opens a form for a password (the name was set at invite); submitting `POST /v1/auth/accept-invite` signs the user in. An expired or used token says so and tells them to ask for a new invitation (BR-026) | done | Iqbal Hamdani |
+| P1-083 | Settings screen | FE | 071 | Name, time zone and order prefix, per `01-product-requirements.md` §4; only `owner` sees save; a changed prefix says it applies to new orders only (BR-025, BR-029, BR-077) | done | Iqbal Hamdani |
+| P1-084 | Self-service signup: `POST /v1/auth/register` | CT/BE | 064, 226 | As §2; always `202`; a new email gets a shop and an `invited` owner whose confirmation link signs them in through `accept-invite`; registering again resends it while unconfirmed (BR-003, BR-014, BR-020, BR-026) | done | Iqbal Hamdani |
+| P1-085 | Register screen; the signup link lands on onboarding | FE | 084, 068, 079 | Shop name, name and email, then "check your inbox"; the confirmation link asks for a password and opens the onboarding wizard | done | Iqbal Hamdani |
+| P1-086 | Signup email codes and staff Google sign-in / sign-up | CT/BE | 084 | As §2: `verify-code` exchanges the emailed code for the invitation token, `resend-code` always `202`, `providers`, `google` and `register/google` (BR-003, BR-014, BR-020, BR-026) | done | Iqbal Hamdani |
+| P1-087 | Sign-in, sign-up and verify screens in the TailAdmin style, with Google | FE | 086, 085 | Split layout with a brand panel; Google's button when `providers` names a client ID; sign-up goes to a 6-digit code screen, then a password, then onboarding; Google sign-up asks only the shop name | done | Iqbal Hamdani |
+| P1-088 | Staff password reset | CT/BE | 086 | As §2: `password-reset` always `202` and mails only an `active` user; `password-reset/confirm` sets the password once, revokes every refresh token, audits and signs in; a customer's reset token is `422`; a Google-only owner adds a password this way (BR-003, BR-014, BR-094) | done | Iqbal Hamdani |
+| P1-089 | Forgot and reset password screens | FE | 088, 087 | "Forgot password?" on sign-in; an email form, then "check your inbox"; the link's page asks for the password twice and signs in; an expired link says to ask for a new one (BR-094) | done | Iqbal Hamdani |
 
-> **`P1-225` is blocked** on a Resend account and the sending domain (`P1-001`). The local half is
+> **`P1-225` was blocked** on a Resend account and the sending domain (`P1-001`). **Done 6 Nov
+> 2026:** `belli.id` carries Resend's DKIM record (`resend._domainkey`), and the production worker
+> runs, which it refuses to do without `RESEND_API_KEY`. The local half is
 > done: in development the worker sends to Mailpit when `SMTP_ADDR` is set (inbox at
 > http://localhost:8025), else prints mail to stdout; elsewhere it refuses to start without
 > `RESEND_API_KEY`. The Resend sender (`P1-226`) is built and tested against Resend's API shape.
@@ -161,23 +165,23 @@ to work an order the day the first one arrives.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-100 | Schema: `customers`, `order_sequences`, `orders`, `order_lines` | BE | 026, 018 | As `03-erd.md` §3.5–3.6 minus `orders.cart_id`, which arrives with `P1-204`; the shipped-needs-tracking and refund CHECKs refuse direct SQL; archiving a variant leaves its order lines intact (BR-004, BR-045, BR-072, BR-076, BR-077, BR-079) | review | Iqbal Hamdani |
-| P1-101 | Order `Transition`: allow-list, row lock, stamps, audit | BE | 100 | Unit-tested over every from × to pair; a move to the current status is a no-op; exactly one audit row per change (BR-070, BR-071, BR-073) | review | Iqbal Hamdani |
-| P1-102 | Status routes: mark-paid, process, ship, complete, cancel, refund | BE | 101 | As §5.3; illegal → `409 illegal_transition`; ship without tracking → `422`; refund only on a paid, cancelled order, once (BR-072, BR-074, BR-075) | review | Iqbal Hamdani |
-| P1-103 | Order list API with saved-view filters | BE | 100 | As §5.1; `refund_owed=true` returns exactly the cancelled-paid-unrefunded orders; p95 first byte < 800 ms at 10k orders (BR-075) | review | Iqbal Hamdani |
-| P1-104 | Order detail and `PATCH` while pending | BE | 101 | As §5.2; `PATCH` after `pending` → `422`; totals recomputed; `allowed_transitions` from the allow-list (BR-010, BR-079) | review | Iqbal Hamdani |
-| P1-105 | Manual order entry `POST /v1/orders` | BE | 101 | As §5.4; prices from the catalog; a `unit_price` in the body → `422 unknown_field`; snapshots written (BR-076, BR-078) | review | Iqbal Hamdani |
-| P1-106 | Customer list and detail API | BE | 100 | As §5.5; no credential field ever appears (BR-092) | review | Iqbal Hamdani |
-| P1-107 | Order export job | BE | 060, 103 | As §5.6; one row per line; opens cleanly in Excel with Indonesian locale; link regenerates (BR-063, BR-064, BR-065) | review | Iqbal Hamdani |
-| P1-108 | Order list screen with saved views | FE | 103 | The four saved views of `01-product-requirements.md` §6.1; mark-paid from the list | review | Iqbal Hamdani |
-| P1-109 | Order detail screen: actions, ship dialog, refund record, audit trail | FE | 102, 104, 077 | Only `allowed_transitions` are offered; the ship dialog requires courier and tracking (BR-025, BR-072) | review | Iqbal Hamdani |
-| P1-110 | Manual order entry screen | FE | 105 | Submit is disabled while the request is in flight (BR-078) | review | Iqbal Hamdani |
-| P1-111 | Customer list and detail screens | FE | 106 | Detail shows the customer's orders, newest first | review | Iqbal Hamdani |
-| P1-112 | Order export screen | FE | 107 | Uses the order-list filters; download link expires in 15 minutes and can be regenerated (BR-063) | review | Iqbal Hamdani |
-| P1-113 | Dashboard figures `GET /v1/dashboard` | CT/BE | 103 | As §5.7; counts only paid, uncancelled orders placed in the period; previous period, WIB days, channel, payment method, customers and top products zero-filled and correct against seeded orders; another shop's orders never count (BR-001, BR-066) | review | Iqbal Hamdani |
-| P1-114 | Dashboard screen | FE | 113, 108 | `/` is the dashboard: needs-action tiles open the matching saved view; 7, 30 or 90 days with change against the period before; daily sales chart; channel, payment method and customer split; top products; latest orders. No stock anywhere (BR-017, BR-066) | review | Iqbal Hamdani |
-| P1-115 | Top customers on the dashboard | CT/BE | 113 | As §5.7: `top_customers`, the period's three best by sales, BR-066's people named as on their latest order, `customer_id` null for a guest; another shop's customers never appear (BR-001, BR-066) | review | Iqbal Hamdani |
-| P1-116 | Top customers card | FE | 115, 114 | Under Customers: name and sales for each, a guest's name plain and an account's linked to the customer; a button to the customer list | review | Iqbal Hamdani |
+| P1-100 | Schema: `customers`, `order_sequences`, `orders`, `order_lines` | BE | 026, 018 | As `03-erd.md` §3.5–3.6 minus `orders.cart_id`, which arrives with `P1-204`; the shipped-needs-tracking and refund CHECKs refuse direct SQL; archiving a variant leaves its order lines intact (BR-004, BR-045, BR-072, BR-076, BR-077, BR-079) | done | Iqbal Hamdani |
+| P1-101 | Order `Transition`: allow-list, row lock, stamps, audit | BE | 100 | Unit-tested over every from × to pair; a move to the current status is a no-op; exactly one audit row per change (BR-070, BR-071, BR-073) | done | Iqbal Hamdani |
+| P1-102 | Status routes: mark-paid, process, ship, complete, cancel, refund | BE | 101 | As §5.3; illegal → `409 illegal_transition`; ship without tracking → `422`; refund only on a paid, cancelled order, once (BR-072, BR-074, BR-075) | done | Iqbal Hamdani |
+| P1-103 | Order list API with saved-view filters | BE | 100 | As §5.1; `refund_owed=true` returns exactly the cancelled-paid-unrefunded orders; p95 first byte < 800 ms at 10k orders (BR-075) | done | Iqbal Hamdani |
+| P1-104 | Order detail and `PATCH` while pending | BE | 101 | As §5.2; `PATCH` after `pending` → `422`; totals recomputed; `allowed_transitions` from the allow-list (BR-010, BR-079) | done | Iqbal Hamdani |
+| P1-105 | Manual order entry `POST /v1/orders` | BE | 101 | As §5.4; prices from the catalog; a `unit_price` in the body → `422 unknown_field`; snapshots written (BR-076, BR-078) | done | Iqbal Hamdani |
+| P1-106 | Customer list and detail API | BE | 100 | As §5.5; no credential field ever appears (BR-092) | done | Iqbal Hamdani |
+| P1-107 | Order export job | BE | 060, 103 | As §5.6; one row per line; opens cleanly in Excel with Indonesian locale; link regenerates (BR-063, BR-064, BR-065) | done | Iqbal Hamdani |
+| P1-108 | Order list screen with saved views | FE | 103 | The four saved views of `01-product-requirements.md` §6.1; mark-paid from the list | done | Iqbal Hamdani |
+| P1-109 | Order detail screen: actions, ship dialog, refund record, audit trail | FE | 102, 104, 077 | Only `allowed_transitions` are offered; the ship dialog requires courier and tracking (BR-025, BR-072) | done | Iqbal Hamdani |
+| P1-110 | Manual order entry screen | FE | 105 | Submit is disabled while the request is in flight (BR-078) | done | Iqbal Hamdani |
+| P1-111 | Customer list and detail screens | FE | 106 | Detail shows the customer's orders, newest first | done | Iqbal Hamdani |
+| P1-112 | Order export screen | FE | 107 | Uses the order-list filters; download link expires in 15 minutes and can be regenerated (BR-063) | done | Iqbal Hamdani |
+| P1-113 | Dashboard figures `GET /v1/dashboard` | CT/BE | 103 | As §5.7; counts only paid, uncancelled orders placed in the period; previous period, WIB days, channel, payment method, customers and top products zero-filled and correct against seeded orders; another shop's orders never count (BR-001, BR-066) | done | Iqbal Hamdani |
+| P1-114 | Dashboard screen | FE | 113, 108 | `/` is the dashboard: needs-action tiles open the matching saved view; 7, 30 or 90 days with change against the period before; daily sales chart; channel, payment method and customer split; top products; latest orders. No stock anywhere (BR-017, BR-066) | done | Iqbal Hamdani |
+| P1-115 | Top customers on the dashboard | CT/BE | 113 | As §5.7: `top_customers`, the period's three best by sales, BR-066's people named as on their latest order, `customer_id` null for a guest; another shop's customers never appear (BR-001, BR-066) | done | Iqbal Hamdani |
+| P1-116 | Top customers card | FE | 115, 114 | Under Customers: name and sales for each, a guest's name plain and an account's linked to the customer; a button to the customer list | done | Iqbal Hamdani |
 
 ---
 
@@ -194,36 +198,36 @@ order; a minimal reference website built from the public docs alone goes product
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-200 | API key API: create, list, edit origins, revoke | BE | 019, 018 | As §4; plaintext returned once; missing or malformed `allowed_origin` → `422`; it must be exact `scheme://host[:port]` (BR-028, BR-083) | review | Iqbal Hamdani |
-| P1-201 | API keys screen | FE | 200 | Copy-once UI with an explicit warning; link to the storefront docs (BR-028) | review | Iqbal Hamdani |
-| P1-202 | Storefront route tree + key middleware | BE | 019, 015 | As §11.2: `invalid_api_key`; browser request from a foreign origin → `origin_not_allowed` without ACAO; same key with no `Origin` accepted; preflight for any origin; revoked key dead within 60 s; storefront and admin packages do not import each other (BR-003, BR-083, BR-085) | review | Iqbal Hamdani |
-| P1-203 | Storefront views + catalog routes | BE | 202, 030, 044 | As §11.4; handlers query only the views; draft and archived products never appear; p95 < 300 ms ; `price` is the effective price and `on_sale` is set while a sale is active (BR-046, BR-080, BR-081) | review | Iqbal Hamdani |
-| P1-204 | `carts`, `cart_items`, `orders.cart_id`; cart routes | BE | 203, 100 | As §11.5 and `03-erd.md` §3.5; cart id is v4; prices never stored; `price` field → `422 unknown_field` (BR-005, BR-087, BR-089) | review | Iqbal Hamdani |
-| P1-205 | **Checkout** | BE | 204, 101 | As §11.7 (bank transfer, before shipping and Midtrans land); 20 parallel checkouts of one cart → one order, all 20 responses carry it; replay → `200` same order; `item_unavailable` leaves the cart untouched; guest `order_token`; a sale that ends while items sit in the cart is charged at the regular price (BR-088, BR-089, BR-090, BR-091) | review | Iqbal Hamdani |
-| P1-206 | Customer accounts: register, login, refresh rotation, logout | BE | 202, 100 | As §11.8; tokens in the body; reused refresh token revokes the session; tenant-B key with tenant-A token → `401`; customer token on any admin route → `401` (BR-021, BR-086, BR-092, BR-093) | review | Iqbal Hamdani |
-| P1-207 | Password reset | BE | 206, 226 | As §11.8; link valid 30 min, single use, revokes every session; always `202`; a Google-only customer can add a password (BR-094) | review | Iqbal Hamdani |
-| P1-208 | `me`, order history, guest order lookup | BE | 205, 206 | As §11.9; cart follows the shopper after sign-in; one order token never opens another order (BR-082, BR-091, BR-095) | review | Iqbal Hamdani |
-| P1-227 | Envelope encryption helper (AES-256-GCM, key in KMS) | BE | 007 | Encrypt/decrypt round-trips; ciphertext never equals plaintext; a log-scan test finds no secret bytes. Reused by `P1-216` and `P1-301` (BR-101, BR-129) | review | Iqbal Hamdani |
-| P1-216 | `storefront_settings` + `GET`/`PATCH /v1/storefront-settings` | BE | 071, 227 | As §4 and `03-erd.md` §3.5; server key write-only; enabling Midtrans without keys → `422`; both methods off → `422` (BR-122, BR-129) | review | Iqbal Hamdani |
-| P1-217 | Storefront settings screen | FE | 216 | Server key field is write-only ("set" / "replace"); shows the notification URL to copy (BR-129) | review | Iqbal Hamdani |
-| P1-224 | `GET /v1/storefront/config` | BE | 216, 202 | As §11.4; contains nothing secret (BR-122, BR-127, BR-129) | review | Iqbal Hamdani |
-| P1-218 | Biteship rates: client, 10-minute cache, storefront and admin rate routes | BE | 216, 204 | As §11.6 and §5.4; one platform key from config; Biteship down → `502 shipping_rates_unavailable` (BR-120) | review | Iqbal Hamdani |
-| P1-219 | Checkout shipping: required choice, server re-quote | BE | 205, 218 | Within the cache window the charged price equals the quoted price; a service no longer offered → `409 shipping_unavailable`; no order on Biteship failure (BR-089, BR-121) | review | Iqbal Hamdani |
-| P1-220 | Midtrans at checkout: `payments` table, Snap transaction | BE | 219, 216 | As §11.7; amount equals order total; attempt ids `ERG-000123`, `-2`, …; Midtrans down → order kept, `payment_unavailable` (BR-122, BR-123) | review | Iqbal Hamdani |
-| P1-221 | Midtrans notification webhook | BE | 220 | As §11.10; bad signature → `401`, nothing changes; status confirmed by Get Status API; `settlement` marks paid once; a replayed notification is a no-op; amount mismatch never marks paid (BR-003, BR-124, BR-125) | review | Iqbal Hamdani |
-| P1-222 | Pay-again route | BE | 221, 208 | As §11.10; a live attempt's link is reused; an expired one gets a new attempt; paid or cancelled → `422` (BR-126) | review | Iqbal Hamdani |
-| P1-223 | Google sign-in + `customer_identities` table | BE | 206, 216 | As §11.8; wrong `aud`, unverified email or bad signature → `401`; existing verified-email account is linked through a `customer_identities` row, not duplicated; the same Google account cannot link to two customers in one shop (BR-127) | review | Iqbal Hamdani |
-| P1-228 | Order emails: placed, payment received, shipped | BE | 226, 205, 221, 102 | Each email is sent once per event, from the shop's name, with courier and tracking on "shipped" (BR-128) | review | Iqbal Hamdani |
-| P1-229 | Order detail shows payment attempts and chosen shipping | FE | 220, 109 | Attempts newest first with Midtrans status; `mark-paid` on a Midtrans order warns it is an override (BR-074) | review | Iqbal Hamdani |
-| P1-209 | Storefront rate limits | BE | 202 | Browser requests per IP and per key, server requests per key and IP, login, checkout, as BR-014; headers on every response | review | Iqbal Hamdani |
-| P1-210 | Storefront auth matrix suite | BE | 208 | Table-driven over origin (allowed, foreign, absent) × token presence against every storefront route (BR-082, BR-083, BR-085, BR-086) | review | Iqbal Hamdani |
-| P1-211 | **Customer isolation suite** | BE | 208 | Two tenants × two customers; zero leakage both ways on every customer-scoped route; extends `P1-008` to the storefront tree (BR-001, BR-082) | review | Iqbal Hamdani |
-| P1-213 | Public storefront OpenAPI at `/v1/storefront/openapi.json` + docs page | CT/BE | 222, 223, 224 | Every §11.3 route documented; the file lives in contracts and is served by the API | review | Iqbal Hamdani |
-| P1-214 | Nightly retention job | BE | 204, 206 | Expired open carts and expired or revoked sessions deleted; checked-out carts kept (BR-096) | review | Iqbal Hamdani |
-| P1-215 | Customer PII purge job | CT/BE/FE | 206, 060 | Purges one customer's PII from `customers`, `customer_identities`, `orders.customer`, `orders.shipping_address`; catalog untouched; audited (BR-097). The owner starts it with "Delete personal data" on the customer's page (`POST /v1/customers/{id}/purge`, `customers:purge`) | review | Iqbal Hamdani |
-| P1-230 | Storefront product list: numbered pages, total, categories and weight | CT/BE | 203 | As §11.4: `page` (1-based) as the alternative to `cursor`, both or `page` < 1 is `422`, a page past the last is empty; `total` counts every matching visible product; each item carries its unarchived `categories` and `weight_grams_min`/`weight_grams_max` over visible variants; p95 < 300 ms still holds (BR-080, BR-081) | review | Iqbal Hamdani |
-| P1-231 | Admin product, order and customer lists: numbered pages and total | CT/BE | 030, 103, 106 | As §7.1, §5.1, §5.5: `page` (1-based) as the alternative to `cursor`, both or `page` < 1 is `422`, a page past the last is empty; `total` counts every matching row; the p95 targets (600 ms products, 800 ms orders at 10k) still hold | review | Iqbal Hamdani |
-| P1-232 | Numbered pager on the product, order and customer screens | FE | 231 | Page numbers, previous/next and "x–y of N" from `total`, the page kept in the URL with the filters; a filter change returns to page 1 | review | Iqbal Hamdani |
+| P1-200 | API key API: create, list, edit origins, revoke | BE | 019, 018 | As §4; plaintext returned once; missing or malformed `allowed_origin` → `422`; it must be exact `scheme://host[:port]` (BR-028, BR-083) | done | Iqbal Hamdani |
+| P1-201 | API keys screen | FE | 200 | Copy-once UI with an explicit warning; link to the storefront docs (BR-028) | done | Iqbal Hamdani |
+| P1-202 | Storefront route tree + key middleware | BE | 019, 015 | As §11.2: `invalid_api_key`; browser request from a foreign origin → `origin_not_allowed` without ACAO; same key with no `Origin` accepted; preflight for any origin; revoked key dead within 60 s; storefront and admin packages do not import each other (BR-003, BR-083, BR-085) | done | Iqbal Hamdani |
+| P1-203 | Storefront views + catalog routes | BE | 202, 030, 044 | As §11.4; handlers query only the views; draft and archived products never appear; p95 < 300 ms ; `price` is the effective price and `on_sale` is set while a sale is active (BR-046, BR-080, BR-081) | done | Iqbal Hamdani |
+| P1-204 | `carts`, `cart_items`, `orders.cart_id`; cart routes | BE | 203, 100 | As §11.5 and `03-erd.md` §3.5; cart id is v4; prices never stored; `price` field → `422 unknown_field` (BR-005, BR-087, BR-089) | done | Iqbal Hamdani |
+| P1-205 | **Checkout** | BE | 204, 101 | As §11.7 (bank transfer, before shipping and Midtrans land); 20 parallel checkouts of one cart → one order, all 20 responses carry it; replay → `200` same order; `item_unavailable` leaves the cart untouched; guest `order_token`; a sale that ends while items sit in the cart is charged at the regular price (BR-088, BR-089, BR-090, BR-091) | done | Iqbal Hamdani |
+| P1-206 | Customer accounts: register, login, refresh rotation, logout | BE | 202, 100 | As §11.8; tokens in the body; reused refresh token revokes the session; tenant-B key with tenant-A token → `401`; customer token on any admin route → `401` (BR-021, BR-086, BR-092, BR-093) | done | Iqbal Hamdani |
+| P1-207 | Password reset | BE | 206, 226 | As §11.8; link valid 30 min, single use, revokes every session; always `202`; a Google-only customer can add a password (BR-094) | done | Iqbal Hamdani |
+| P1-208 | `me`, order history, guest order lookup | BE | 205, 206 | As §11.9; cart follows the shopper after sign-in; one order token never opens another order (BR-082, BR-091, BR-095) | done | Iqbal Hamdani |
+| P1-227 | Envelope encryption helper (AES-256-GCM, key in KMS) | BE | 007 | Encrypt/decrypt round-trips; ciphertext never equals plaintext; a log-scan test finds no secret bytes. Reused by `P1-216` and `P1-301` (BR-101, BR-129) | done | Iqbal Hamdani |
+| P1-216 | `storefront_settings` + `GET`/`PATCH /v1/storefront-settings` | BE | 071, 227 | As §4 and `03-erd.md` §3.5; server key write-only; enabling Midtrans without keys → `422`; both methods off → `422` (BR-122, BR-129) | done | Iqbal Hamdani |
+| P1-217 | Storefront settings screen | FE | 216 | Server key field is write-only ("set" / "replace"); shows the notification URL to copy (BR-129) | done | Iqbal Hamdani |
+| P1-224 | `GET /v1/storefront/config` | BE | 216, 202 | As §11.4; contains nothing secret (BR-122, BR-127, BR-129) | done | Iqbal Hamdani |
+| P1-218 | Biteship rates: client, 10-minute cache, storefront and admin rate routes | BE | 216, 204 | As §11.6 and §5.4; one platform key from config; Biteship down → `502 shipping_rates_unavailable` (BR-120) | done | Iqbal Hamdani |
+| P1-219 | Checkout shipping: required choice, server re-quote | BE | 205, 218 | Within the cache window the charged price equals the quoted price; a service no longer offered → `409 shipping_unavailable`; no order on Biteship failure (BR-089, BR-121) | done | Iqbal Hamdani |
+| P1-220 | Midtrans at checkout: `payments` table, Snap transaction | BE | 219, 216 | As §11.7; amount equals order total; attempt ids `ERG-000123`, `-2`, …; Midtrans down → order kept, `payment_unavailable` (BR-122, BR-123) | done | Iqbal Hamdani |
+| P1-221 | Midtrans notification webhook | BE | 220 | As §11.10; bad signature → `401`, nothing changes; status confirmed by Get Status API; `settlement` marks paid once; a replayed notification is a no-op; amount mismatch never marks paid (BR-003, BR-124, BR-125) | done | Iqbal Hamdani |
+| P1-222 | Pay-again route | BE | 221, 208 | As §11.10; a live attempt's link is reused; an expired one gets a new attempt; paid or cancelled → `422` (BR-126) | done | Iqbal Hamdani |
+| P1-223 | Google sign-in + `customer_identities` table | BE | 206, 216 | As §11.8; wrong `aud`, unverified email or bad signature → `401`; existing verified-email account is linked through a `customer_identities` row, not duplicated; the same Google account cannot link to two customers in one shop (BR-127) | done | Iqbal Hamdani |
+| P1-228 | Order emails: placed, payment received, shipped | BE | 226, 205, 221, 102 | Each email is sent once per event, from the shop's name, with courier and tracking on "shipped" (BR-128) | done | Iqbal Hamdani |
+| P1-229 | Order detail shows payment attempts and chosen shipping | FE | 220, 109 | Attempts newest first with Midtrans status; `mark-paid` on a Midtrans order warns it is an override (BR-074) | done | Iqbal Hamdani |
+| P1-209 | Storefront rate limits | BE | 202 | Browser requests per IP and per key, server requests per key and IP, login, checkout, as BR-014; headers on every response | done | Iqbal Hamdani |
+| P1-210 | Storefront auth matrix suite | BE | 208 | Table-driven over origin (allowed, foreign, absent) × token presence against every storefront route (BR-082, BR-083, BR-085, BR-086) | done | Iqbal Hamdani |
+| P1-211 | **Customer isolation suite** | BE | 208 | Two tenants × two customers; zero leakage both ways on every customer-scoped route; extends `P1-008` to the storefront tree (BR-001, BR-082) | done | Iqbal Hamdani |
+| P1-213 | Public storefront OpenAPI at `/v1/storefront/openapi.json` + docs page | CT/BE | 222, 223, 224 | Every §11.3 route documented; the file lives in contracts and is served by the API | done | Iqbal Hamdani |
+| P1-214 | Nightly retention job | BE | 204, 206 | Expired open carts and expired or revoked sessions deleted; checked-out carts kept (BR-096) | done | Iqbal Hamdani |
+| P1-215 | Customer PII purge job | CT/BE/FE | 206, 060 | Purges one customer's PII from `customers`, `customer_identities`, `orders.customer`, `orders.shipping_address`; catalog untouched; audited (BR-097). The owner starts it with "Delete personal data" on the customer's page (`POST /v1/customers/{id}/purge`, `customers:purge`) | done | Iqbal Hamdani |
+| P1-230 | Storefront product list: numbered pages, total, categories and weight | CT/BE | 203 | As §11.4: `page` (1-based) as the alternative to `cursor`, both or `page` < 1 is `422`, a page past the last is empty; `total` counts every matching visible product; each item carries its unarchived `categories` and `weight_grams_min`/`weight_grams_max` over visible variants; p95 < 300 ms still holds (BR-080, BR-081) | done | Iqbal Hamdani |
+| P1-231 | Admin product, order and customer lists: numbered pages and total | CT/BE | 030, 103, 106 | As §7.1, §5.1, §5.5: `page` (1-based) as the alternative to `cursor`, both or `page` < 1 is `422`, a page past the last is empty; `total` counts every matching row; the p95 targets (600 ms products, 800 ms orders at 10k) still hold | done | Iqbal Hamdani |
+| P1-232 | Numbered pager on the product, order and customer screens | FE | 231 | Page numbers, previous/next and "x–y of N" from `total`, the page kept in the URL with the filters; a filter change returns to page 1 | done | Iqbal Hamdani |
 | P1-212 | Reference website from the public docs alone | FE | 213, 222, 223 | A throwaway site outside `new-commerce-web`, using only the docs and an API key: product → cart → shipping choice → guest checkout paid with Midtrans sandbox → order lookup, and Google sign-in → order history | blocked | |
 
 > **Phase 3 is delivered in three slices** (decided 11 Oct 2026): 3a is P1-200…P1-208, 3b is
@@ -319,10 +323,10 @@ must not happen on storage that has never been restored from.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-001 | VPS provisioning, Docker Compose, Caddy, TLS | OPS | — | `docker compose up` serves HTTPS on the domain; two `cmd/api` replicas drain one at a time on deploy | todo | |
-| P1-002 | PostgreSQL 18 + Redis 8 with tuned config and resource limits | OPS | 001 | `shared_buffers` ≈ 25% RAM, `max_connections` 100; `cpus`/`mem_limit` per service; Redis AOF `everysec` | todo | |
+| P1-001 | VPS provisioning, Docker Compose, Caddy, TLS | OPS | — | `docker compose up` serves HTTPS on the domain; two `cmd/api` replicas drain one at a time on deploy | done | |
+| P1-002 | PostgreSQL 18 + Redis 8 with tuned config and resource limits | OPS | 001 | `shared_buffers` ≈ 25% RAM, `max_connections` 100; `cpus`/`mem_limit` per service; Redis AOF `everysec` | done | |
 | P1-003 | **pgBackRest to R2 + restore drill** | OPS | 002 | **A restore from R2 into a clean machine succeeds.** RPO 5 min. Gates `P1-070` | todo | |
-| P1-004 | CI: lint, test, migrations on a snapshot, contract drift check | BE/FE | 001 | A PR breaking any of the four is red | todo | |
+| P1-004 | CI: lint, test, migrations on a snapshot, contract drift check | BE/FE | 001 | A PR breaking any of the four is red | done | |
 | P1-500 | k6 load test | OPS | 001, 203, 205 | Storefront browsing at 10× expected peak with an import running stays within `01-product-requirements.md` §8.1 | todo | |
 | P1-501 | Alerts and traces | OPS/BE | 001 | Every alert in `01-product-requirements.md` §8.5 fires in a drill; checkout and import jobs each appear as one trace | todo | |
 | P1-502 | Runbooks: restore, deploy, key rotation, channel reconnect | OPS | 003 | Each runbook was followed once by someone who did not write it | todo | |
@@ -338,6 +342,16 @@ must not happen on storage that has never been restored from.
 > Also decided: the admin passes `/v1/*` to the API on its own host (`04-api-spec.md` §1);
 > monitoring is Grafana Cloud's free tier through an Alloy agent; expected peak is 10 storefront
 > requests a second, so k6 runs at 100 (`01-product-requirements.md` §8.1).
+>
+> **Status (6 Nov 2026).** Production runs at `admin.belli.id`, `{slug}.belli.id` and
+> `img.belli.id`: one VPS with Compose and Caddy behind Cloudflare, and a managed PostgreSQL
+> (Sumopod, limited-roles mode, BR-001). `P1-001`, `P1-002` and `P1-004` are done; `P1-002`'s
+> PostgreSQL tuning applies to the Compose database (`deploy/postgres`, `check.sh`), while the
+> managed one is tuned by its provider. **`P1-003` changed shape** with the managed database: no
+> pgBackRest, but a nightly encrypted dump into the `belli-backups` R2 bucket
+> (`deploy/backup.sh`, 30-day expiry), which has run every night since 17 Oct 2026. Still open: a
+> restore from R2 into a clean machine (`deploy/restore-drill.sh`), and the RPO is a day, not 5
+> minutes.
 >
 > **`P1-004` in practice:** the snapshot is main's schema with `dev-seed` data until production
 > exists, then a restored production backup. Contract drift is red when the generated code does
@@ -362,14 +376,14 @@ website through `/v1/storefront/blog/posts`, and a scheduled one appears by itse
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-601 | Blog schema | BE | — | Migration `000028_blog` matches `03-erd.md` §3.8 and §4: three tables with RLS, the same-tenant FKs, `users.bio`, `storefront_blog_posts`; `blog:read`/`blog:write` in the role matrix (BR-130–135) | review | Iqbal Hamdani |
-| P1-602 | Blog categories API | BE | 601 | As §13.1; slug clash is `422` on `slug` or `name`; `DELETE` archives (BR-012, BR-130) | review | Iqbal Hamdani |
-| P1-603 | Blog posts API and cover upload | BE | 601, 602 | As §13.2 and §8 (`blog_cover`); one featured post per shop; publishing sets `published_at`; `excerpt_preview` filled; a cover key outside the post's prefix is `422`; `*/blogs/*` is public in the dev bucket (BR-131–135) | review | Iqbal Hamdani |
-| P1-604 | Author bio on users | BE | 601 | `User` carries `bio`; `PATCH /v1/users/{id}` sets and clears it (§4, BR-133) | review | Iqbal Hamdani |
-| P1-605 | Storefront blog | BE | 603, 203 | As §11.11; draft, archived and scheduled posts are absent; `featured`, `category`, `tag` and `page` filter; linked products that are hidden drop out; no author field but `name` and `bio` (BR-131–135) | review | Iqbal Hamdani |
-| P1-606 | Blog categories in the post editor | FE | 602 | From the editor's Category field: add, rename, reorder by `position`, delete; slug follows the name until edited; a category added there is picked (BR-130). The nav has one Blog entry, under Catalog | review | Iqbal Hamdani |
-| P1-607 | Blog posts list and editor | FE | 603, 606 | List with status and search; the editor saves every §13.2 field, uploads a cover, picks products, shows `excerpt_preview` as the excerpt's placeholder, and schedules with the shop's time zone (BR-131–135) | review | Iqbal Hamdani |
-| P1-608 | Bio on the Team screen | FE | 604 | An owner or admin edits a member's bio (BR-133) | review | Iqbal Hamdani |
+| P1-601 | Blog schema | BE | — | Migration `000028_blog` matches `03-erd.md` §3.8 and §4: three tables with RLS, the same-tenant FKs, `users.bio`, `storefront_blog_posts`; `blog:read`/`blog:write` in the role matrix (BR-130–135) | done | Iqbal Hamdani |
+| P1-602 | Blog categories API | BE | 601 | As §13.1; slug clash is `422` on `slug` or `name`; `DELETE` archives (BR-012, BR-130) | done | Iqbal Hamdani |
+| P1-603 | Blog posts API and cover upload | BE | 601, 602 | As §13.2 and §8 (`blog_cover`); one featured post per shop; publishing sets `published_at`; `excerpt_preview` filled; a cover key outside the post's prefix is `422`; `*/blogs/*` is public in the dev bucket (BR-131–135) | done | Iqbal Hamdani |
+| P1-604 | Author bio on users | BE | 601 | `User` carries `bio`; `PATCH /v1/users/{id}` sets and clears it (§4, BR-133) | done | Iqbal Hamdani |
+| P1-605 | Storefront blog | BE | 603, 203 | As §11.11; draft, archived and scheduled posts are absent; `featured`, `category`, `tag` and `page` filter; linked products that are hidden drop out; no author field but `name` and `bio` (BR-131–135) | done | Iqbal Hamdani |
+| P1-606 | Blog categories in the post editor | FE | 602 | From the editor's Category field: add, rename, reorder by `position`, delete; slug follows the name until edited; a category added there is picked (BR-130). The nav has one Blog entry, under Catalog | done | Iqbal Hamdani |
+| P1-607 | Blog posts list and editor | FE | 603, 606 | List with status and search; the editor saves every §13.2 field, uploads a cover, picks products, shows `excerpt_preview` as the excerpt's placeholder, and schedules with the shop's time zone (BR-131–135) | done | Iqbal Hamdani |
+| P1-608 | Bio on the Team screen | FE | 604 | An owner or admin edits a member's bio (BR-133) | done | Iqbal Hamdani |
 
 > **Production step for `P1-603`:** the bucket policy in `make storage-init` makes `*/blogs/*`
 > public on MinIO only. The production image domain must serve `{tenant}/blogs/…` too, or covers
@@ -388,12 +402,12 @@ and blog at `https://{slug}.belli.id`, with an order button that opens WhatsApp.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-701 | Platform key | BE | 202 | As §11.2: the platform key with `X-Shop` reads an active shop's catalog, blog and config; with an `Origin`, on a write, or with no key configured it is `401`; an unknown or suspended shop is `404`; shop A's slug never shows shop B's data; the server limit counts per shop (BR-003, BR-014, BR-141) | review | Iqbal Hamdani |
-| P1-702 | Shop address | BE | 083 | `PATCH /v1/settings` takes `slug` as §4: format, reserved names and another shop's slug are `422` on `slug`; one audit row (BR-008, BR-140) | review | Iqbal Hamdani |
-| P1-703 | The shop's look and logo upload | BE | 216 | Migration `000029_storefront_branding` matches `03-erd.md` §3.5; storefront settings read and write the look as §4, `null` clearing each; `shop_logo` presign as §8 (2 MB, `settings:write`), a logo key outside `{tenant}/shop/` or never uploaded is `422`; `/config` returns the look; `*/shop/*` is public in the dev bucket (BR-053, BR-142) | review | Iqbal Hamdani |
-| P1-704 | Address and look in the admin | FE | 702, 703 | Settings edits the address with its `.belli.id` suffix and links to the website; storefront settings uploads a logo and edits WhatsApp, tagline, colour and Instagram (BR-140, BR-142) | review | Iqbal Hamdani |
-| P1-705 | The hosted website | SF | 701, 703 | One Next.js server answers `{slug}.belli.id` with that shop's home, catalog, product pages (WhatsApp order button when a number is set), blog, sitemap and robots, in its logo and colour, with "Dibuat dengan Belli" in the footer; an unknown shop is a `404` page (BR-140, BR-142) | review | Iqbal Hamdani |
-| P1-706 | Wildcard host in production | OPS | 705 | Caddy serves `*.belli.id` from the website's container with the origin certificate; `deploy.sh` rolls it out with the API and admin; Cloudflare proxies `*.belli.id`; the image domain serves `{tenant}/shop/…` (BR-053, BR-140) | review | Iqbal Hamdani |
+| P1-701 | Platform key | BE | 202 | As §11.2: the platform key with `X-Shop` reads an active shop's catalog, blog and config; with an `Origin`, on a write, or with no key configured it is `401`; an unknown or suspended shop is `404`; shop A's slug never shows shop B's data; the server limit counts per shop (BR-003, BR-014, BR-141) | done | Iqbal Hamdani |
+| P1-702 | Shop address | BE | 083 | `PATCH /v1/settings` takes `slug` as §4: format, reserved names and another shop's slug are `422` on `slug`; one audit row (BR-008, BR-140) | done | Iqbal Hamdani |
+| P1-703 | The shop's look and logo upload | BE | 216 | Migration `000029_storefront_branding` matches `03-erd.md` §3.5; storefront settings read and write the look as §4, `null` clearing each; `shop_logo` presign as §8 (2 MB, `settings:write`), a logo key outside `{tenant}/shop/` or never uploaded is `422`; `/config` returns the look; `*/shop/*` is public in the dev bucket (BR-053, BR-142) | done | Iqbal Hamdani |
+| P1-704 | Address and look in the admin | FE | 702, 703 | Settings edits the address with its `.belli.id` suffix and links to the website; storefront settings uploads a logo and edits WhatsApp, tagline, colour and Instagram (BR-140, BR-142) | done | Iqbal Hamdani |
+| P1-705 | The hosted website | SF | 701, 703 | One Next.js server answers `{slug}.belli.id` with that shop's home, catalog, product pages (WhatsApp order button when a number is set), blog, sitemap and robots, in its logo and colour, with "Dibuat dengan Belli" in the footer; an unknown shop is a `404` page (BR-140, BR-142) | done | Iqbal Hamdani |
+| P1-706 | Wildcard host in production | OPS | 705 | Caddy serves `*.belli.id` from the website's container with the origin certificate; `deploy.sh` rolls it out with the API and admin; Cloudflare proxies `*.belli.id`; the image domain serves `{tenant}/shop/…` (BR-053, BR-140) | done | Iqbal Hamdani |
 
 > **Production steps for `P1-706`:** the origin certificate must name `*.belli.id`; `deploy/.env`
 > needs `ROOT_DOMAIN` and `STOREFRONT_PLATFORM_KEY`; the box must be able to pull
@@ -412,21 +426,21 @@ redrawn within a minute; belli.id links to eight demo shops, one per theme.
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-801 | Theme contracts | CT | 703 | v2.24.0: BR-142 adds the theme, hero photo, address, opening hours and marketplace links; BR-143 lists the eight themes and their colours; `storefront.yaml` 0.14.0 adds them to `/config` and `on_sale`, `regular_price_min`, `options` to the product list | review | Iqbal Hamdani |
-| P1-802 | Themes and the rest of the look | BE | 801 | Migration `000030_storefront_themes` matches `03-erd.md` §3.5; storefront settings read and write the theme, colour (one of the theme's four, else `422`; a theme change without a colour clears it), hero photo, address, opening hours and marketplace links as §4; `shop_hero` presign as §8 (5 MB, `settings:write`); `/config` returns the theme and always a colour (BR-142, BR-143) | review | Iqbal Hamdani |
-| P1-803 | Card fields in the product list | BE | 801 | `/v1/storefront/products` items carry `on_sale`, `regular_price_min` and `options` as §11.4 (BR-046, BR-143) | review | Iqbal Hamdani |
-| P1-804 | A demo shop per theme | BE | 802, 803 | `demo-seed -theme {key}` seeds a shop drawn in that theme: catalog, collections, photos, articles and look; the fashion catalog stays the default (BR-143) | review | Iqbal Hamdani |
-| P1-805 | Theme picker in the admin | FE | 802 | Storefront settings shows the eight themes, each with what it suits and a link to its demo shop, then the chosen theme's four colours; uploads a hero photo and edits address, opening hours and marketplace links (BR-142, BR-143) | review | Iqbal Hamdani |
-| P1-806 | Themes in the hosted website | SF | 802, 803 | The website draws each shop in the theme and colour from `/config`, an unknown theme as `katalog`; catalog filters, variant prices, the WhatsApp message and the mobile order bar are shared by every theme (BR-142, BR-143) | review | Iqbal Hamdani |
-| P1-807 | Theme `busana` | SF | 806 | Busana: home, catalog, product page, articles and article follow `Belli Store.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-808 | Theme `clothing` | SF | 806 | Clothing: home, catalog, product page, articles and article follow `Belli Store Clothing.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-809 | Theme `woman` | SF | 806 | Woman: home, catalog, product page, articles and article follow `Belli Store Woman.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-810 | Theme `katalog` | SF | 806 | Katalog: home, catalog, product page, articles and article follow `Belli Katalog.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-811 | Theme `katalog-hangat` | SF | 806 | Katalog Hangat: home, catalog, product page, articles and article follow `Belli Katalog Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-812 | Theme `furnitur` | SF | 806 | Furnitur Klasik: home, catalog, product page, articles and article follow `Belli Katalog Furnitur.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-813 | Theme `furnitur-earthy` | SF | 806 | Furnitur Earthy: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-814 | Theme `furnitur-ceria` | SF | 806 | Furnitur Ceria: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 3.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | review | Iqbal Hamdani |
-| P1-815 | Demo shops on belli.id | LP | 804, 807–814 | The landing page's examples show the eight demo shops with screenshots and live links; ACL Cosm and Sleep Project are gone | review | Iqbal Hamdani |
+| P1-801 | Theme contracts | CT | 703 | v2.24.0: BR-142 adds the theme, hero photo, address, opening hours and marketplace links; BR-143 lists the eight themes and their colours; `storefront.yaml` 0.14.0 adds them to `/config` and `on_sale`, `regular_price_min`, `options` to the product list | done | Iqbal Hamdani |
+| P1-802 | Themes and the rest of the look | BE | 801 | Migration `000030_storefront_themes` matches `03-erd.md` §3.5; storefront settings read and write the theme, colour (one of the theme's four, else `422`; a theme change without a colour clears it), hero photo, address, opening hours and marketplace links as §4; `shop_hero` presign as §8 (5 MB, `settings:write`); `/config` returns the theme and always a colour (BR-142, BR-143) | done | Iqbal Hamdani |
+| P1-803 | Card fields in the product list | BE | 801 | `/v1/storefront/products` items carry `on_sale`, `regular_price_min` and `options` as §11.4 (BR-046, BR-143) | done | Iqbal Hamdani |
+| P1-804 | A demo shop per theme | BE | 802, 803 | `demo-seed -theme {key}` seeds a shop drawn in that theme: catalog, collections, photos, articles and look; the fashion catalog stays the default (BR-143) | done | Iqbal Hamdani |
+| P1-805 | Theme picker in the admin | FE | 802 | Storefront settings shows the eight themes, each with what it suits and a link to its demo shop, then the chosen theme's four colours; uploads a hero photo and edits address, opening hours and marketplace links (BR-142, BR-143) | done | Iqbal Hamdani |
+| P1-806 | Themes in the hosted website | SF | 802, 803 | The website draws each shop in the theme and colour from `/config`, an unknown theme as `katalog`; catalog filters, variant prices, the WhatsApp message and the mobile order bar are shared by every theme (BR-142, BR-143) | done | Iqbal Hamdani |
+| P1-807 | Theme `busana` | SF | 806 | Busana: home, catalog, product page, articles and article follow `Belli Store.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-808 | Theme `clothing` | SF | 806 | Clothing: home, catalog, product page, articles and article follow `Belli Store Clothing.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-809 | Theme `woman` | SF | 806 | Woman: home, catalog, product page, articles and article follow `Belli Store Woman.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-810 | Theme `katalog` | SF | 806 | Katalog: home, catalog, product page, articles and article follow `Belli Katalog.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-811 | Theme `katalog-hangat` | SF | 806 | Katalog Hangat: home, catalog, product page, articles and article follow `Belli Katalog Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-812 | Theme `furnitur` | SF | 806 | Furnitur Klasik: home, catalog, product page, articles and article follow `Belli Katalog Furnitur.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-813 | Theme `furnitur-earthy` | SF | 806 | Furnitur Earthy: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 2.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-814 | Theme `furnitur-ceria` | SF | 806 | Furnitur Ceria: home, catalog, product page, articles and article follow `Belli Katalog Furnitur Tema 3.dc.html` in Claude Design at 360 px and 1280 px, in each of its four colours (BR-143) | done | Iqbal Hamdani |
+| P1-815 | Demo shops on belli.id | LP | 804, 807–814 | The landing page's examples show the eight demo shops with screenshots and live links; ACL Cosm and Sleep Project are gone | done | Iqbal Hamdani |
 
 > **Production steps for `P1-804`:** after the API, admin and website are deployed, run `demo-seed`
 > once per new theme on the box (`deploy/README.md`), then set the existing `demo` shop's theme to
@@ -444,9 +458,9 @@ shop and the signup funnel; anyone else sees no such page and gets `403` from th
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-901 | Platform admin contracts | CT | — | v2.25.0: BR-150 and BR-003's one exception; `GET /v1/platform/shops` and `SessionUser.platform_admin` in `04-api-spec.md` §14 and `openapi.yaml` | review | Iqbal Hamdani |
-| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | review | Iqbal Hamdani |
-| P1-903 | Platform page in the admin | FE | 902 | A Platform item in the sidebar only for `platform_admin`; the page shows the summary, then every shop with its owner, source, website, products, orders and last activity, searchable and filtered by not verified and sleeping, CLI and demo shops hidden by default (BR-150) | review | Iqbal Hamdani |
+| P1-901 | Platform admin contracts | CT | — | v2.25.0: BR-150 and BR-003's one exception; `GET /v1/platform/shops` and `SessionUser.platform_admin` in `04-api-spec.md` §14 and `openapi.yaml` | done | Iqbal Hamdani |
+| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | done | Iqbal Hamdani |
+| P1-903 | Platform page in the admin | FE | 902 | A Platform item in the sidebar only for `platform_admin`; the page shows the summary, then every shop with its owner, source, website, products, orders and last activity, searchable and filtered by not verified and sleeping, CLI and demo shops hidden by default (BR-150) | done | Iqbal Hamdani |
 
 > **Production step for `P1-902`:** set `PLATFORM_ADMIN_EMAILS` in the box's `.env` (the founder's
 > email, never a `@demo.belli.id` one: their password is public), then `./deploy.sh main`.
@@ -474,7 +488,8 @@ An item is `done` when **all** of these hold. Not five of seven.
 4. Errors use the RFC 9457 envelope with `trace_id`.
 5. No server-managed or unknown field is accepted from a client.
 6. `make generate` changes nothing on a clean tree in both repos.
-7. Reviewed by someone who didn't write it.
+7. Reviewed by someone who didn't write it. The owner reading and merging the PR counts
+   (decided 6 Nov 2026).
 
 ---
 
