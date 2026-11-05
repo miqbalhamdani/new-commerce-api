@@ -124,13 +124,14 @@ POST /v1/auth/login
 200 OK   ← refresh token set as an httpOnly, Secure, SameSite=Lax cookie
 { "access_token": "eyJ…", "expires_in": 900,
   "user":   { "id": "0192…", "name": "Budi", "role": "ops",
-              "permissions": ["orders:read", "orders:write", "…"] },
+              "permissions": ["orders:read", "orders:write", "…"], "platform_admin": false },
   "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta" } }
 ```
 
 This body is a **Session**; `refresh` and `accept-invite` return it too. The tenant comes from the
 user row (BR-020): there is no tenant, workspace or subdomain parameter. Wrong password, unknown
-email and disabled account all return the same `401` (BR-021).
+email and disabled account all return the same `401` (BR-021). `platform_admin` is `true` only for an
+email in `PLATFORM_ADMIN_EMAILS` (BR-150, §14); it is not a role and grants nothing in the shop.
 
 ### Refresh and logout
 
@@ -1861,3 +1862,36 @@ DELETE /v1/blog/posts/{id}
   and `products`), newest created first; `q` matches the title, `status` is `draft` or
   `published`, `category_id` filters by category. Cursor paging.
 - No `If-Match`: the last save wins (BR-010).
+
+---
+
+## 14. Platform admin
+
+| Method | Path | Permission | BR |
+|---|---|---|---|
+| `GET` | `/v1/platform/shops` | an `active` user whose email is in `PLATFORM_ADMIN_EMAILS` | 003, 150 |
+
+```json
+GET /v1/platform/shops
+200 OK
+{ "generated_at": "2026-11-05T21:00:00+07:00",
+  "summary": { "shops": 12, "new_7d": 3, "new_30d": 9, "verified": 10, "website_set_up": 6,
+               "with_products": 7, "with_orders": 2, "active_7d": 5, "sleeping": 3 },
+  "shops": [
+    { "id": "0192…", "name": "Lelap", "slug": "lelap-3f9a1c", "status": "active",
+      "created_at": "2026-11-04T10:12:00+07:00", "source": "google",
+      "owner": { "name": "Rina", "email": "rina@lelap.id", "status": "active",
+                 "last_login_at": "2026-11-05T08:30:00+07:00" },
+      "website": { "theme": "katalog", "logo": true, "whatsapp": true, "set_up": true },
+      "products": { "active": 14, "total": 16, "first_at": "2026-11-04T11:02:00+07:00" },
+      "orders": { "total": 0, "last_30d": 0, "first_at": null, "last_at": null },
+      "last_activity_at": "2026-11-05T08:41:00+07:00" } ] }
+```
+
+The report is BR-150's: one entry per shop, newest first, unpaginated. `source` is `email`,
+`google` or `cli`, and `summary` counts only `email` and `google` shops. `owner` is the shop's
+first owner, `null` if it has none. `website.theme` is `null` until the shop first opens its
+storefront settings. `products.total` leaves out archived products. `last_activity_at` is the
+latest staff sign-in or audit-log entry, `null` when there is neither. Anyone else, and everyone when
+`PLATFORM_ADMIN_EMAILS` is empty, gets `403` with that requirement in `detail` (BR-024). The
+website address is `https://{slug}.belli.id` (BR-140).

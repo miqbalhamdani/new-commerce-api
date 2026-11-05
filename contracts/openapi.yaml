@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.24.0
+  version: 2.25.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -10,7 +10,7 @@ info:
     **This file is a skeleton plus the paths already built.** It carries the conventions from
     `04-api-spec.md` §1 that every endpoint depends on — authentication, the error envelope,
     money, pagination, optimistic concurrency, rate limiting — and only the endpoints whose
-    backlog item is done: `P1-011` the three auth paths, `P1-012` roles, `P1-021` brands, `P1-024` categories, `P1-028` products, `P1-029` variants, `P1-060` jobs, `P1-040` the variant matrix, `P1-043` media, `P1-072` bulk, `P1-073` import, `P1-064` users, `P1-071` settings, `P1-077` the audit log, `P1-102` order status routes, `P1-103` the order list, `P1-104` order detail, `P1-105` manual orders, `P1-106` customers, `P1-107` order export, `P1-200` API keys, `P1-216` storefront settings, `P1-218` shipping rates, `P1-221` the Midtrans webhook, `P1-602` blog categories, `P1-603` blog posts.
+    backlog item is done: `P1-011` the three auth paths, `P1-012` roles, `P1-021` brands, `P1-024` categories, `P1-028` products, `P1-029` variants, `P1-060` jobs, `P1-040` the variant matrix, `P1-043` media, `P1-072` bulk, `P1-073` import, `P1-064` users, `P1-071` settings, `P1-077` the audit log, `P1-102` order status routes, `P1-103` the order list, `P1-104` order detail, `P1-105` manual orders, `P1-106` customers, `P1-107` order export, `P1-200` API keys, `P1-216` storefront settings, `P1-218` shipping rates, `P1-221` the Midtrans webhook, `P1-602` blog categories, `P1-603` blog posts, `P1-902` the platform report.
 
     Every other path is added by the backlog item that builds it (`05-backlog.md`). The API repo
     generates a strict server interface from this file, so a path listed here before its handler
@@ -2078,6 +2078,28 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /platform/shops:
+    get:
+      operationId: getPlatformShops
+      summary: Every shop on Belli, for the platform admins
+      description: |
+        BR-150's report: every shop, newest first, unpaginated, with its owner, source, website,
+        products, orders and last activity, and a summary of the shops that signed up themselves.
+        Each shop is read in its own tenant transaction; nothing is written. Only an `active` staff
+        user whose email is in `PLATFORM_ADMIN_EMAILS` may call it: anyone else, and everyone when
+        the setting is empty, gets `403`.
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShops"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /customers:
     get:
       operationId: listCustomers
@@ -2527,7 +2549,7 @@ components:
 
     SessionUser:
       type: object
-      required: [id, name, role, permissions]
+      required: [id, name, role, permissions, platform_admin]
       properties:
         id:
           type: string
@@ -2546,6 +2568,11 @@ components:
           items:
             type: string
             examples: ["products:read"]
+        platform_admin:
+          type: boolean
+          description: |
+            True when the user's email is in the server's `PLATFORM_ADMIN_EMAILS` (BR-150), so the
+            admin shows the platform page. Not a role; it grants nothing in the user's shop.
 
     SessionTenant:
       type: object
@@ -2560,6 +2587,153 @@ components:
           type: string
           description: IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
           examples: ["Asia/Jakarta"]
+
+    PlatformShops:
+      type: object
+      description: BR-150's report (04-api-spec.md §14).
+      required: [generated_at, summary, shops]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        summary:
+          $ref: "#/components/schemas/PlatformSummary"
+        shops:
+          type: array
+          description: Newest first.
+          items:
+            $ref: "#/components/schemas/PlatformShop"
+
+    PlatformSummary:
+      type: object
+      description: |
+        Counts over the shops whose source is `email` or `google`. Shops made with
+        `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+      required: [shops, new_7d, new_30d, verified, website_set_up, with_products, with_orders,
+                 active_7d, sleeping]
+      properties:
+        shops:
+          type: integer
+        new_7d:
+          type: integer
+          description: Signed up in the last 7 days.
+        new_30d:
+          type: integer
+          description: Signed up in the last 30 days.
+        verified:
+          type: integer
+          description: The owner confirmed their email (owner `active`).
+        website_set_up:
+          type: integer
+        with_products:
+          type: integer
+        with_orders:
+          type: integer
+        active_7d:
+          type: integer
+          description: A staff sign-in or audit-log entry in the last 7 days.
+        sleeping:
+          type: integer
+          description: Verified, with no activity in 14 days.
+
+    PlatformShop:
+      type: object
+      required: [id, name, slug, status, created_at, source, owner, website, products, orders,
+                 last_activity_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          description: The website is `https://{slug}.belli.id` (BR-140).
+        status:
+          type: string
+          enum: [active, suspended, closed]
+        created_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [email, google, cli]
+          description: |
+            How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
+            `cmd/demo-seed` (no `tenant.register` audit row).
+        owner:
+          oneOf:
+            - $ref: "#/components/schemas/PlatformShopOwner"
+            - type: "null"
+        website:
+          $ref: "#/components/schemas/PlatformShopWebsite"
+        products:
+          $ref: "#/components/schemas/PlatformShopProducts"
+        orders:
+          $ref: "#/components/schemas/PlatformShopOrders"
+        last_activity_at:
+          type: [string, "null"]
+          format: date-time
+
+    PlatformShopOwner:
+      type: object
+      required: [name, email, status, last_login_at]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [invited, active, disabled]
+          description: "`invited` until the owner confirms their email."
+        last_login_at:
+          type: [string, "null"]
+          format: date-time
+
+    PlatformShopWebsite:
+      type: object
+      required: [theme, logo, whatsapp, set_up]
+      properties:
+        theme:
+          type: [string, "null"]
+          description: "`null` until the shop first opens its storefront settings."
+        logo:
+          type: boolean
+        whatsapp:
+          type: boolean
+        set_up:
+          type: boolean
+          description: A logo, WhatsApp number or tagline is set.
+
+    PlatformShopProducts:
+      type: object
+      required: [active, total, first_at]
+      properties:
+        active:
+          type: integer
+        total:
+          type: integer
+          description: Not archived.
+        first_at:
+          type: [string, "null"]
+          format: date-time
+
+    PlatformShopOrders:
+      type: object
+      required: [total, last_30d, first_at, last_at]
+      properties:
+        total:
+          type: integer
+        last_30d:
+          type: integer
+        first_at:
+          type: [string, "null"]
+          format: date-time
+        last_at:
+          type: [string, "null"]
+          format: date-time
 
     Role:
       type: object
