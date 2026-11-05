@@ -459,6 +459,69 @@ func (e OrderStatus) Valid() bool {
 	}
 }
 
+// Defines values for PlatformShopSource.
+const (
+	Cli    PlatformShopSource = "cli"
+	Email  PlatformShopSource = "email"
+	Google PlatformShopSource = "google"
+)
+
+// Valid indicates whether the value is a known member of the PlatformShopSource enum.
+func (e PlatformShopSource) Valid() bool {
+	switch e {
+	case Cli:
+		return true
+	case Email:
+		return true
+	case Google:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformShopStatus.
+const (
+	PlatformShopStatusActive    PlatformShopStatus = "active"
+	PlatformShopStatusClosed    PlatformShopStatus = "closed"
+	PlatformShopStatusSuspended PlatformShopStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the PlatformShopStatus enum.
+func (e PlatformShopStatus) Valid() bool {
+	switch e {
+	case PlatformShopStatusActive:
+		return true
+	case PlatformShopStatusClosed:
+		return true
+	case PlatformShopStatusSuspended:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformShopOwnerStatus.
+const (
+	PlatformShopOwnerStatusActive   PlatformShopOwnerStatus = "active"
+	PlatformShopOwnerStatusDisabled PlatformShopOwnerStatus = "disabled"
+	PlatformShopOwnerStatusInvited  PlatformShopOwnerStatus = "invited"
+)
+
+// Valid indicates whether the value is a known member of the PlatformShopOwnerStatus enum.
+func (e PlatformShopOwnerStatus) Valid() bool {
+	switch e {
+	case PlatformShopOwnerStatusActive:
+		return true
+	case PlatformShopOwnerStatusDisabled:
+		return true
+	case PlatformShopOwnerStatusInvited:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PresignRequestPurpose.
 const (
 	PresignRequestPurposeBlogCover     PresignRequestPurpose = "blog_cover"
@@ -1868,6 +1931,110 @@ type OrderUpdateRequest struct {
 	ShippingAddress *ShippingAddressWrite `json:"shipping_address,omitempty"`
 }
 
+// PlatformShop defines model for PlatformShop.
+type PlatformShop struct {
+	CreatedAt      time.Time            `json:"created_at"`
+	Id             openapi_types.UUID   `json:"id"`
+	LastActivityAt *time.Time           `json:"last_activity_at"`
+	Name           string               `json:"name"`
+	Orders         PlatformShopOrders   `json:"orders"`
+	Owner          *PlatformShopOwner   `json:"owner"`
+	Products       PlatformShopProducts `json:"products"`
+
+	// Slug The website is `https://{slug}.belli.id` (BR-140).
+	Slug string `json:"slug"`
+
+	// Source How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
+	// `cmd/demo-seed` (no `tenant.register` audit row).
+	Source  PlatformShopSource  `json:"source"`
+	Status  PlatformShopStatus  `json:"status"`
+	Website PlatformShopWebsite `json:"website"`
+}
+
+// PlatformShopSource How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
+// `cmd/demo-seed` (no `tenant.register` audit row).
+type PlatformShopSource string
+
+// PlatformShopStatus defines model for PlatformShop.Status.
+type PlatformShopStatus string
+
+// PlatformShopOrders defines model for PlatformShopOrders.
+type PlatformShopOrders struct {
+	FirstAt *time.Time `json:"first_at"`
+	Last30d int        `json:"last_30d"`
+	LastAt  *time.Time `json:"last_at"`
+	Total   int        `json:"total"`
+}
+
+// PlatformShopOwner defines model for PlatformShopOwner.
+type PlatformShopOwner struct {
+	Email       openapi_types.Email `json:"email"`
+	LastLoginAt *time.Time          `json:"last_login_at"`
+	Name        string              `json:"name"`
+
+	// Status `invited` until the owner confirms their email.
+	Status PlatformShopOwnerStatus `json:"status"`
+}
+
+// PlatformShopOwnerStatus `invited` until the owner confirms their email.
+type PlatformShopOwnerStatus string
+
+// PlatformShopProducts defines model for PlatformShopProducts.
+type PlatformShopProducts struct {
+	Active  int        `json:"active"`
+	FirstAt *time.Time `json:"first_at"`
+
+	// Total Not archived.
+	Total int `json:"total"`
+}
+
+// PlatformShopWebsite defines model for PlatformShopWebsite.
+type PlatformShopWebsite struct {
+	Logo bool `json:"logo"`
+
+	// SetUp A logo, WhatsApp number or tagline is set.
+	SetUp bool `json:"set_up"`
+
+	// Theme `null` until the shop first opens its storefront settings.
+	Theme    *string `json:"theme"`
+	Whatsapp bool    `json:"whatsapp"`
+}
+
+// PlatformShops BR-150's report (04-api-spec.md §14).
+type PlatformShops struct {
+	GeneratedAt time.Time `json:"generated_at"`
+
+	// Shops Newest first.
+	Shops []PlatformShop `json:"shops"`
+
+	// Summary Counts over the shops whose source is `email` or `google`. Shops made with
+	// `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+	Summary PlatformSummary `json:"summary"`
+}
+
+// PlatformSummary Counts over the shops whose source is `email` or `google`. Shops made with
+// `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+type PlatformSummary struct {
+	// Active7d A staff sign-in or audit-log entry in the last 7 days.
+	Active7d int `json:"active_7d"`
+
+	// New30d Signed up in the last 30 days.
+	New30d int `json:"new_30d"`
+
+	// New7d Signed up in the last 7 days.
+	New7d int `json:"new_7d"`
+	Shops int `json:"shops"`
+
+	// Sleeping Verified, with no activity in 14 days.
+	Sleeping int `json:"sleeping"`
+
+	// Verified The owner confirmed their email (owner `active`).
+	Verified     int `json:"verified"`
+	WebsiteSetUp int `json:"website_set_up"`
+	WithOrders   int `json:"with_orders"`
+	WithProducts int `json:"with_products"`
+}
+
 // PresignRequest defines model for PresignRequest.
 type PresignRequest struct {
 	Bytes    int64  `json:"bytes"`
@@ -2082,8 +2249,12 @@ type SessionUser struct {
 	// Permissions `resource:action` strings the role grants. The client hides actions it does not find
 	// here rather than disabling them -- a button that 403s advertises a capability the user
 	// does not have.
-	Permissions []string        `json:"permissions"`
-	Role        SessionUserRole `json:"role"`
+	Permissions []string `json:"permissions"`
+
+	// PlatformAdmin True when the user's email is in the server's `PLATFORM_ADMIN_EMAILS` (BR-150), so the
+	// admin shows the platform page. Not a role; it grants nothing in the user's shop.
+	PlatformAdmin bool            `json:"platform_admin"`
+	Role          SessionUserRole `json:"role"`
 }
 
 // SessionUserRole defines model for SessionUser.Role.
@@ -3253,6 +3424,9 @@ type ServerInterface interface {
 	// ShipOrder Record the courier and tracking number and mark shipped
 	// (POST /orders/{id}/ship)
 	ShipOrder(w http.ResponseWriter, r *http.Request, id Id)
+	// GetPlatformShops Every shop on Belli, for the platform admins
+	// (GET /platform/shops)
+	GetPlatformShops(w http.ResponseWriter, r *http.Request)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -3667,6 +3841,12 @@ func (_ Unimplemented) RefundOrder(w http.ResponseWriter, r *http.Request, id Id
 // ShipOrder Record the courier and tracking number and mark shipped
 // (POST /orders/{id}/ship)
 func (_ Unimplemented) ShipOrder(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetPlatformShops Every shop on Belli, for the platform admins
+// (GET /platform/shops)
+func (_ Unimplemented) GetPlatformShops(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5495,6 +5675,20 @@ func (siw *ServerInterfaceWrapper) ShipOrder(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetPlatformShops operation middleware
+func (siw *ServerInterfaceWrapper) GetPlatformShops(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlatformShops(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
 
@@ -6588,6 +6782,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/platform/shops", wrapper.GetPlatformShops)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
@@ -10718,6 +10915,59 @@ func (response ShipOrder422ApplicationProblemPlusJSONResponse) VisitShipOrderRes
 	return err
 }
 
+type GetPlatformShopsRequestObject struct {
+}
+
+type GetPlatformShopsResponseObject interface {
+	VisitGetPlatformShopsResponse(w http.ResponseWriter) error
+}
+
+type GetPlatformShops200JSONResponse PlatformShops
+
+func (response GetPlatformShops200JSONResponse) VisitGetPlatformShopsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlatformShops401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlatformShops401ApplicationProblemPlusJSONResponse) VisitGetPlatformShopsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlatformShops403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlatformShops403ApplicationProblemPlusJSONResponse) VisitGetPlatformShopsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProductsRequestObject struct {
 	Params ListProductsParams
 }
@@ -12774,6 +13024,9 @@ type StrictServerInterface interface {
 	// ShipOrder Record the courier and tracking number and mark shipped
 	// (POST /orders/{id}/ship)
 	ShipOrder(ctx context.Context, request ShipOrderRequestObject) (ShipOrderResponseObject, error)
+	// GetPlatformShops Every shop on Belli, for the platform admins
+	// (GET /platform/shops)
+	GetPlatformShops(ctx context.Context, request GetPlatformShopsRequestObject) (GetPlatformShopsResponseObject, error)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -14498,6 +14751,30 @@ func (sh *strictHandler) ShipOrder(w http.ResponseWriter, r *http.Request, id Id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ShipOrderResponseObject); ok {
 		if err := validResponse.VisitShipOrderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlatformShops operation middleware
+func (sh *strictHandler) GetPlatformShops(w http.ResponseWriter, r *http.Request) {
+	var request GetPlatformShopsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlatformShops(ctx, request.(GetPlatformShopsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlatformShops")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlatformShopsResponseObject); ok {
+		if err := validResponse.VisitGetPlatformShopsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

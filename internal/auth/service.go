@@ -48,6 +48,9 @@ type SessionUser struct {
 	Name        string
 	Role        string
 	Permissions []string
+	// PlatformAdmin is whether the email is in PLATFORM_ADMIN_EMAILS (BR-150), so
+	// the admin can show the platform page. The route checks again itself.
+	PlatformAdmin bool
 }
 
 type SessionTenant struct {
@@ -63,10 +66,17 @@ type Service struct {
 	store  *db.Store
 	signer *Signer
 	now    func() time.Time
+	admins PlatformAdmins
 }
 
 func NewService(store *db.Store, signer *Signer) *Service {
 	return &Service{store: store, signer: signer, now: time.Now}
+}
+
+// WithPlatformAdmins sets who the session marks platform_admin (BR-150).
+func (s *Service) WithPlatformAdmins(admins PlatformAdmins) *Service {
+	s.admins = admins
+	return s
 }
 
 // Login exchanges an email and password for a session.
@@ -259,7 +269,8 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 				// The client hides actions it does not find here rather than
 				// disabling them, so this list is part of the UI contract and
 				// not merely informational.
-				Permissions: PermissionsFor(row.Role),
+				Permissions:   PermissionsFor(row.Role),
+				PlatformAdmin: s.admins.Has(row.Email),
 			},
 			Tenant: SessionTenant{
 				ID:       row.TenantID,

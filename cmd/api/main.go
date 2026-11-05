@@ -28,6 +28,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/logging"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/telemetry"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platformadmin"
 	"github.com/miqbalhamdani/new-commerce-api/internal/queue"
 	"github.com/miqbalhamdani/new-commerce-api/internal/ratelimit"
 	"github.com/miqbalhamdani/new-commerce-api/internal/secrets"
@@ -161,9 +162,11 @@ func run() error {
 		storefrontLimits,
 	))
 	adminLimits := httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow)
+	// BR-150: who may open the platform admin report. Empty lets no one.
+	platformAdmins := auth.NewPlatformAdmins(config.PlatformAdminEmails())
 	mux.Handle("/v1/", httpapi.NewRouter(
 		httpapi.NewServer(httpapi.Services{
-			Auth:           auth.NewService(pool, signer),
+			Auth:           auth.NewService(pool, signer).WithPlatformAdmins(platformAdmins),
 			Catalog:        catalogSvc,
 			Blog:           blogSvc,
 			Jobs:           jobsSvc,
@@ -174,6 +177,7 @@ func run() error {
 			Google:         google,
 			GoogleClientID: config.GoogleClientID(),
 			Limits:         adminLimits,
+			Platform:       platformadmin.NewService(pool, platformAdmins),
 		}, !config.IsDevelopment()),
 		signer,
 		adminLimits,

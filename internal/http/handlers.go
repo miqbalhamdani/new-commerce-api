@@ -12,6 +12,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/jobs"
 	"github.com/miqbalhamdani/new-commerce-api/internal/orders"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
+	"github.com/miqbalhamdani/new-commerce-api/internal/platformadmin"
 	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 )
 
@@ -32,7 +33,9 @@ type Server struct {
 	orders  *orders.Service
 	invites *auth.InviteSigner
 	resets  *auth.ResetTokens // staff password reset links (BR-094)
-	limits  *RateLimiter
+	// platform is BR-150's report; nil, as in most tests, lets no one in.
+	platform *platformadmin.Service
+	limits   *RateLimiter
 
 	// google checks staff Google ID tokens against googleClientID, the
 	// platform's client ID; an empty ID turns Google sign-in off (BR-020).
@@ -56,6 +59,8 @@ type Services struct {
 	Invites *auth.InviteSigner
 	// Resets are the staff reset tokens (auth.ResetTokens.Staff, BR-094).
 	Resets *auth.ResetTokens
+	// Platform is the platform admin report (BR-150); nil lets no one in.
+	Platform *platformadmin.Service
 	// Limits counts sign-ins (BR-014); nil counts nothing.
 	Limits *RateLimiter
 	// Google and GoogleClientID are staff Google sign-in (BR-020); an empty
@@ -66,7 +71,8 @@ type Services struct {
 
 func NewServer(svc Services, secureCookies bool) *Server {
 	return &Server{auth: svc.Auth, catalog: svc.Catalog, blog: svc.Blog, jobs: svc.Jobs, team: svc.Team, orders: svc.Orders, invites: svc.Invites,
-		resets: svc.Resets, limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID, secureCookies: secureCookies}
+		resets: svc.Resets, platform: svc.Platform, limits: svc.Limits, google: svc.Google, googleClientID: svc.GoogleClientID,
+		secureCookies: secureCookies}
 }
 
 // Login handles POST /auth/login.
@@ -139,10 +145,11 @@ func (s *Server) writeSessionStatus(w http.ResponseWriter, r *http.Request, sess
 		AccessToken: session.AccessToken,
 		ExpiresIn:   session.ExpiresIn,
 		User: SessionUser{
-			Id:          session.User.ID,
-			Name:        session.User.Name,
-			Role:        SessionUserRole(session.User.Role),
-			Permissions: session.User.Permissions,
+			Id:            session.User.ID,
+			Name:          session.User.Name,
+			Role:          SessionUserRole(session.User.Role),
+			Permissions:   session.User.Permissions,
+			PlatformAdmin: session.User.PlatformAdmin,
 		},
 		Tenant: SessionTenant{
 			Id:       session.Tenant.ID,

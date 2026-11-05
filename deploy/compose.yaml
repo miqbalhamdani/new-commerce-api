@@ -45,6 +45,8 @@ x-api: &api
     API_URL: https://${API_HOST:?}
     # The hosted website's key (BR-141). Empty accepts none.
     STOREFRONT_PLATFORM_KEY: ${STOREFRONT_PLATFORM_KEY:-}
+    # The platform admin report's staff emails (BR-150). Empty lets no one.
+    PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
     # Caddy, and only Caddy, is believed for X-Real-IP (04-api-spec.md §1).
     TRUSTED_PROXIES: 172.30.0.2/32
   depends_on: *app-deps

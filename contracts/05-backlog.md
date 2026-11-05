@@ -445,7 +445,7 @@ shop and the signup funnel; anyone else sees no such page and gets `403` from th
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
 | P1-901 | Platform admin contracts | CT | — | v2.25.0: BR-150 and BR-003's one exception; `GET /v1/platform/shops` and `SessionUser.platform_admin` in `04-api-spec.md` §14 and `openapi.yaml` | review | Iqbal Hamdani |
-| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | wip | Iqbal Hamdani |
+| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | review | Iqbal Hamdani |
 | P1-903 | Platform page in the admin | FE | 902 | A Platform item in the sidebar only for `platform_admin`; the page shows the summary, then every shop with its owner, source, website, products, orders and last activity, searchable and filtered by not verified and sleeping, CLI and demo shops hidden by default (BR-150) | wip | Iqbal Hamdani |
 
 > **Production step for `P1-902`:** set `PLATFORM_ADMIN_EMAILS` in the box's `.env` (the founder's
