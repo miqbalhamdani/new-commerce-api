@@ -22,9 +22,10 @@ type PlatformActorRow struct {
 	Status string
 }
 
-// BR-150, the platform admin report. Every query here runs inside one shop's
+// BR-150..152, the platform admin. Every query here runs inside one shop's
 // InTenantTx (internal/platformadmin), so RLS scopes it to that shop exactly as
-// it scopes a request. None of them names a tenant.
+// it scopes a request. tenants has no RLS, so a write to it names the
+// transaction's own tenant, as UpdateSettings does.
 // The signed-in user, for the PLATFORM_ADMIN_EMAILS check: in their own shop.
 func (q *Queries) PlatformActor(ctx context.Context, id uuid.UUID) (PlatformActorRow, error) {
 	row := q.db.QueryRow(ctx, platformActor, id)
@@ -90,4 +91,32 @@ func (q *Queries) PlatformShopWebsite(ctx context.Context) (PlatformShopWebsiteR
 		&i.Tagline,
 	)
 	return i, err
+}
+
+const revokeShopRefreshTokens = `-- name: RevokeShopRefreshTokens :execrows
+UPDATE refresh_tokens SET revoked_at = now() WHERE revoked_at IS NULL
+`
+
+// BR-151: a shop taken offline signs every one of its staff out.
+func (q *Queries) RevokeShopRefreshTokens(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeShopRefreshTokens)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setShopStatus = `-- name: SetShopStatus :one
+UPDATE tenants t SET status = $1
+  FROM (SELECT status FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.status
+`
+
+// BR-151. Returns the status it replaced.
+func (q *Queries) SetShopStatus(ctx context.Context, status string) (string, error) {
+	row := q.db.QueryRow(ctx, setShopStatus, status)
+	var status_2 string
+	err := row.Scan(&status_2)
+	return status_2, err
 }

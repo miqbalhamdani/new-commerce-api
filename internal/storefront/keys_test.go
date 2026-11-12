@@ -105,6 +105,37 @@ func TestKeyMiddleware(t *testing.T) {
 	assertCode(t, "revoked", send("GET", key, ""), 401, "invalid_api_key")
 }
 
+// TestSuspendedShopIsOffline: a suspended or closed shop's key answers 404,
+// within the cache's TTL as a revoked key does (BR-151, BR-140).
+func TestSuspendedShopIsOffline(t *testing.T) {
+	store := openStore(t)
+	tenantID, key := seedKey(t, store, "https://tokoabc.com")
+	h := NewRouter(NewServer(Services{}), NewKeys(store), testSigner(t), nil)
+	send := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/v1/storefront/nothing-here", nil)
+		r.Header.Set("X-Api-Key", key)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+	setStatus := func(status string) {
+		ctx := tenant.NewContext(t.Context(), tenantID)
+		if err := store.InTenantTx(ctx, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE tenants SET status = $1 WHERE id = $2`, status, tenantID)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setStatus("suspended")
+	if rec := send(); rec.Code != 404 || strings.Contains(rec.Body.String(), "invalid_api_key") {
+		t.Errorf("suspended: %d %s", rec.Code, rec.Body)
+	}
+	setStatus("active")
+	h = NewRouter(NewServer(Services{}), NewKeys(store), testSigner(t), nil) // a fresh cache
+	assertCode(t, "active again", send(), 404, "not_found")                  // past the key: no such route
+}
+
 // TestRouterAnswersProblems: past the key, a route storefront.yaml does not
 // define is a problem+json 404, not chi's plain text; before it, the key
 // still comes first.

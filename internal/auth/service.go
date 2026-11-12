@@ -258,6 +258,12 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 		if err != nil {
 			return err
 		}
+		// A suspended or closed shop signs no one in, by any route, and is
+		// refused as a disabled account is (BR-151, BR-021). Returning here
+		// rolls back the refresh token just written.
+		if row.TenantStatus != "active" {
+			return ErrUnauthenticated
+		}
 		out = Session{
 			AccessToken:  access,
 			ExpiresIn:    int(AccessTokenTTL.Seconds()),

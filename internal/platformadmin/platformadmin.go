@@ -1,8 +1,8 @@
-// Package platformadmin is BR-150's report: every shop on Belli, for the staff
-// in PLATFORM_ADMIN_EMAILS. It is the one request path that spans shops
+// Package platformadmin is BR-150's report and BR-151's shop actions, for the
+// staff in PLATFORM_ADMIN_EMAILS. It is the one request path that spans shops
 // (BR-003's exception), and it spans them the way the retention sweep does:
-// shop ids from tenants, which has no RLS, then each shop read in its own
-// InTenantTx as app_user. It writes nothing.
+// shop ids from tenants, which has no RLS, then each shop read or written in
+// its own InTenantTx as app_user, audited there.
 package platformadmin
 
 import (
@@ -126,6 +126,31 @@ func (s *Service) Report(ctx context.Context) (Report, error) {
 		count(&out.Summary, shop, now)
 	}
 	return out, nil
+}
+
+// SetStatus is BR-151's status: active, suspended or closed. Anything but
+// active also revokes every refresh token in the shop; sign-in and refresh
+// then refuse it (auth.Service.issue) and the storefront API answers 404.
+// A shop that does not exist is db.ErrNotFound.
+func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status string) error {
+	if _, err := s.store.Tenant(ctx, id); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, id)
+	return s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		before, err := q.SetShopStatus(tctx, status)
+		if err != nil {
+			return err
+		}
+		if status != "active" {
+			if _, err := q.RevokeShopRefreshTokens(tctx); err != nil {
+				return err
+			}
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.status", SubjectType: "tenant", SubjectID: id.String(),
+			Before: map[string]any{"status": before}, After: map[string]any{"status": status}})
+	})
 }
 
 // Shop is one shop as the report shows it, for the answer to a shop action

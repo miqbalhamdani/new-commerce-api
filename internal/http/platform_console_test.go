@@ -141,6 +141,47 @@ func TestPlatformConsole(t *testing.T) {
 		}
 	})
 
+	t.Run("status: suspend signs the shop out and refuses sign-in; active restores it", func(t *testing.T) {
+		shopID := homeOf(t, owner, other.email)
+		login := func() int {
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, jsonRequest(t, "/v1/auth/login", map[string]string{"email": other.email, "password": other.password}))
+			return rec.Code
+		}
+		path := "/v1/platform/shops/" + shopID.String()
+		rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"status": "suspended"})
+		var shop struct{ Status string }
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &shop) != nil || shop.Status != "suspended" {
+			t.Fatalf("suspend: %d %s", rec.Code, rec.Body)
+		}
+		var live int
+		if err := owner.QueryRow(ctx, `SELECT count(*) FROM refresh_tokens WHERE tenant_id = $1 AND revoked_at IS NULL`, shopID).Scan(&live); err != nil || live != 0 {
+			t.Errorf("%d live refresh tokens after suspend (%v)", live, err)
+		}
+		if code := login(); code != http.StatusUnauthorized {
+			t.Errorf("login while suspended: %d", code)
+		}
+		if n := audits(shopID, "tenant.status"); n != 1 {
+			t.Errorf("%d tenant.status rows, want 1", n)
+		}
+		if rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"status": "active"}); rec.Code != http.StatusOK {
+			t.Fatalf("reactivate: %d %s", rec.Code, rec.Body)
+		}
+		if code := login(); code != http.StatusOK {
+			t.Errorf("login once active: %d", code)
+		}
+	})
+
+	t.Run("status: an unknown status is 422, an unknown shop 404", func(t *testing.T) {
+		path := "/v1/platform/shops/" + homeID.String()
+		if rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"status": "deleted"}); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("unknown status: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+uuid.NewString(), founder.accessToken, map[string]any{"status": "active"}); rec.Code != http.StatusNotFound {
+			t.Errorf("unknown shop: %d %s", rec.Code, rec.Body)
+		}
+	})
+
 	t.Run("open: anyone else is 403", func(t *testing.T) {
 		rec := call(http.MethodPost, "/v1/platform/shops", other.accessToken, map[string]any{
 			"shop_name": "Tiga", "owner_name": "Rina", "owner_email": "x-" + uuid.NewString() + "@example.com", "send_invite": false})
@@ -148,4 +189,14 @@ func TestPlatformConsole(t *testing.T) {
 			t.Errorf("%d %s", rec.Code, rec.Body)
 		}
 	})
+}
+
+// homeOf is the shop an email's user belongs to.
+func homeOf(t *testing.T, owner *pgx.Conn, address string) uuid.UUID {
+	t.Helper()
+	var id uuid.UUID
+	if err := owner.QueryRow(t.Context(), `SELECT tenant_id FROM users WHERE email = $1`, address).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

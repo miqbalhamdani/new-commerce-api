@@ -44,9 +44,26 @@ func (s *Server) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// The rest of §14 lands with P1-913..915.
-func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, _ Id) {
-	s.requirePlatformAdmin(notBuilt)(w, r)
+// The rest of §14 lands with P1-914 and P1-915.
+// UpdatePlatformShop handles PATCH /v1/platform/shops/{id} (P1-913, §14.1):
+// suspend, close or reopen a shop (BR-151).
+func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		var body PlatformShopUpdate
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		if !body.Status.Valid() {
+			writeError(w, r, apperrors.ValidationFailed("status is active, suspended or closed").
+				WithFields(apperrors.Field{Name: "status", Detail: "is active, suspended or closed"}))
+			return
+		}
+		if err := s.platform.SetStatus(r.Context(), id, string(body.Status)); err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		s.writePlatformShop(w, r, http.StatusOK, id)
+	})(w, r)
 }
 
 func (s *Server) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, _ Id) {
@@ -69,14 +86,19 @@ func notBuilt(w http.ResponseWriter, r *http.Request) {
 // it. A shop that does not exist is 404.
 func (s *Server) writePlatformShop(w http.ResponseWriter, r *http.Request, status int, id uuid.UUID) {
 	sh, err := s.platform.Shop(r.Context(), id)
-	if errors.Is(err, db.ErrNotFound) {
-		err = apperrors.NotFound("No such shop.")
-	}
 	if err != nil {
-		writeError(w, r, err)
+		writeError(w, r, notFoundShop(err))
 		return
 	}
 	writeJSON(w, status, platformShopOut(sh))
+}
+
+// notFoundShop is 404 for a shop id that names no shop.
+func notFoundShop(err error) error {
+	if errors.Is(err, db.ErrNotFound) {
+		return apperrors.NotFound("No such shop.")
+	}
+	return err
 }
 
 // requirePlatformAdmin is requirePermission for BR-150, which is not a role:
