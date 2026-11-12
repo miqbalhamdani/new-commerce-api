@@ -99,6 +99,13 @@ func PermissionsFor(role string) []string {
 	return out
 }
 
+// ImpersonationPermissions is what an impersonation grants (BR-152): the
+// owner's permissions except erasing a shopper's data, which stays the
+// owner's own decision (BR-097).
+func ImpersonationPermissions() []string {
+	return slices.DeleteFunc(PermissionsFor(RoleOwner), func(p string) bool { return p == PermCustomersPurge })
+}
+
 // Can reports whether a role grants a permission.
 func Can(role, permission string) bool {
 	return slices.Contains(rolePermissions[role], permission)

@@ -30,7 +30,12 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 			if user, err = q.GetUser(tctx, e.UserID); err != nil {
 				return err
 			}
-			if inviter, err = q.GetUser(tctx, e.ActorID); err != nil {
+			// An impersonating platform admin is no user of the shop: the
+			// invitation is from Belli (BR-152).
+			if inviter, err = q.GetUser(tctx, e.ActorID); errors.Is(err, pgx.ErrNoRows) {
+				inviter, err = sqlcgen.User{Name: "Belli"}, nil
+			}
+			if err != nil {
 				return err
 			}
 			if replyTo, err = ContactEmail(tctx, q); err != nil {
@@ -51,7 +56,7 @@ func InvitationMail(store *db.Store, invites *auth.InviteSigner, adminURL string
 		link := adminURL + "/accept-invite#token=" + invites.Mint(user.ID, user.TenantID, time.Now())
 		// Reply-To is the shop's contact email (BR-128), or the inviter for a
 		// shop that has not set one.
-		reply := string(inviter.Email)
+		reply := string(inviter.Email) // "" for Belli: no Reply-To
 		if replyTo != nil {
 			reply = *replyTo
 		}

@@ -18,6 +18,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -27,10 +28,10 @@ import (
 // error too, and only bad input or a real failure is not.
 func (s *Service) Register(ctx context.Context, shopName, name, address string, ip netip.Addr) error {
 	shopName, name, address = strings.TrimSpace(shopName), strings.TrimSpace(name), strings.TrimSpace(address)
-	if err := validSignup(shopName, name, address); err != nil {
+	if err := validSignup(shopName, name, address, "name", "email"); err != nil {
 		return err
 	}
-	tenantID, ownerID, err := s.openShop(ctx, shopName, address, "", ip, func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error {
+	tenantID, ownerID, err := s.openShop(ctx, shopName, address, "", ip, uuid.Nil, func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error {
 		_, err := q.InviteUser(ctx, sqlcgen.InviteUserParams{ID: id, Email: address, Name: name, Role: auth.RoleOwner})
 		return err
 	})
@@ -60,7 +61,7 @@ func (s *Service) RegisterWithGoogle(ctx context.Context, google *auth.GoogleVer
 		return uuid.Nil, uuid.Nil, auth.ErrUnauthenticated
 	}
 	name := googleName(id)
-	tenantID, ownerID, err = s.openShop(ctx, shopName, id.Email, "google", ip, func(q *sqlcgen.Queries, ctx context.Context, owner uuid.UUID) error {
+	tenantID, ownerID, err = s.openShop(ctx, shopName, id.Email, "google", ip, uuid.Nil, func(q *sqlcgen.Queries, ctx context.Context, owner uuid.UUID) error {
 		_, err := q.CreateActiveOwner(ctx, sqlcgen.CreateActiveOwnerParams{ID: owner, Email: id.Email, Name: name})
 		return err
 	})
@@ -76,13 +77,134 @@ func (s *Service) ResendCode(ctx context.Context, address string) error {
 	return s.resendSignup(ctx, strings.TrimSpace(address))
 }
 
+// OpenShopForPlatform is BR-151's open: a shop and its invited owner, opened
+// by the platform admin in ctx, who is the audit row's actor. The signup email
+// goes out only when sendInvite; otherwise the shop is held until a hand-over.
+// A taken email is 422 on owner_email: the caller is a platform admin, so
+// saying so names nothing (BR-021 protects the public signup, not this).
+func (s *Service) OpenShopForPlatform(ctx context.Context, shopName, name, address string, sendInvite bool) (uuid.UUID, error) {
+	shopName, name, address = strings.TrimSpace(shopName), strings.TrimSpace(name), strings.TrimSpace(address)
+	if err := validSignup(shopName, name, address, "owner_name", "owner_email"); err != nil {
+		return uuid.Nil, err
+	}
+	actor, _ := tenant.ActorFromContext(ctx)
+	tenantID, ownerID, err := s.openShop(ctx, shopName, address, "platform", actor.IP, actor.UserID, func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error {
+		_, err := q.InviteUser(ctx, sqlcgen.InviteUserParams{ID: id, Email: address, Name: name, Role: auth.RoleOwner})
+		return err
+	})
+	if taken(err) {
+		return uuid.Nil, fieldError("owner_email", "This email already has an account in a shop.")
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if sendInvite {
+		s.sendSignup(ctx, tenantID, ownerID)
+	}
+	return tenantID, nil
+}
+
+// ChangeInvitedOwner is BR-151's hand-over: a new email or name for a
+// shop's owner who has not confirmed yet, audited in that shop. It sends
+// nothing. A shop that does not exist is db.ErrNotFound.
+//
+// ponytail: a signup link already sent to the old address stays valid until
+// it expires (BR-026, 7 days): the token names the user, not the address.
+// Bind it to the address if hand-overs after a sent invite become common.
+func (s *Service) ChangeInvitedOwner(ctx context.Context, shopID uuid.UUID, address, name *string) error {
+	if address != nil {
+		*address = strings.TrimSpace(*address)
+		if !validAddress(*address) {
+			return fieldError("email", "email is not a valid address")
+		}
+	}
+	if name != nil {
+		*name = strings.TrimSpace(*name)
+		if *name == "" || utf8.RuneCountInString(*name) > 100 {
+			return fieldError("name", "name is 1 to 100 characters")
+		}
+	}
+	if _, err := s.store.Tenant(ctx, shopID); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, shopID)
+	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		before, err := invitedOwner(tctx, q)
+		if err != nil {
+			return err
+		}
+		after, err := q.SetInvitedOwner(tctx, sqlcgen.SetInvitedOwnerParams{ID: before.ID, Email: address, Name: name})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ownerConfirmed()
+		}
+		if err != nil {
+			return err
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.owner_change", SubjectType: "user", SubjectID: before.ID.String(),
+			Before: map[string]any{"email": before.Email, "name": before.Name},
+			After:  map[string]any{"email": after.Email, "name": after.Name}})
+	})
+	if taken(err) {
+		return fieldError("email", "This email already has an account in a shop.")
+	}
+	return err
+}
+
+// SendOwnerInvite queues the signup email to a shop's unconfirmed owner, at
+// their current address (BR-151, BR-026), audited in that shop. A shop that
+// does not exist is db.ErrNotFound.
+func (s *Service) SendOwnerInvite(ctx context.Context, shopID uuid.UUID) error {
+	if _, err := s.store.Tenant(ctx, shopID); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, shopID)
+	var ownerID uuid.UUID
+	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		o, err := invitedOwner(tctx, sqlcgen.New(tx))
+		if err != nil {
+			return err
+		}
+		ownerID = o.ID
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.resend_signup", SubjectType: "user", SubjectID: o.ID.String()})
+	})
+	if err == nil {
+		s.sendSignup(ctx, shopID, ownerID)
+	}
+	return err
+}
+
+// invitedOwner is the shop's first owner, or 422 when they have confirmed (or
+// the shop has none).
+func invitedOwner(ctx context.Context, q *sqlcgen.Queries) (sqlcgen.PlatformShopOwnerRow, error) {
+	o, err := q.PlatformShopOwner(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return o, apperrors.ValidationFailed("This shop has no owner.")
+	}
+	if err != nil {
+		return o, err
+	}
+	if o.Status != "invited" {
+		return o, ownerConfirmed()
+	}
+	return o, nil
+}
+
+func ownerConfirmed() error {
+	return apperrors.ValidationFailed("The owner has confirmed their account; the shop is theirs (BR-151).")
+}
+
 // openShop is one signup's transaction: the tenant, its owner (added by
-// owner) and the tenant.register audit row, with the new owner as the actor of
-// their own signup, as an invitee is of their acceptance.
-func (s *Service) openShop(ctx context.Context, shopName, address, via string, ip netip.Addr,
+// owner) and the tenant.register audit row. The actor is by, or, when by is
+// uuid.Nil, the new owner, as the actor of their own signup, as an invitee is
+// of their acceptance.
+func (s *Service) openShop(ctx context.Context, shopName, address, via string, ip netip.Addr, by uuid.UUID,
 	owner func(q *sqlcgen.Queries, ctx context.Context, id uuid.UUID) error) (tenantID, ownerID uuid.UUID, err error) {
 	tenantID, ownerID = uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
-	tctx := tenant.NewActorContext(tenant.NewContext(ctx, tenantID), tenant.Actor{UserID: ownerID, IP: ip})
+	if by == uuid.Nil {
+		by = ownerID
+	}
+	tctx := tenant.NewActorContext(tenant.NewContext(ctx, tenantID), tenant.Actor{UserID: by, IP: ip})
 	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
 		q := sqlcgen.New(tx)
 		shop, err := q.CreateTenant(tctx, sqlcgen.CreateTenantParams{Name: shopName, Slug: slugFor(shopName), OrderPrefix: prefixFor(shopName)})
@@ -146,18 +268,26 @@ func (s *Service) sendSignup(ctx context.Context, tenantID, ownerID uuid.UUID) {
 	}
 }
 
-func validSignup(shopName, name, address string) error {
+// validSignup checks a new shop's fields; nameField and emailField are what
+// the caller's body calls the owner's name and email.
+func validSignup(shopName, name, address, nameField, emailField string) error {
 	if shopName == "" || utf8.RuneCountInString(shopName) > 100 {
 		return fieldError("shop_name", "shop_name is 1 to 100 characters")
 	}
 	if name == "" || utf8.RuneCountInString(name) > 100 {
-		return fieldError("name", "name is 1 to 100 characters")
+		return fieldError(nameField, nameField+" is 1 to 100 characters")
 	}
-	// A bare address only: "Budi <budi@erigo.co.id>" parses, but is not one.
-	if a, err := mail.ParseAddress(address); err != nil || a.Address != address || len(address) > 254 {
-		return fieldError("email", "email is not a valid address")
+	if !validAddress(address) {
+		return fieldError(emailField, emailField+" is not a valid address")
 	}
 	return nil
+}
+
+// validAddress is a bare address only: "Budi <budi@erigo.co.id>" parses, but
+// is not one.
+func validAddress(address string) bool {
+	a, err := mail.ParseAddress(address)
+	return err == nil && a.Address == address && len(address) <= 254
 }
 
 // slugFor derives the tenant's slug, its website's address, from its name.

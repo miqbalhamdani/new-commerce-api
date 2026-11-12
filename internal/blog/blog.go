@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -73,7 +74,13 @@ func tenantOf(ctx context.Context) uuid.UUID {
 	return id
 }
 
+// actorOf is the signed-in user, as a post's default author. An
+// impersonating platform admin is no user of the shop, so has no author row
+// to point at (BR-152).
 func actorOf(ctx context.Context) *uuid.UUID {
+	if auth.Impersonating(ctx) {
+		return nil
+	}
 	if a, ok := tenant.ActorFromContext(ctx); ok {
 		return &a.UserID
 	}

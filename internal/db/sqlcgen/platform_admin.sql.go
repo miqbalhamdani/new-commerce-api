@@ -22,9 +22,10 @@ type PlatformActorRow struct {
 	Status string
 }
 
-// BR-150, the platform admin report. Every query here runs inside one shop's
+// BR-150..152, the platform admin. Every query here runs inside one shop's
 // InTenantTx (internal/platformadmin), so RLS scopes it to that shop exactly as
-// it scopes a request. None of them names a tenant.
+// it scopes a request. tenants has no RLS, so a write to it names the
+// transaction's own tenant, as UpdateSettings does.
 // The signed-in user, for the PLATFORM_ADMIN_EMAILS check: in their own shop.
 func (q *Queries) PlatformActor(ctx context.Context, id uuid.UUID) (PlatformActorRow, error) {
 	row := q.db.QueryRow(ctx, platformActor, id)
@@ -34,7 +35,7 @@ func (q *Queries) PlatformActor(ctx context.Context, id uuid.UUID) (PlatformActo
 }
 
 const platformShopOwner = `-- name: PlatformShopOwner :one
-SELECT name, email, status, last_login_at
+SELECT id, name, email, status, last_login_at
   FROM users
  WHERE role = 'owner'
  ORDER BY created_at, id
@@ -42,6 +43,7 @@ SELECT name, email, status, last_login_at
 `
 
 type PlatformShopOwnerRow struct {
+	ID          uuid.UUID
 	Name        string
 	Email       string
 	Status      string
@@ -53,6 +55,7 @@ func (q *Queries) PlatformShopOwner(ctx context.Context) (PlatformShopOwnerRow, 
 	row := q.db.QueryRow(ctx, platformShopOwner)
 	var i PlatformShopOwnerRow
 	err := row.Scan(
+		&i.ID,
 		&i.Name,
 		&i.Email,
 		&i.Status,
@@ -90,4 +93,58 @@ func (q *Queries) PlatformShopWebsite(ctx context.Context) (PlatformShopWebsiteR
 		&i.Tagline,
 	)
 	return i, err
+}
+
+const revokeShopRefreshTokens = `-- name: RevokeShopRefreshTokens :execrows
+UPDATE refresh_tokens SET revoked_at = now() WHERE revoked_at IS NULL
+`
+
+// BR-151: a shop taken offline signs every one of its staff out.
+func (q *Queries) RevokeShopRefreshTokens(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeShopRefreshTokens)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setInvitedOwner = `-- name: SetInvitedOwner :one
+UPDATE users SET email = coalesce($2, email), name = coalesce($3, name)
+ WHERE id = $1 AND status = 'invited' AND password_hash IS NULL
+RETURNING email, name
+`
+
+type SetInvitedOwnerParams struct {
+	ID    uuid.UUID
+	Email *string
+	Name  *string
+}
+
+type SetInvitedOwnerRow struct {
+	Email string
+	Name  string
+}
+
+// BR-151's hand-over: only while the owner has not confirmed. No row means
+// they have.
+func (q *Queries) SetInvitedOwner(ctx context.Context, arg SetInvitedOwnerParams) (SetInvitedOwnerRow, error) {
+	row := q.db.QueryRow(ctx, setInvitedOwner, arg.ID, arg.Email, arg.Name)
+	var i SetInvitedOwnerRow
+	err := row.Scan(&i.Email, &i.Name)
+	return i, err
+}
+
+const setShopStatus = `-- name: SetShopStatus :one
+UPDATE tenants t SET status = $1
+  FROM (SELECT status FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.status
+`
+
+// BR-151. Returns the status it replaced.
+func (q *Queries) SetShopStatus(ctx context.Context, status string) (string, error) {
+	row := q.db.QueryRow(ctx, setShopStatus, status)
+	var status_2 string
+	err := row.Scan(&status_2)
+	return status_2, err
 }

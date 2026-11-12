@@ -38,8 +38,9 @@ type Keys struct {
 }
 
 type cachedKey struct {
-	key db.APIKey
-	at  time.Time
+	key      db.APIKey
+	inactive bool // the key's shop is suspended or closed (BR-151)
+	at       time.Time
 }
 
 func NewKeys(store *db.Store) *Keys {
@@ -92,13 +93,19 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 			k.platform(w, r, origin, next)
 			return
 		}
-		key, err := k.resolve(r.Context(), auth.HashRefreshToken(raw))
+		key, active, err := k.resolve(r.Context(), auth.HashRefreshToken(raw))
 		if errors.Is(err, db.ErrNotFound) || err == nil && key.RevokedAt != nil {
 			httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
 			return
 		}
 		if err != nil {
 			httpkit.WriteError(w, r, err)
+			return
+		}
+		// A suspended or closed shop is offline (BR-151, BR-140), within the
+		// cache's TTL as a revoked key is.
+		if !active {
+			httpkit.WriteError(w, r, apperrors.NotFound("No such shop."))
 			return
 		}
 
@@ -185,20 +192,29 @@ func preflight(w http.ResponseWriter, origin string) {
 // resolve answers from the cache while the entry is fresh, else from the
 // database. Only keys that exist are cached, revoked ones included: caching
 // misses would let anyone grow the map without bound by sending random keys.
-func (k *Keys) resolve(ctx context.Context, hash string) (db.APIKey, error) {
+//
+// active is whether the key's shop is active (BR-151), cached with the key.
+func (k *Keys) resolve(ctx context.Context, hash string) (key db.APIKey, active bool, err error) {
 	k.mu.Lock()
 	c, ok := k.cache[hash]
 	k.mu.Unlock()
 	if ok && k.now().Sub(c.at) < k.ttl {
-		return c.key, nil
+		return c.key, !c.inactive, nil
 	}
 
-	key, err := k.store.ResolveAPIKey(ctx, hash)
+	key, err = k.store.ResolveAPIKey(ctx, hash)
 	if err != nil {
-		return db.APIKey{}, err
+		return db.APIKey{}, false, err
 	}
+	// tenants has no RLS: this reads one column of the shop the key just
+	// named, not a boundary crossed (BR-003).
+	shop, err := k.store.Tenant(ctx, key.TenantID)
+	if err != nil {
+		return db.APIKey{}, false, err
+	}
+	active = shop.Status == "active"
 	k.mu.Lock()
-	k.cache[hash] = cachedKey{key: key, at: k.now()}
+	k.cache[hash] = cachedKey{key: key, inactive: !active, at: k.now()}
 	k.mu.Unlock()
 
 	if key.RevokedAt == nil {
@@ -207,5 +223,5 @@ func (k *Keys) resolve(ctx context.Context, hash string) (db.APIKey, error) {
 			slog.WarnContext(ctx, "could not record API key use", "error", err)
 		}
 	}
-	return key, nil
+	return key, active, nil
 }

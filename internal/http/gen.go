@@ -461,9 +461,10 @@ func (e OrderStatus) Valid() bool {
 
 // Defines values for PlatformShopSource.
 const (
-	Cli    PlatformShopSource = "cli"
-	Email  PlatformShopSource = "email"
-	Google PlatformShopSource = "google"
+	Cli      PlatformShopSource = "cli"
+	Email    PlatformShopSource = "email"
+	Google   PlatformShopSource = "google"
+	Platform PlatformShopSource = "platform"
 )
 
 // Valid indicates whether the value is a known member of the PlatformShopSource enum.
@@ -474,6 +475,8 @@ func (e PlatformShopSource) Valid() bool {
 	case Email:
 		return true
 	case Google:
+		return true
+	case Platform:
 		return true
 	default:
 		return false
@@ -516,6 +519,27 @@ func (e PlatformShopOwnerStatus) Valid() bool {
 	case PlatformShopOwnerStatusDisabled:
 		return true
 	case PlatformShopOwnerStatusInvited:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformShopUpdateStatus.
+const (
+	PlatformShopUpdateStatusActive    PlatformShopUpdateStatus = "active"
+	PlatformShopUpdateStatusClosed    PlatformShopUpdateStatus = "closed"
+	PlatformShopUpdateStatusSuspended PlatformShopUpdateStatus = "suspended"
+)
+
+// Valid indicates whether the value is a known member of the PlatformShopUpdateStatus enum.
+func (e PlatformShopUpdateStatus) Valid() bool {
+	switch e {
+	case PlatformShopUpdateStatusActive:
+		return true
+	case PlatformShopUpdateStatusClosed:
+		return true
+	case PlatformShopUpdateStatusSuspended:
 		return true
 	default:
 		return false
@@ -1944,19 +1968,29 @@ type PlatformShop struct {
 	// Slug The website is `https://{slug}.belli.id` (BR-140).
 	Slug string `json:"slug"`
 
-	// Source How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
-	// `cmd/demo-seed` (no `tenant.register` audit row).
+	// Source How the shop was opened: the signup form, Google, `cmd/create-tenant` /
+	// `cmd/demo-seed` (no `tenant.register` audit row), or a platform admin (BR-151).
 	Source  PlatformShopSource  `json:"source"`
 	Status  PlatformShopStatus  `json:"status"`
 	Website PlatformShopWebsite `json:"website"`
 }
 
-// PlatformShopSource How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
-// `cmd/demo-seed` (no `tenant.register` audit row).
+// PlatformShopSource How the shop was opened: the signup form, Google, `cmd/create-tenant` /
+// `cmd/demo-seed` (no `tenant.register` audit row), or a platform admin (BR-151).
 type PlatformShopSource string
 
 // PlatformShopStatus defines model for PlatformShop.Status.
 type PlatformShopStatus string
+
+// PlatformShopCreate defines model for PlatformShopCreate.
+type PlatformShopCreate struct {
+	OwnerEmail openapi_types.Email `json:"owner_email"`
+	OwnerName  string              `json:"owner_name"`
+
+	// SendInvite Email the owner their signup code and link now. False holds the shop.
+	SendInvite bool   `json:"send_invite"`
+	ShopName   string `json:"shop_name"`
+}
 
 // PlatformShopOrders defines model for PlatformShopOrders.
 type PlatformShopOrders struct {
@@ -1979,6 +2013,12 @@ type PlatformShopOwner struct {
 // PlatformShopOwnerStatus `invited` until the owner confirms their email.
 type PlatformShopOwnerStatus string
 
+// PlatformShopOwnerUpdate defines model for PlatformShopOwnerUpdate.
+type PlatformShopOwnerUpdate struct {
+	Email *openapi_types.Email `json:"email,omitempty"`
+	Name  *string              `json:"name,omitempty"`
+}
+
 // PlatformShopProducts defines model for PlatformShopProducts.
 type PlatformShopProducts struct {
 	Active  int        `json:"active"`
@@ -1987,6 +2027,14 @@ type PlatformShopProducts struct {
 	// Total Not archived.
 	Total int `json:"total"`
 }
+
+// PlatformShopUpdate defines model for PlatformShopUpdate.
+type PlatformShopUpdate struct {
+	Status PlatformShopUpdateStatus `json:"status"`
+}
+
+// PlatformShopUpdateStatus defines model for PlatformShopUpdate.Status.
+type PlatformShopUpdateStatus string
 
 // PlatformShopWebsite defines model for PlatformShopWebsite.
 type PlatformShopWebsite struct {
@@ -2008,12 +2056,12 @@ type PlatformShops struct {
 	Shops []PlatformShop `json:"shops"`
 
 	// Summary Counts over the shops whose source is `email` or `google`. Shops made with
-	// `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+	// `cmd/create-tenant`, `cmd/demo-seed` or by a platform admin are listed but not counted.
 	Summary PlatformSummary `json:"summary"`
 }
 
 // PlatformSummary Counts over the shops whose source is `email` or `google`. Shops made with
-// `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+// `cmd/create-tenant`, `cmd/demo-seed` or by a platform admin are listed but not counted.
 type PlatformSummary struct {
 	// Active7d A staff sign-in or audit-log entry in the last 7 days.
 	Active7d int `json:"active_7d"`
@@ -2243,8 +2291,12 @@ type SessionTenant struct {
 
 // SessionUser defines model for SessionUser.
 type SessionUser struct {
-	Id   openapi_types.UUID `json:"id"`
-	Name string             `json:"name"`
+	Id openapi_types.UUID `json:"id"`
+
+	// Impersonating True only in a session from `POST /platform/shops/{id}/impersonate` (BR-152): a platform
+	// admin working in someone else's shop. The admin shows a banner and a way back.
+	Impersonating bool   `json:"impersonating"`
+	Name          string `json:"name"`
 
 	// Permissions `resource:action` strings the role grants. The client hides actions it does not find
 	// here rather than disabling them -- a button that 403s advertises a capability the user
@@ -2253,6 +2305,7 @@ type SessionUser struct {
 
 	// PlatformAdmin True when the user's email is in the server's `PLATFORM_ADMIN_EMAILS` (BR-150), so the
 	// admin shows the platform page. Not a role; it grants nothing in the user's shop.
+	// False in an impersonation session.
 	PlatformAdmin bool            `json:"platform_admin"`
 	Role          SessionUserRole `json:"role"`
 }
@@ -2996,6 +3049,15 @@ type RefundOrderJSONRequestBody = OrderRefundRequest
 // ShipOrderJSONRequestBody defines body for ShipOrder for application/json ContentType.
 type ShipOrderJSONRequestBody = OrderShipRequest
 
+// CreatePlatformShopJSONRequestBody defines body for CreatePlatformShop for application/json ContentType.
+type CreatePlatformShopJSONRequestBody = PlatformShopCreate
+
+// UpdatePlatformShopJSONRequestBody defines body for UpdatePlatformShop for application/json ContentType.
+type UpdatePlatformShopJSONRequestBody = PlatformShopUpdate
+
+// UpdatePlatformShopOwnerJSONRequestBody defines body for UpdatePlatformShopOwner for application/json ContentType.
+type UpdatePlatformShopOwnerJSONRequestBody = PlatformShopOwnerUpdate
+
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductCreate
 
@@ -3427,6 +3489,21 @@ type ServerInterface interface {
 	// GetPlatformShops Every shop on Belli, for the platform admins
 	// (GET /platform/shops)
 	GetPlatformShops(w http.ResponseWriter, r *http.Request)
+	// CreatePlatformShop Open a shop for someone, held until it is handed over
+	// (POST /platform/shops)
+	CreatePlatformShop(w http.ResponseWriter, r *http.Request)
+	// UpdatePlatformShop Suspend, close or reopen a shop
+	// (PATCH /platform/shops/{id})
+	UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id)
+	// ImpersonatePlatformShop Open the shop's admin as its owner
+	// (POST /platform/shops/{id}/impersonate)
+	ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id)
+	// SendPlatformShopInvite Email the owner their signup code and link
+	// (POST /platform/shops/{id}/invite)
+	SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
+	// (PATCH /platform/shops/{id}/owner)
+	UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -3847,6 +3924,36 @@ func (_ Unimplemented) ShipOrder(w http.ResponseWriter, r *http.Request, id Id) 
 // GetPlatformShops Every shop on Belli, for the platform admins
 // (GET /platform/shops)
 func (_ Unimplemented) GetPlatformShops(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// CreatePlatformShop Open a shop for someone, held until it is handed over
+// (POST /platform/shops)
+func (_ Unimplemented) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdatePlatformShop Suspend, close or reopen a shop
+// (PATCH /platform/shops/{id})
+func (_ Unimplemented) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ImpersonatePlatformShop Open the shop's admin as its owner
+// (POST /platform/shops/{id}/impersonate)
+func (_ Unimplemented) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// SendPlatformShopInvite Email the owner their signup code and link
+// (POST /platform/shops/{id}/invite)
+func (_ Unimplemented) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
+// (PATCH /platform/shops/{id}/owner)
+func (_ Unimplemented) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5689,6 +5796,124 @@ func (siw *ServerInterfaceWrapper) GetPlatformShops(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// CreatePlatformShop operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlatformShop(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePlatformShop operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlatformShop(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlatformShop(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImpersonatePlatformShop operation middleware
+func (siw *ServerInterfaceWrapper) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImpersonatePlatformShop(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendPlatformShopInvite operation middleware
+func (siw *ServerInterfaceWrapper) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendPlatformShopInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePlatformShopOwner operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlatformShopOwner(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
 
@@ -6785,6 +7010,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/platform/shops", wrapper.GetPlatformShops)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/platform/shops", wrapper.CreatePlatformShop)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/platform/shops/{id}", wrapper.UpdatePlatformShop)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/platform/shops/{id}/owner", wrapper.UpdatePlatformShopOwner)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/platform/shops/{id}/invite", wrapper.SendPlatformShopInvite)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/platform/shops/{id}/impersonate", wrapper.ImpersonatePlatformShop)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/customers", wrapper.ListCustomers)
@@ -10968,6 +11208,400 @@ func (response GetPlatformShops403ApplicationProblemPlusJSONResponse) VisitGetPl
 	return err
 }
 
+type CreatePlatformShopRequestObject struct {
+	Body *CreatePlatformShopJSONRequestBody
+}
+
+type CreatePlatformShopResponseObject interface {
+	VisitCreatePlatformShopResponse(w http.ResponseWriter) error
+}
+
+type CreatePlatformShop201JSONResponse PlatformShop
+
+func (response CreatePlatformShop201JSONResponse) VisitCreatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlatformShop401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePlatformShop401ApplicationProblemPlusJSONResponse) VisitCreatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlatformShop403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePlatformShop403ApplicationProblemPlusJSONResponse) VisitCreatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlatformShop422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePlatformShop422ApplicationProblemPlusJSONResponse) VisitCreatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdatePlatformShopJSONRequestBody
+}
+
+type UpdatePlatformShopResponseObject interface {
+	VisitUpdatePlatformShopResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlatformShop200JSONResponse PlatformShop
+
+func (response UpdatePlatformShop200JSONResponse) VisitUpdatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShop401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShop401ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShop403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShop403ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShop404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShop404ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShop422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShop422ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImpersonatePlatformShopRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type ImpersonatePlatformShopResponseObject interface {
+	VisitImpersonatePlatformShopResponse(w http.ResponseWriter) error
+}
+
+type ImpersonatePlatformShop200JSONResponse Session
+
+func (response ImpersonatePlatformShop200JSONResponse) VisitImpersonatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImpersonatePlatformShop401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ImpersonatePlatformShop401ApplicationProblemPlusJSONResponse) VisitImpersonatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImpersonatePlatformShop403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ImpersonatePlatformShop403ApplicationProblemPlusJSONResponse) VisitImpersonatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ImpersonatePlatformShop404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ImpersonatePlatformShop404ApplicationProblemPlusJSONResponse) VisitImpersonatePlatformShopResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendPlatformShopInviteRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type SendPlatformShopInviteResponseObject interface {
+	VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error
+}
+
+type SendPlatformShopInvite204Response struct {
+}
+
+func (response SendPlatformShopInvite204Response) VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SendPlatformShopInvite401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response SendPlatformShopInvite401ApplicationProblemPlusJSONResponse) VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendPlatformShopInvite403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SendPlatformShopInvite403ApplicationProblemPlusJSONResponse) VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendPlatformShopInvite404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SendPlatformShopInvite404ApplicationProblemPlusJSONResponse) VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendPlatformShopInvite422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response SendPlatformShopInvite422ApplicationProblemPlusJSONResponse) VisitSendPlatformShopInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopOwnerRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdatePlatformShopOwnerJSONRequestBody
+}
+
+type UpdatePlatformShopOwnerResponseObject interface {
+	VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlatformShopOwner200JSONResponse PlatformShop
+
+func (response UpdatePlatformShopOwner200JSONResponse) VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopOwner401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopOwner401ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopOwner403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopOwner403ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopOwner404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopOwner404ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopOwner422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopOwner422ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopOwnerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProductsRequestObject struct {
 	Params ListProductsParams
 }
@@ -13027,6 +13661,21 @@ type StrictServerInterface interface {
 	// GetPlatformShops Every shop on Belli, for the platform admins
 	// (GET /platform/shops)
 	GetPlatformShops(ctx context.Context, request GetPlatformShopsRequestObject) (GetPlatformShopsResponseObject, error)
+	// CreatePlatformShop Open a shop for someone, held until it is handed over
+	// (POST /platform/shops)
+	CreatePlatformShop(ctx context.Context, request CreatePlatformShopRequestObject) (CreatePlatformShopResponseObject, error)
+	// UpdatePlatformShop Suspend, close or reopen a shop
+	// (PATCH /platform/shops/{id})
+	UpdatePlatformShop(ctx context.Context, request UpdatePlatformShopRequestObject) (UpdatePlatformShopResponseObject, error)
+	// ImpersonatePlatformShop Open the shop's admin as its owner
+	// (POST /platform/shops/{id}/impersonate)
+	ImpersonatePlatformShop(ctx context.Context, request ImpersonatePlatformShopRequestObject) (ImpersonatePlatformShopResponseObject, error)
+	// SendPlatformShopInvite Email the owner their signup code and link
+	// (POST /platform/shops/{id}/invite)
+	SendPlatformShopInvite(ctx context.Context, request SendPlatformShopInviteRequestObject) (SendPlatformShopInviteResponseObject, error)
+	// UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
+	// (PATCH /platform/shops/{id}/owner)
+	UpdatePlatformShopOwner(ctx context.Context, request UpdatePlatformShopOwnerRequestObject) (UpdatePlatformShopOwnerResponseObject, error)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -14775,6 +15424,155 @@ func (sh *strictHandler) GetPlatformShops(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPlatformShopsResponseObject); ok {
 		if err := validResponse.VisitGetPlatformShopsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePlatformShop operation middleware
+func (sh *strictHandler) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
+	var request CreatePlatformShopRequestObject
+
+	var body CreatePlatformShopJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePlatformShop(ctx, request.(CreatePlatformShopRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePlatformShop")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePlatformShopResponseObject); ok {
+		if err := validResponse.VisitCreatePlatformShopResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePlatformShop operation middleware
+func (sh *strictHandler) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdatePlatformShopRequestObject
+
+	request.Id = id
+
+	var body UpdatePlatformShopJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlatformShop(ctx, request.(UpdatePlatformShopRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlatformShop")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlatformShopResponseObject); ok {
+		if err := validResponse.VisitUpdatePlatformShopResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ImpersonatePlatformShop operation middleware
+func (sh *strictHandler) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	var request ImpersonatePlatformShopRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ImpersonatePlatformShop(ctx, request.(ImpersonatePlatformShopRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ImpersonatePlatformShop")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ImpersonatePlatformShopResponseObject); ok {
+		if err := validResponse.VisitImpersonatePlatformShopResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendPlatformShopInvite operation middleware
+func (sh *strictHandler) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, id Id) {
+	var request SendPlatformShopInviteRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendPlatformShopInvite(ctx, request.(SendPlatformShopInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendPlatformShopInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendPlatformShopInviteResponseObject); ok {
+		if err := validResponse.VisitSendPlatformShopInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePlatformShopOwner operation middleware
+func (sh *strictHandler) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdatePlatformShopOwnerRequestObject
+
+	request.Id = id
+
+	var body UpdatePlatformShopOwnerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlatformShopOwner(ctx, request.(UpdatePlatformShopOwnerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlatformShopOwner")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlatformShopOwnerResponseObject); ok {
+		if err := validResponse.VisitUpdatePlatformShopOwnerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

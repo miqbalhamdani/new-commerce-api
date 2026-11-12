@@ -51,6 +51,9 @@ type SessionUser struct {
 	// PlatformAdmin is whether the email is in PLATFORM_ADMIN_EMAILS (BR-150), so
 	// the admin can show the platform page. The route checks again itself.
 	PlatformAdmin bool
+	// Impersonating marks a platform admin's session in someone else's shop
+	// (BR-152).
+	Impersonating bool
 }
 
 type SessionTenant struct {
@@ -258,6 +261,12 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 		if err != nil {
 			return err
 		}
+		// A suspended or closed shop signs no one in, by any route, and is
+		// refused as a disabled account is (BR-151, BR-021). Returning here
+		// rolls back the refresh token just written.
+		if row.TenantStatus != "active" {
+			return ErrUnauthenticated
+		}
 		out = Session{
 			AccessToken:  access,
 			ExpiresIn:    int(AccessTokenTTL.Seconds()),
@@ -435,6 +444,46 @@ func (s *Service) GoogleSignIn(ctx context.Context, google *GoogleVerifier, clie
 		return Session{}, ErrUnauthenticated
 	}
 	return s.issue(ctx, u.TenantID, u.ID, u.Role, nil)
+}
+
+// Impersonate is BR-152: an owner's session in shop target for the platform
+// admin in ctx (their own shop is the tenant in ctx), with no refresh token,
+// audited platform.impersonate in target. The caller has checked that they
+// are a platform admin. A shop that does not exist is db.ErrNotFound.
+func (s *Service) Impersonate(ctx context.Context, target uuid.UUID) (Session, error) {
+	home, ok := tenant.FromContext(ctx)
+	actor, okActor := tenant.ActorFromContext(ctx)
+	if !ok || !okActor {
+		return Session{}, ErrUnauthenticated
+	}
+	if _, err := s.store.Tenant(ctx, target); err != nil {
+		return Session{}, err
+	}
+	var name string
+	if err := s.store.InTenantTx(ctx, func(tx pgx.Tx) error {
+		row, err := sqlcgen.New(tx).GetSession(ctx, actor.UserID)
+		name = row.UserName
+		return err
+	}); err != nil {
+		return Session{}, err
+	}
+	now := s.now()
+	access, err := s.signer.IssueImpersonation(actor.UserID, home, target, now)
+	if err != nil {
+		return Session{}, err
+	}
+	out := Session{AccessToken: access, ExpiresIn: int(ImpersonationTTL.Seconds()),
+		User: SessionUser{ID: actor.UserID, Name: name, Role: RoleOwner, Permissions: ImpersonationPermissions(), Impersonating: true}}
+	tctx := tenant.NewContext(ctx, target)
+	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		shop, err := sqlcgen.New(tx).GetTenant(tctx, target)
+		if err != nil {
+			return err
+		}
+		out.Tenant = SessionTenant{ID: shop.ID, Name: shop.Name, Timezone: shop.Timezone}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "platform.impersonate", SubjectType: "tenant", SubjectID: target.String()})
+	})
+	return out, err
 }
 
 // SessionFor signs in a user the caller has just authenticated another way --

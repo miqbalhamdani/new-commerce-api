@@ -1,8 +1,8 @@
-// Package platformadmin is BR-150's report: every shop on Belli, for the staff
-// in PLATFORM_ADMIN_EMAILS. It is the one request path that spans shops
+// Package platformadmin is BR-150's report and BR-151's shop actions, for the
+// staff in PLATFORM_ADMIN_EMAILS. It is the one request path that spans shops
 // (BR-003's exception), and it spans them the way the retention sweep does:
-// shop ids from tenants, which has no RLS, then each shop read in its own
-// InTenantTx as app_user. It writes nothing.
+// shop ids from tenants, which has no RLS, then each shop read or written in
+// its own InTenantTx as app_user, audited there.
 package platformadmin
 
 import (
@@ -28,12 +28,13 @@ const (
 	sleepsFor = 14 * 24 * time.Hour
 )
 
-// Sources: the signup form, Google, or cmd/create-tenant and cmd/demo-seed,
-// which write no tenant.register audit row.
+// Sources: the signup form, Google, cmd/create-tenant and cmd/demo-seed
+// (which write no tenant.register audit row), or a platform admin (BR-151).
 const (
-	SourceEmail  = "email"
-	SourceGoogle = "google"
-	SourceCLI    = "cli"
+	SourceEmail    = "email"
+	SourceGoogle   = "google"
+	SourceCLI      = "cli"
+	SourcePlatform = "platform"
 )
 
 type Service struct {
@@ -127,6 +128,41 @@ func (s *Service) Report(ctx context.Context) (Report, error) {
 	return out, nil
 }
 
+// SetStatus is BR-151's status: active, suspended or closed. Anything but
+// active also revokes every refresh token in the shop; sign-in and refresh
+// then refuse it (auth.Service.issue) and the storefront API answers 404.
+// A shop that does not exist is db.ErrNotFound.
+func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status string) error {
+	if _, err := s.store.Tenant(ctx, id); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, id)
+	return s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		before, err := q.SetShopStatus(tctx, status)
+		if err != nil {
+			return err
+		}
+		if status != "active" {
+			if _, err := q.RevokeShopRefreshTokens(tctx); err != nil {
+				return err
+			}
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.status", SubjectType: "tenant", SubjectID: id.String(),
+			Before: map[string]any{"status": before}, After: map[string]any{"status": status}})
+	})
+}
+
+// Shop is one shop as the report shows it, for the answer to a shop action
+// (BR-151). A shop that does not exist is db.ErrNotFound.
+func (s *Service) Shop(ctx context.Context, id uuid.UUID) (Shop, error) {
+	t, err := s.store.Tenant(ctx, id)
+	if err != nil {
+		return Shop{}, err
+	}
+	return s.shop(ctx, t)
+}
+
 func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 	shop := Shop{ID: t.ID, Name: t.Name, Slug: t.Slug, Status: t.Status, CreatedAt: t.CreatedAt}
 	err := s.store.InTenantTx(tenant.NewContext(ctx, t.ID), func(tx pgx.Tx) error {
@@ -138,8 +174,8 @@ func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 		shop.Source = SourceCLI
 		if st.Registered {
 			shop.Source = SourceEmail
-			if st.RegisterVia != nil && *st.RegisterVia == SourceGoogle {
-				shop.Source = SourceGoogle
+			if v := st.RegisterVia; v != nil && (*v == SourceGoogle || *v == SourcePlatform) {
+				shop.Source = *v
 			}
 		}
 		shop.LastActivityAt = latest(st.LastAuditAt, st.LastLoginAt)
@@ -170,7 +206,7 @@ func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 
 // count adds one shop to the summary, if it signed up itself (BR-150).
 func count(sum *Summary, shop Shop, now time.Time) {
-	if shop.Source == SourceCLI {
+	if shop.Source != SourceEmail && shop.Source != SourceGoogle {
 		return
 	}
 	sum.Shops++

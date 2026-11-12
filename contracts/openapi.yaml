@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.25.0
+  version: 2.26.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -2099,6 +2099,142 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createPlatformShop
+      summary: Open a shop for someone, held until it is handed over
+      description: |
+        BR-151: a new shop whose owner is `invited`, its source `platform`. No email is sent unless
+        `send_invite` is true; the owner can be handed over later with `…/owner` and `…/invite`. An
+        email already used in any shop is `422` on `owner_email` (BR-020). Platform admins only,
+        as `GET`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformShopCreate"
+      responses:
+        "201":
+          description: The new shop, as the report shows it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /platform/shops/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updatePlatformShop
+      summary: Suspend, close or reopen a shop
+      description: |
+        BR-151. `suspended` and `closed` sign every staff user of the shop out (their refresh tokens
+        are revoked), refuse their sign-ins, and take the website and storefront API offline
+        (`404`, BR-140). `active` undoes either. Platform admins only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformShopUpdate"
+      responses:
+        "200":
+          description: The shop, as the report shows it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /platform/shops/{id}/owner:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updatePlatformShopOwner
+      summary: Change the email or name of a shop's owner before they confirm it
+      description: |
+        BR-151's hand-over: only while the owner is `invited`; an owner who has confirmed is `422`.
+        An email already used in any shop is `422` on `email` (BR-020). Sends nothing; follow with
+        `…/invite`. Platform admins only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformShopOwnerUpdate"
+      responses:
+        "200":
+          description: The shop, as the report shows it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /platform/shops/{id}/invite:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: sendPlatformShopInvite
+      summary: Email the owner their signup code and link
+      description: |
+        BR-151: the same email as a signup (BR-026, BR-128), to the owner's current address. Only
+        while the owner is `invited`; otherwise `422`. Platform admins only.
+      responses:
+        "204":
+          description: Queued.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /platform/shops/{id}/impersonate:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: impersonatePlatformShop
+      summary: Open the shop's admin as its owner
+      description: |
+        BR-152: a session in that shop with the owner's role, for one hour, with no refresh token.
+        `user` is the platform admin, `impersonating` is true, and every write in it is audited
+        with the platform admin as the actor. Platform admins only; any shop status.
+      responses:
+        "200":
+          description: The impersonation session. No cookie is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /customers:
     get:
@@ -2549,7 +2685,7 @@ components:
 
     SessionUser:
       type: object
-      required: [id, name, role, permissions, platform_admin]
+      required: [id, name, role, permissions, platform_admin, impersonating]
       properties:
         id:
           type: string
@@ -2573,6 +2709,12 @@ components:
           description: |
             True when the user's email is in the server's `PLATFORM_ADMIN_EMAILS` (BR-150), so the
             admin shows the platform page. Not a role; it grants nothing in the user's shop.
+            False in an impersonation session.
+        impersonating:
+          type: boolean
+          description: |
+            True only in a session from `POST /platform/shops/{id}/impersonate` (BR-152): a platform
+            admin working in someone else's shop. The admin shows a banner and a way back.
 
     SessionTenant:
       type: object
@@ -2608,7 +2750,7 @@ components:
       type: object
       description: |
         Counts over the shops whose source is `email` or `google`. Shops made with
-        `cmd/create-tenant` or `cmd/demo-seed` are listed but not counted.
+        `cmd/create-tenant`, `cmd/demo-seed` or by a platform admin are listed but not counted.
       required: [shops, new_7d, new_30d, verified, website_set_up, with_products, with_orders,
                  active_7d, sleeping]
       properties:
@@ -2657,10 +2799,10 @@ components:
           format: date-time
         source:
           type: string
-          enum: [email, google, cli]
+          enum: [email, google, cli, platform]
           description: |
-            How the shop was opened: the signup form, Google, or `cmd/create-tenant` /
-            `cmd/demo-seed` (no `tenant.register` audit row).
+            How the shop was opened: the signup form, Google, `cmd/create-tenant` /
+            `cmd/demo-seed` (no `tenant.register` audit row), or a platform admin (BR-151).
         owner:
           oneOf:
             - $ref: "#/components/schemas/PlatformShopOwner"
@@ -2674,6 +2816,45 @@ components:
         last_activity_at:
           type: [string, "null"]
           format: date-time
+
+    PlatformShopCreate:
+      type: object
+      required: [shop_name, owner_name, owner_email, send_invite]
+      additionalProperties: false
+      properties:
+        shop_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        owner_name:
+          type: string
+          minLength: 1
+        owner_email:
+          type: string
+          format: email
+        send_invite:
+          type: boolean
+          description: Email the owner their signup code and link now. False holds the shop.
+
+    PlatformShopUpdate:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [active, suspended, closed]
+
+    PlatformShopOwnerUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 1
 
     PlatformShopOwner:
       type: object

@@ -205,9 +205,12 @@ work without that role; in production it would not.
 **Work that spans shops** (the nightly retention sweep, `internal/retention`) has no role of its
 own: `Store.TenantIDs` lists shop ids (`tenants` has no RLS), then each shop's work runs in that
 shop's own `InTenantTx` as `app_user`, audit-logged, never reachable from a request (BR-003). Do
-not add a `BYPASSRLS` pool for it. The one exception is `GET /v1/platform/shops`
-(`internal/platformadmin`, BR-150): read-only, the same shop-by-shop reads, and only for an active
-user whose email is in `PLATFORM_ADMIN_EMAILS`, checked per request.
+not add a `BYPASSRLS` pool for it. The one exception is `/v1/platform/*` (`internal/platformadmin`,
+BR-150..152), only for an active user whose email is in `PLATFORM_ADMIN_EMAILS`, checked per
+request: the report and the shop actions are the same shop-by-shop transactions, audited in the
+shop they touch. Impersonation (BR-152) is a token for one shop with an `imp` claim: `Authenticate`
+re-checks the platform admin in their own shop on every request, the actor is the platform admin
+(no user row in that shop, so nothing may assume the actor is one), and `customers:purge` is out.
 
 **Two roles, two DSNs.** `cmd/migrate` connects as the schema owner via `DATABASE_URL`.
 `cmd/api` connects as `app_user` via `APP_DATABASE_URL` and never as the owner -- locally the

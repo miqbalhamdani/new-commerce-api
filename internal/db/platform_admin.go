@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,6 +29,20 @@ func (s *Store) Tenants(ctx context.Context) ([]TenantRow, error) {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[TenantRow])
+}
+
+// Tenant is one shop by id, for a platform action (BR-151); ErrNotFound when
+// there is none.
+func (s *Store) Tenant(ctx context.Context, id uuid.UUID) (TenantRow, error) {
+	rows, err := s.pool.Query(ctx, "SELECT id, name, slug, status, created_at FROM tenants WHERE id = $1", id)
+	if err != nil {
+		return TenantRow{}, fmt.Errorf("get tenant: %w", err)
+	}
+	t, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[TenantRow])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TenantRow{}, ErrNotFound
+	}
+	return t, err
 }
 
 // ShopStats is one shop's counts and first/last dates for BR-150. A nil time

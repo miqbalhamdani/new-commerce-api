@@ -83,8 +83,8 @@ Work that spans shops, such as the nightly retention sweep (BR-096), crosses no 
 query and has no role of its own: it lists shop ids from `tenants`, which has no RLS, then does
 each shop's work inside that shop's own tenant transaction as the application role, so RLS holds
 as it does for a request. It is audit-logged per shop and never reachable from a request. The one
-exception is the platform admin report (BR-150): read-only, for the staff emails the server names,
-and made of the same shop-by-shop reads. A PII
+exception is the platform admin (BR-150..152), for the staff emails the server names: its report and
+shop actions are the same shop-by-shop transactions, and impersonation is a token for one shop. A PII
 purge (BR-097) is not cross-tenant at all: the owner asks for it, and the tenant comes from their
 token.
 
@@ -1145,6 +1145,43 @@ days, and sleeping (verified, no activity in 14 days).
 
 *Why:* the founder needs to see who signed up and who got stuck without a database console.
 Reading shop by shop keeps RLS doing for this page what it does for every other request.
+
+The report is read-only. The platform admin's writes are BR-151 and BR-152.
+
+### BR-151 Platform shop actions
+The same platform admins (BR-150) can open a shop, change its status, and hand it over. Each action
+runs in the target shop's own tenant transaction as the application role and writes one audit row
+there, with the platform admin as the actor.
+
+- **Open:** a shop and an `invited` owner, as a signup does (BR-020), with source `platform`. No
+  email goes out unless asked for; the shop is held until it is handed over.
+- **Status:** `active`, `suspended` or `closed`. Anything but `active` revokes the refresh tokens of
+  every staff user in the shop, refuses their sign-in and refresh as a disabled account is refused
+  (BR-021), and takes the website and storefront API offline (`404`, BR-140). An access token
+  already issued runs out within its 15 minutes. Nothing is deleted; `active` undoes either.
+- **Hand-over:** while the owner is still `invited`, the platform admin may change their email and
+  name, and send them the signup email (BR-026) at their current address. Once the owner has
+  confirmed, the shop is theirs and neither is allowed. A link already sent to an earlier address
+  keeps working until it expires, so the address is changed before the email is sent.
+
+*Why:* the founder sets up shops for client demos before the client has an account, and needs to
+take a shop offline without a database console.
+
+### BR-152 Impersonation
+A platform admin may open any shop's admin as its owner. The server issues an access token for that
+shop with the owner's role, the platform admin as the subject, and a mark that it is an
+impersonation. It lasts one hour, has no refresh token, and the server checks the platform admin's
+email and `active` status again on every request made with it.
+
+- It grants the owner's permissions except `customers:purge` (BR-097): erasing a shopper's data is
+  the owner's own decision.
+- The platform admin is not a user of that shop, so routes about the signed-in user find nothing.
+- Every write is audited in the shop with the platform admin as the actor; the shop's activity log
+  shows them as Belli. Opening the session is itself audited (`platform.impersonate`).
+- The session says `impersonating: true`, and the admin shows a banner with the way back.
+
+*Why:* setting up a demo shop, and helping an owner, both need the shop's own screens. A token for
+one shop keeps RLS, the permission matrix and the audit log doing what they do for everyone else.
 
 ---
 

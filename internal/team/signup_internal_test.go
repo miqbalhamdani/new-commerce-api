@@ -24,7 +24,7 @@ func TestSlugAndPrefix(t *testing.T) {
 	for address, ok := range map[string]bool{
 		"budi@erigo.co.id": true, "Budi <budi@erigo.co.id>": false, "budi": false, "": false,
 	} {
-		if err := validSignup("Shop", "Budi", address); (err == nil) != ok {
+		if err := validSignup("Shop", "Budi", address, "name", "email"); (err == nil) != ok {
 			t.Errorf("validSignup(%q) = %v", address, err)
 		}
 	}

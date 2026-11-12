@@ -23,3 +23,18 @@ func RoleFromContext(ctx context.Context) (string, bool) {
 	role, ok := ctx.Value(roleKey{}).(string)
 	return role, ok
 }
+
+type impersonatingKey struct{}
+
+// NewImpersonationContext marks the request as a platform admin working in
+// someone else's shop (BR-152). Set only by the authentication middleware,
+// from a verified token's imp claim.
+func NewImpersonationContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, impersonatingKey{}, true)
+}
+
+// Impersonating reports whether the request is an impersonation (BR-152).
+func Impersonating(ctx context.Context) bool {
+	v, _ := ctx.Value(impersonatingKey{}).(bool)
+	return v
+}
