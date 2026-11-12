@@ -444,12 +444,31 @@ shop and the signup funnel; anyone else sees no such page and gets `403` from th
 
 | ID | Item | Repo | Depends | Acceptance | Status | Owner |
 |---|---|---|---|---|---|---|
-| P1-901 | Platform admin contracts | CT | — | v2.25.0: BR-150 and BR-003's one exception; `GET /v1/platform/shops` and `SessionUser.platform_admin` in `04-api-spec.md` §14 and `openapi.yaml` | review | Iqbal Hamdani |
-| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | review | Iqbal Hamdani |
-| P1-903 | Platform page in the admin | FE | 902 | A Platform item in the sidebar only for `platform_admin`; the page shows the summary, then every shop with its owner, source, website, products, orders and last activity, searchable and filtered by not verified and sleeping, CLI and demo shops hidden by default (BR-150) | review | Iqbal Hamdani |
+| P1-901 | Platform admin contracts | CT | — | v2.25.0: BR-150 and BR-003's one exception; `GET /v1/platform/shops` and `SessionUser.platform_admin` in `04-api-spec.md` §14 and `openapi.yaml` | done | Iqbal Hamdani |
+| P1-902 | The platform report | BE | 901 | `GET /v1/platform/shops` answers §14 for an `active` staff user whose email is in `PLATFORM_ADMIN_EMAILS` and `403` for anyone else, or for everyone when it is empty; each shop is read in its own tenant transaction and nothing is written; login and refresh carry `platform_admin` (BR-150) | done | Iqbal Hamdani |
+| P1-903 | Platform page in the admin | FE | 902 | A Platform item in the sidebar only for `platform_admin`; the page shows the summary, then every shop with its owner, source, website, products, orders and last activity, searchable and filtered by not verified and sleeping, CLI and demo shops hidden by default (BR-150) | done | Iqbal Hamdani |
 
 > **Production step for `P1-902`:** set `PLATFORM_ADMIN_EMAILS` in the box's `.env` (the founder's
 > email, never a `@demo.belli.id` one: their password is public), then `./deploy.sh main`.
+
+## Phase 11 · Platform console
+
+Added in v2.26 so the founder can set up a shop for a client demo, work in it, hand it over, and take
+a shop offline, all from the Platform page (BR-151, BR-152). Per-shop custom roles stay out (BR-023).
+
+**Exit:** from Platform, the founder opens a held shop, works in it as its owner and returns, hands it
+to an email that then confirms it, and suspends a shop whose staff are then signed out and whose
+website is `404`.
+
+| ID | Item | Repo | Depends | Acceptance | Status | Owner |
+|---|---|---|---|---|---|---|
+| P1-911 | Platform console contracts | CT | 903 | v2.26.0: BR-151, BR-152, BR-003's exception widened; §14.1–14.2 and `openapi.yaml`: `POST /v1/platform/shops`, `PATCH …/{id}`, `PATCH …/{id}/owner`, `POST …/{id}/invite`, `POST …/{id}/impersonate`, `SessionUser.impersonating`, source `platform` | wip | Iqbal Hamdani |
+| P1-912 | Open a shop from Platform | BE | 911 | `POST /v1/platform/shops` opens a shop with an `invited` owner and source `platform`, audited `tenant.register`; no email unless `send_invite`; a taken email is `422` on `owner_email`; `403` for anyone but a platform admin (BR-151) | wip | Iqbal Hamdani |
+| P1-913 | Shop status | BE | 911 | `PATCH /v1/platform/shops/{id}` sets the status, audited `tenant.status`; `suspended` or `closed` revokes the shop's refresh tokens, refuses login and refresh with `401`, and makes the storefront API `404`; `active` restores all three (BR-151, BR-140) | wip | Iqbal Hamdani |
+| P1-914 | Owner hand-over | BE | 912 | `PATCH …/{id}/owner` changes an `invited` owner's email or name and `POST …/{id}/invite` queues the signup email to the current address, each audited; both `422` once the owner is `active` (BR-151, BR-026) | wip | Iqbal Hamdani |
+| P1-915 | Impersonation | BE | 911 | `POST …/{id}/impersonate` returns a one-hour owner session in that shop with `impersonating: true` and no cookie, audited `platform.impersonate`; each request re-checks the platform admin; `customers:purge` and `/v1/platform` are `403` in it; it reads nothing of another shop (BR-152) | wip | Iqbal Hamdani |
+| P1-916 | Platform shop actions in the admin | FE | 912, 913, 914 | Platform has New shop (with "Send invite now") and per-shop actions: Open as owner, Send invite and Change owner while `invited`, Suspend / Activate / Close behind a confirmation; `422`s land on their fields (BR-151) | wip | Iqbal Hamdani |
+| P1-917 | Impersonation in the admin | FE | 915, 916 | Open as owner swaps the session in memory and lands on the dashboard; a banner on every screen names the shop with Back to Platform, which restores the founder's session; the activity log shows a platform admin's entries as Belli (BR-152) | wip | Iqbal Hamdani |
 
 ## Dropped in v2
 

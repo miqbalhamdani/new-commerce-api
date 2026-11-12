@@ -124,7 +124,8 @@ POST /v1/auth/login
 200 OK   ← refresh token set as an httpOnly, Secure, SameSite=Lax cookie
 { "access_token": "eyJ…", "expires_in": 900,
   "user":   { "id": "0192…", "name": "Budi", "role": "ops",
-              "permissions": ["orders:read", "orders:write", "…"], "platform_admin": false },
+              "permissions": ["orders:read", "orders:write", "…"], "platform_admin": false,
+              "impersonating": false },
   "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta" } }
 ```
 
@@ -1870,6 +1871,11 @@ DELETE /v1/blog/posts/{id}
 | Method | Path | Permission | BR |
 |---|---|---|---|
 | `GET` | `/v1/platform/shops` | an `active` user whose email is in `PLATFORM_ADMIN_EMAILS` | 003, 150 |
+| `POST` | `/v1/platform/shops` | the same | 020, 151 |
+| `PATCH` | `/v1/platform/shops/{id}` | the same | 140, 151 |
+| `PATCH` | `/v1/platform/shops/{id}/owner` | the same | 020, 151 |
+| `POST` | `/v1/platform/shops/{id}/invite` | the same | 026, 151 |
+| `POST` | `/v1/platform/shops/{id}/impersonate` | the same | 003, 152 |
 
 ```json
 GET /v1/platform/shops
@@ -1895,3 +1901,42 @@ storefront settings. `products.total` leaves out archived products. `last_activi
 latest staff sign-in or audit-log entry, `null` when there is neither. Anyone else, and everyone when
 `PLATFORM_ADMIN_EMAILS` is empty, gets `403` with that requirement in `detail` (BR-024). The
 website address is `https://{slug}.belli.id` (BR-140).
+
+### 14.1 Shop actions (BR-151)
+
+```json
+POST /v1/platform/shops
+{ "shop_name": "Toko Klien", "owner_name": "Rina", "owner_email": "rina@klien.id",
+  "send_invite": false }
+201 Created
+{ "id": "0192…", "name": "Toko Klien", "slug": "toko-klien-a1b2c3", "status": "active",
+  "source": "platform", "owner": { "name": "Rina", "email": "rina@klien.id", "status": "invited",
+  "last_login_at": null }, … }
+
+PATCH /v1/platform/shops/{id}          { "status": "suspended" }      → 200, the shop
+PATCH /v1/platform/shops/{id}/owner    { "email": "owner@klien.id" }  → 200, the shop
+POST  /v1/platform/shops/{id}/invite                                  → 204
+```
+
+Each answers the shop as the report shows it, except `invite`. The new shop's owner is `invited`
+and nothing is emailed unless `send_invite` is true. A taken email is `422` on `owner_email` (or
+`email` on `…/owner`, BR-020). `…/owner` and `…/invite` are `422` once the owner has confirmed.
+`status` is `active`, `suspended` or `closed`; anything but `active` signs the shop's staff out,
+refuses their sign-ins (`401`, as for a disabled account, BR-021) and takes the website and the
+storefront API offline (`404`, BR-140). A shop that does not exist is `404`.
+
+### 14.2 Impersonation (BR-152)
+
+```json
+POST /v1/platform/shops/{id}/impersonate
+200 OK
+{ "access_token": "eyJ…", "expires_in": 3600,
+  "user": { "id": "<the platform admin>", "name": "Iqbal", "role": "owner",
+            "permissions": ["…"], "platform_admin": false, "impersonating": true },
+  "tenant": { "id": "0192…", "name": "Toko Klien", "timezone": "Asia/Jakarta" } }
+```
+
+An owner's session in that shop for one hour, with no refresh cookie: when it ends, refresh returns
+the platform admin's own session. It grants the owner's permissions except `customers:purge`, and
+the server checks the platform admin's email and status again on every request made with it. The
+`/v1/platform` routes are `403` in it.
