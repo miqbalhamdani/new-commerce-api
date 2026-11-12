@@ -139,7 +139,11 @@ func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, session au
 }
 
 func (s *Server) writeSessionStatus(w http.ResponseWriter, r *http.Request, session auth.Session, status int) {
-	http.SetCookie(w, s.refreshCookie(session.RefreshToken, auth.RefreshTokenTTL))
+	// An impersonation has no refresh token, and must not replace the
+	// platform admin's own cookie (BR-152).
+	if session.RefreshToken != "" {
+		http.SetCookie(w, s.refreshCookie(session.RefreshToken, auth.RefreshTokenTTL))
+	}
 
 	body := Session{
 		AccessToken: session.AccessToken,
@@ -150,6 +154,7 @@ func (s *Server) writeSessionStatus(w http.ResponseWriter, r *http.Request, sess
 			Role:          SessionUserRole(session.User.Role),
 			Permissions:   session.User.Permissions,
 			PlatformAdmin: session.User.PlatformAdmin,
+			Impersonating: session.User.Impersonating,
 		},
 		Tenant: SessionTenant{
 			Id:       session.Tenant.ID,

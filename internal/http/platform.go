@@ -44,7 +44,6 @@ func (s *Server) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// Impersonation lands with P1-915.
 // UpdatePlatformShop handles PATCH /v1/platform/shops/{id} (P1-913, §14.1):
 // suspend, close or reopen a shop (BR-151).
 func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
@@ -99,12 +98,17 @@ func (s *Server) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, 
 	})(w, r)
 }
 
-func (s *Server) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, _ Id) {
-	s.requirePlatformAdmin(notBuilt)(w, r)
-}
-
-func notBuilt(w http.ResponseWriter, r *http.Request) {
-	writeError(w, r, apperrors.NotFound("Not built yet."))
+// ImpersonatePlatformShop handles POST /v1/platform/shops/{id}/impersonate
+// (P1-915, §14.2): an owner's session in that shop, with no cookie (BR-152).
+func (s *Server) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.auth.Impersonate(r.Context(), id)
+		if err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		s.writeSession(w, r, session)
+	})(w, r)
 }
 
 // writePlatformShop answers a shop action with the shop as the report shows

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -20,7 +21,12 @@ import (
 // listed in unauthenticated below. Everything else needs a token, and a route
 // that forgets to say so fails closed: with no tenant in the context,
 // InTenantTx returns ErrNoTenantContext rather than reading anything.
-func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
+//
+// An impersonation token (BR-152) is honoured only while its platform admin
+// still is one: imp checks them in their own shop on every request, and a nil
+// imp, or a no, ends it with 401, which sends the admin back to their own
+// session.
+func Authenticate(signer *auth.Signer, imp impersonationCheck) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if unauthenticated(r) {
@@ -42,12 +48,35 @@ func Authenticate(signer *auth.Signer) func(http.Handler) http.Handler {
 			// Both come from the verified token and from nowhere else. The
 			// role decides what the caller may do; the tenant decides which
 			// rows they may do it to.
+			actor := tenant.Actor{UserID: claims.UserID(), IP: clientIP(r)}
 			ctx := tenant.NewContext(r.Context(), claims.TenantID)
 			ctx = auth.NewRoleContext(ctx, claims.Role)
-			ctx = tenant.NewActorContext(ctx, tenant.Actor{UserID: claims.UserID(), IP: clientIP(r)})
+			ctx = tenant.NewActorContext(ctx, actor)
+			if claims.Imp != nil {
+				allowed := false
+				if imp != nil {
+					var err error
+					allowed, err = imp.Allows(tenant.NewActorContext(tenant.NewContext(r.Context(), *claims.Imp), actor))
+					if err != nil {
+						writeError(w, r, err)
+						return
+					}
+				}
+				if !allowed {
+					writeError(w, r, apperrors.Unauthenticated("The impersonation has ended."))
+					return
+				}
+				ctx = auth.NewImpersonationContext(ctx)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// impersonationCheck is the platform admin check (platformadmin.Service):
+// whether the actor in ctx, in the shop in ctx, still is one.
+type impersonationCheck interface {
+	Allows(ctx context.Context) (bool, error)
 }
 
 // unauthenticated mirrors `security: []` in openapi.yaml.

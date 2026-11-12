@@ -22,6 +22,10 @@ const (
 	// httpOnly cookie and is rotated on every use.
 	RefreshTokenTTL = 30 * 24 * time.Hour
 
+	// ImpersonationTTL is how long a platform admin's session in another
+	// shop lasts (BR-152). It has no refresh token.
+	ImpersonationTTL = time.Hour
+
 	refreshTokenBytes = 32
 )
 
@@ -36,6 +40,10 @@ var ErrInvalidToken = errors.New("invalid access token")
 type Claims struct {
 	TenantID uuid.UUID `json:"tid"`
 	Role     string    `json:"role"`
+	// Imp marks an impersonation (BR-152): the subject is a platform admin
+	// working in TenantID, and Imp is their own shop, where the server checks
+	// them again on every request.
+	Imp *uuid.UUID `json:"imp,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -64,24 +72,31 @@ func NewSigner(secret string) (*Signer, error) {
 
 // Issue returns a signed admin access token for a staff user.
 func (s *Signer) Issue(userID, tenantID uuid.UUID, role string, now time.Time) (string, error) {
-	return s.issue(AudienceAdmin, userID, tenantID, role, now)
+	return s.issue(AudienceAdmin, userID, tenantID, role, nil, AccessTokenTTL, now)
+}
+
+// IssueImpersonation returns an owner's admin token in target for the
+// platform admin adminID of shop home (BR-152), good for ImpersonationTTL.
+func (s *Signer) IssueImpersonation(adminID, home, target uuid.UUID, now time.Time) (string, error) {
+	return s.issue(AudienceAdmin, adminID, target, RoleOwner, &home, ImpersonationTTL, now)
 }
 
 // IssueCustomer returns a signed storefront access token for a shop's
 // customer (BR-093): sub is the customer, tid the shop, and no role.
 func (s *Signer) IssueCustomer(customerID, tenantID uuid.UUID, now time.Time) (string, error) {
-	return s.issue(AudienceStorefront, customerID, tenantID, "", now)
+	return s.issue(AudienceStorefront, customerID, tenantID, "", nil, AccessTokenTTL, now)
 }
 
-func (s *Signer) issue(audience string, subject, tenantID uuid.UUID, role string, now time.Time) (string, error) {
+func (s *Signer) issue(audience string, subject, tenantID uuid.UUID, role string, imp *uuid.UUID, ttl time.Duration, now time.Time) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		TenantID: tenantID,
 		Role:     role,
+		Imp:      imp,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject.String(),
 			Audience:  jwt.ClaimStrings{audience},
 			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 	})
 	signed, err := token.SignedString(s.secret)

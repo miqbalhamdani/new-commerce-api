@@ -152,6 +152,12 @@ func TestInvitationReplyTo(t *testing.T) {
 	if m, err = render(ctx, env); err != nil || m.ReplyTo != "halo@tokoabc.com" || m.FromName != "Toko ABC" {
 		t.Errorf("with a contact email: %+v %v", m, err)
 	}
+	// An impersonating platform admin is no user of the shop: the invitation
+	// is from Belli, and still sent (BR-152).
+	env.ActorID = uuid.Must(uuid.NewV7())
+	if m, err = render(ctx, env); err != nil || m == nil || m.Subject != "Belli invited you to Toko ABC" {
+		t.Errorf("from an impersonator: %+v %v", m, err)
+	}
 }
 
 // TestSignupEmail is P1-084 at the worker: a signup's confirmation comes from

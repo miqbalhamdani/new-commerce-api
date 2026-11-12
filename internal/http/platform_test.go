@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
+	"github.com/miqbalhamdani/new-commerce-api/internal/blog"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	httpapi "github.com/miqbalhamdani/new-commerce-api/internal/http"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platformadmin"
@@ -46,6 +47,7 @@ func platformServer(t *testing.T, store *db.Store, emails ...string) http.Handle
 	return httpapi.NewRouter(httpapi.NewServer(httpapi.Services{
 		Auth:     auth.NewService(store, signer).WithPlatformAdmins(admins),
 		Team:     team.NewService(store, redis, nil),
+		Blog:     blog.NewService(store, testFiles(t)),
 		Platform: platformadmin.NewService(store, admins),
 	}, false), signer, httpapi.NewRateLimiter(redis, httpapi.AdminRateLimit, httpapi.AdminRateWindow))
 }

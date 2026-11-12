@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -217,6 +218,83 @@ func TestPlatformConsole(t *testing.T) {
 		}
 		if rec := call(http.MethodPost, "/v1/platform/shops/"+uuid.NewString()+"/invite", founder.accessToken, nil); rec.Code != http.StatusNotFound {
 			t.Errorf("an unknown shop: %d", rec.Code)
+		}
+	})
+
+	t.Run("impersonate: an owner session in that shop, audited, no cookie", func(t *testing.T) {
+		shopID := homeOf(t, owner, other.email)
+		rec := call(http.MethodPost, "/v1/platform/shops/"+shopID.String()+"/impersonate", founder.accessToken, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("impersonate: %d %s", rec.Code, rec.Body)
+		}
+		if c := rec.Header().Get("Set-Cookie"); c != "" {
+			t.Errorf("an impersonation set a cookie: %s", c)
+		}
+		var session struct {
+			AccessToken string `json:"access_token"`
+			ExpiresIn   int    `json:"expires_in"`
+			User        struct {
+				ID            string   `json:"id"`
+				Role          string   `json:"role"`
+				Permissions   []string `json:"permissions"`
+				PlatformAdmin bool     `json:"platform_admin"`
+				Impersonating bool     `json:"impersonating"`
+			} `json:"user"`
+			Tenant struct{ ID string } `json:"tenant"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &session); err != nil {
+			t.Fatal(err)
+		}
+		u := session.User
+		if !u.Impersonating || u.PlatformAdmin || u.Role != "owner" || u.ID != founderID.String() ||
+			session.Tenant.ID != shopID.String() || session.ExpiresIn != 3600 || slices.Contains(u.Permissions, auth.PermCustomersPurge) ||
+			!slices.Contains(u.Permissions, auth.PermSettingsWrite) {
+			t.Errorf("session %+v", session)
+		}
+		if n := audits(shopID, "platform.impersonate"); n != 1 {
+			t.Errorf("%d platform.impersonate rows, want 1", n)
+		}
+		imp := session.AccessToken
+
+		// It reads that shop, and only that shop.
+		rec = call(http.MethodGet, "/v1/users", imp, nil)
+		if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(other.email)) || bytes.Contains(rec.Body.Bytes(), []byte(founder.email)) {
+			t.Errorf("GET /v1/users: %d %s", rec.Code, rec.Body)
+		}
+		// A write is the founder's, in that shop.
+		rec = call(http.MethodPost, "/v1/users/invite", imp, map[string]any{"email": "staf-" + uuid.NewString() + "@example.com", "name": "Staf", "role": "admin"})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("invite as impersonator: %d %s", rec.Code, rec.Body)
+		}
+		if n := audits(shopID, "user.invite"); n != 1 {
+			t.Errorf("%d user.invite rows by the founder, want 1", n)
+		}
+		// A post has no author: the founder is no user of the shop.
+		if rec := call(http.MethodPost, "/v1/blog/posts", imp, map[string]any{"title": "Halo"}); rec.Code != http.StatusCreated ||
+			!bytes.Contains(rec.Body.Bytes(), []byte(`"author":null`)) {
+			t.Errorf("a post while impersonating: %d %s", rec.Code, rec.Body)
+		}
+		// Purging a shopper and the platform routes stay out of reach.
+		if rec := call(http.MethodPost, "/v1/customers/"+uuid.NewString()+"/purge", imp, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("purge while impersonating: %d", rec.Code)
+		}
+		if rec := call(http.MethodGet, "/v1/platform/shops", imp, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("platform while impersonating: %d", rec.Code)
+		}
+		// It ends the moment the founder is no longer a platform admin.
+		rec = httptest.NewRecorder()
+		platformServer(t, store).ServeHTTP(rec, platformRequest(t, http.MethodGet, "/v1/users", imp, nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("after removal from PLATFORM_ADMIN_EMAILS: %d", rec.Code)
+		}
+	})
+
+	t.Run("impersonate: anyone else is 403, an unknown shop 404", func(t *testing.T) {
+		if rec := call(http.MethodPost, "/v1/platform/shops/"+homeID.String()+"/impersonate", other.accessToken, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("not an admin: %d", rec.Code)
+		}
+		if rec := call(http.MethodPost, "/v1/platform/shops/"+uuid.NewString()+"/impersonate", founder.accessToken, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("unknown shop: %d", rec.Code)
 		}
 	})
 

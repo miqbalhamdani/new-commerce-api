@@ -28,7 +28,8 @@ func requirePermission(permission string, next http.HandlerFunc) http.HandlerFun
 			writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 			return
 		}
-		if !auth.Can(role, permission) {
+		// An impersonation is the owner's role less customers:purge (BR-152).
+		if !auth.Can(role, permission) || permission == auth.PermCustomersPurge && auth.Impersonating(r.Context()) {
 			writeError(w, r, apperrors.PermissionDenied(permission))
 			return
 		}

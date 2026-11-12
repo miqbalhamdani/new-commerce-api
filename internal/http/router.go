@@ -21,7 +21,13 @@ func NewRouter(srv ServerInterface, signer *auth.Signer, limiter *RateLimiter) h
 	// Outermost, so a span exists before anything can fail. An error raised by
 	// the authentication middleware still carries a trace id that resolves.
 	// The limiter keys on the user Authenticate puts in the context.
-	r.Use(tracing, Authenticate(signer), limiter.Middleware)
+	// An impersonation (BR-152) is checked against the server's platform
+	// admins; a server without them honours none.
+	var imp impersonationCheck
+	if s, ok := srv.(*Server); ok && s.platform != nil {
+		imp = s.platform
+	}
+	r.Use(tracing, Authenticate(signer, imp), limiter.Middleware)
 	return HandlerWithOptions(srv, ChiServerOptions{
 		BaseURL: "/v1", BaseRouter: r, ErrorHandlerFunc: paramError,
 	})
