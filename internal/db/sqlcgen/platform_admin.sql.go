@@ -35,7 +35,7 @@ func (q *Queries) PlatformActor(ctx context.Context, id uuid.UUID) (PlatformActo
 }
 
 const platformShopOwner = `-- name: PlatformShopOwner :one
-SELECT name, email, status, last_login_at
+SELECT id, name, email, status, last_login_at
   FROM users
  WHERE role = 'owner'
  ORDER BY created_at, id
@@ -43,6 +43,7 @@ SELECT name, email, status, last_login_at
 `
 
 type PlatformShopOwnerRow struct {
+	ID          uuid.UUID
 	Name        string
 	Email       string
 	Status      string
@@ -54,6 +55,7 @@ func (q *Queries) PlatformShopOwner(ctx context.Context) (PlatformShopOwnerRow, 
 	row := q.db.QueryRow(ctx, platformShopOwner)
 	var i PlatformShopOwnerRow
 	err := row.Scan(
+		&i.ID,
 		&i.Name,
 		&i.Email,
 		&i.Status,
@@ -104,6 +106,32 @@ func (q *Queries) RevokeShopRefreshTokens(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setInvitedOwner = `-- name: SetInvitedOwner :one
+UPDATE users SET email = coalesce($2, email), name = coalesce($3, name)
+ WHERE id = $1 AND status = 'invited' AND password_hash IS NULL
+RETURNING email, name
+`
+
+type SetInvitedOwnerParams struct {
+	ID    uuid.UUID
+	Email *string
+	Name  *string
+}
+
+type SetInvitedOwnerRow struct {
+	Email string
+	Name  string
+}
+
+// BR-151's hand-over: only while the owner has not confirmed. No row means
+// they have.
+func (q *Queries) SetInvitedOwner(ctx context.Context, arg SetInvitedOwnerParams) (SetInvitedOwnerRow, error) {
+	row := q.db.QueryRow(ctx, setInvitedOwner, arg.ID, arg.Email, arg.Name)
+	var i SetInvitedOwnerRow
+	err := row.Scan(&i.Email, &i.Name)
+	return i, err
 }
 
 const setShopStatus = `-- name: SetShopStatus :one

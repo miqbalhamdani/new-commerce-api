@@ -44,7 +44,7 @@ func (s *Server) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
 	})(w, r)
 }
 
-// The rest of §14 lands with P1-914 and P1-915.
+// Impersonation lands with P1-915.
 // UpdatePlatformShop handles PATCH /v1/platform/shops/{id} (P1-913, §14.1):
 // suspend, close or reopen a shop (BR-151).
 func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
@@ -66,12 +66,37 @@ func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id I
 	})(w, r)
 }
 
-func (s *Server) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, _ Id) {
-	s.requirePlatformAdmin(notBuilt)(w, r)
+// UpdatePlatformShopOwner handles PATCH /v1/platform/shops/{id}/owner
+// (P1-914, §14.1): the hand-over, while the owner is invited (BR-151).
+func (s *Server) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		var body PlatformShopOwnerUpdate
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		var address *string
+		if body.Email != nil {
+			a := string(*body.Email)
+			address = &a
+		}
+		if err := s.team.ChangeInvitedOwner(r.Context(), id, address, body.Name); err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		s.writePlatformShop(w, r, http.StatusOK, id)
+	})(w, r)
 }
 
-func (s *Server) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, _ Id) {
-	s.requirePlatformAdmin(notBuilt)(w, r)
+// SendPlatformShopInvite handles POST /v1/platform/shops/{id}/invite
+// (P1-914, §14.1): the signup email, to the invited owner (BR-151, BR-026).
+func (s *Server) SendPlatformShopInvite(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		if err := s.team.SendOwnerInvite(r.Context(), id); err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})(w, r)
 }
 
 func (s *Server) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, _ Id) {

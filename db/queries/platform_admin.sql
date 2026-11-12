@@ -9,7 +9,7 @@ SELECT email, status FROM users WHERE id = $1;
 
 -- name: PlatformShopOwner :one
 -- The shop's first owner.
-SELECT name, email, status, last_login_at
+SELECT id, name, email, status, last_login_at
   FROM users
  WHERE role = 'owner'
  ORDER BY created_at, id
@@ -36,3 +36,10 @@ RETURNING old.status;
 -- name: RevokeShopRefreshTokens :execrows
 -- BR-151: a shop taken offline signs every one of its staff out.
 UPDATE refresh_tokens SET revoked_at = now() WHERE revoked_at IS NULL;
+
+-- name: SetInvitedOwner :one
+-- BR-151's hand-over: only while the owner has not confirmed. No row means
+-- they have.
+UPDATE users SET email = coalesce(sqlc.narg(email), email), name = coalesce(sqlc.narg(name), name)
+ WHERE id = $1 AND status = 'invited' AND password_hash IS NULL
+RETURNING email, name;

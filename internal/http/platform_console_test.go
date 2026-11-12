@@ -182,6 +182,44 @@ func TestPlatformConsole(t *testing.T) {
 		}
 	})
 
+	t.Run("hand-over: change the invited owner, send the invite; 422 once confirmed", func(t *testing.T) {
+		shop, _ := open(t, false)
+		shopID := uuid.MustParse(shop.ID)
+		next := "owner-" + uuid.NewString() + "@example.com"
+		rec := call(http.MethodPatch, "/v1/platform/shops/"+shop.ID+"/owner", founder.accessToken, map[string]any{"email": next})
+		var got platformShop
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got.Owner == nil || got.Owner.Email != next {
+			t.Fatalf("change owner: %d %s", rec.Code, rec.Body)
+		}
+		if n := audits(shopID, "user.owner_change"); n != 1 {
+			t.Errorf("%d user.owner_change rows, want 1", n)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+shop.ID+"/owner", founder.accessToken, map[string]any{"email": other.email}); rec.Code != http.StatusUnprocessableEntity || !bytes.Contains(rec.Body.Bytes(), []byte(`"email"`)) {
+			t.Errorf("a taken email: %d %s", rec.Code, rec.Body)
+		}
+
+		before := emails()
+		if rec := call(http.MethodPost, "/v1/platform/shops/"+shop.ID+"/invite", founder.accessToken, nil); rec.Code != http.StatusNoContent {
+			t.Fatalf("invite: %d %s", rec.Code, rec.Body)
+		}
+		if emails() != before+1 || audits(shopID, "user.resend_signup") != 1 {
+			t.Error("the invite was not queued and audited")
+		}
+
+		if _, err := owner.Exec(ctx, `UPDATE users SET status = 'active', password_hash = 'x' WHERE email = $1`, next); err != nil {
+			t.Fatal(err)
+		}
+		if rec := call(http.MethodPost, "/v1/platform/shops/"+shop.ID+"/invite", founder.accessToken, nil); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("invite a confirmed owner: %d", rec.Code)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+shop.ID+"/owner", founder.accessToken, map[string]any{"name": "Lain"}); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("change a confirmed owner: %d", rec.Code)
+		}
+		if rec := call(http.MethodPost, "/v1/platform/shops/"+uuid.NewString()+"/invite", founder.accessToken, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("an unknown shop: %d", rec.Code)
+		}
+	})
+
 	t.Run("open: anyone else is 403", func(t *testing.T) {
 		rec := call(http.MethodPost, "/v1/platform/shops", other.accessToken, map[string]any{
 			"shop_name": "Tiga", "owner_name": "Rina", "owner_email": "x-" + uuid.NewString() + "@example.com", "send_invite": false})

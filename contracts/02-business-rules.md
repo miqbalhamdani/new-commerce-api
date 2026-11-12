@@ -1161,7 +1161,8 @@ there, with the platform admin as the actor.
   already issued runs out within its 15 minutes. Nothing is deleted; `active` undoes either.
 - **Hand-over:** while the owner is still `invited`, the platform admin may change their email and
   name, and send them the signup email (BR-026) at their current address. Once the owner has
-  confirmed, the shop is theirs and neither is allowed.
+  confirmed, the shop is theirs and neither is allowed. A link already sent to an earlier address
+  keeps working until it expires, so the address is changed before the email is sent.
 
 *Why:* the founder sets up shops for client demos before the client has an account, and needs to
 take a shop offline without a database console.

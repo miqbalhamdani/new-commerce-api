@@ -18,6 +18,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
+	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -101,6 +102,96 @@ func (s *Service) OpenShopForPlatform(ctx context.Context, shopName, name, addre
 		s.sendSignup(ctx, tenantID, ownerID)
 	}
 	return tenantID, nil
+}
+
+// ChangeInvitedOwner is BR-151's hand-over: a new email or name for a
+// shop's owner who has not confirmed yet, audited in that shop. It sends
+// nothing. A shop that does not exist is db.ErrNotFound.
+//
+// ponytail: a signup link already sent to the old address stays valid until
+// it expires (BR-026, 7 days): the token names the user, not the address.
+// Bind it to the address if hand-overs after a sent invite become common.
+func (s *Service) ChangeInvitedOwner(ctx context.Context, shopID uuid.UUID, address, name *string) error {
+	if address != nil {
+		*address = strings.TrimSpace(*address)
+		if !validAddress(*address) {
+			return fieldError("email", "email is not a valid address")
+		}
+	}
+	if name != nil {
+		*name = strings.TrimSpace(*name)
+		if *name == "" || utf8.RuneCountInString(*name) > 100 {
+			return fieldError("name", "name is 1 to 100 characters")
+		}
+	}
+	if _, err := s.store.Tenant(ctx, shopID); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, shopID)
+	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		q := sqlcgen.New(tx)
+		before, err := invitedOwner(tctx, q)
+		if err != nil {
+			return err
+		}
+		after, err := q.SetInvitedOwner(tctx, sqlcgen.SetInvitedOwnerParams{ID: before.ID, Email: address, Name: name})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ownerConfirmed()
+		}
+		if err != nil {
+			return err
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.owner_change", SubjectType: "user", SubjectID: before.ID.String(),
+			Before: map[string]any{"email": before.Email, "name": before.Name},
+			After:  map[string]any{"email": after.Email, "name": after.Name}})
+	})
+	if taken(err) {
+		return fieldError("email", "This email already has an account in a shop.")
+	}
+	return err
+}
+
+// SendOwnerInvite queues the signup email to a shop's unconfirmed owner, at
+// their current address (BR-151, BR-026), audited in that shop. A shop that
+// does not exist is db.ErrNotFound.
+func (s *Service) SendOwnerInvite(ctx context.Context, shopID uuid.UUID) error {
+	if _, err := s.store.Tenant(ctx, shopID); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, shopID)
+	var ownerID uuid.UUID
+	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		o, err := invitedOwner(tctx, sqlcgen.New(tx))
+		if err != nil {
+			return err
+		}
+		ownerID = o.ID
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "user.resend_signup", SubjectType: "user", SubjectID: o.ID.String()})
+	})
+	if err == nil {
+		s.sendSignup(ctx, shopID, ownerID)
+	}
+	return err
+}
+
+// invitedOwner is the shop's first owner, or 422 when they have confirmed (or
+// the shop has none).
+func invitedOwner(ctx context.Context, q *sqlcgen.Queries) (sqlcgen.PlatformShopOwnerRow, error) {
+	o, err := q.PlatformShopOwner(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return o, apperrors.ValidationFailed("This shop has no owner.")
+	}
+	if err != nil {
+		return o, err
+	}
+	if o.Status != "invited" {
+		return o, ownerConfirmed()
+	}
+	return o, nil
+}
+
+func ownerConfirmed() error {
+	return apperrors.ValidationFailed("The owner has confirmed their account; the shop is theirs (BR-151).")
 }
 
 // openShop is one signup's transaction: the tenant, its owner (added by
