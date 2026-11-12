@@ -16,6 +16,7 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/email"
 	"github.com/miqbalhamdani/new-commerce-api/internal/platform/config"
+	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
 // The platform console's routes (Phase 11, BR-151, BR-152). The suite's
@@ -207,7 +208,13 @@ func TestPlatformConsole(t *testing.T) {
 			t.Error("the invite was not queued and audited")
 		}
 
-		if _, err := owner.Exec(ctx, `UPDATE users SET status = 'active', password_hash = 'x' WHERE email = $1`, next); err != nil {
+		// In the shop's own transaction: in limited-roles mode the owner
+		// connection reads across shops but writes none (BR-001).
+		tctx := tenant.NewContext(ctx, shopID)
+		if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
+			_, err := tx.Exec(tctx, `UPDATE users SET status = 'active', password_hash = 'x' WHERE email = $1`, next)
+			return err
+		}); err != nil {
 			t.Fatal(err)
 		}
 		if rec := call(http.MethodPost, "/v1/platform/shops/"+shop.ID+"/invite", founder.accessToken, nil); rec.Code != http.StatusUnprocessableEntity {
