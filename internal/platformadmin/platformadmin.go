@@ -28,12 +28,13 @@ const (
 	sleepsFor = 14 * 24 * time.Hour
 )
 
-// Sources: the signup form, Google, or cmd/create-tenant and cmd/demo-seed,
-// which write no tenant.register audit row.
+// Sources: the signup form, Google, cmd/create-tenant and cmd/demo-seed
+// (which write no tenant.register audit row), or a platform admin (BR-151).
 const (
-	SourceEmail  = "email"
-	SourceGoogle = "google"
-	SourceCLI    = "cli"
+	SourceEmail    = "email"
+	SourceGoogle   = "google"
+	SourceCLI      = "cli"
+	SourcePlatform = "platform"
 )
 
 type Service struct {
@@ -127,6 +128,16 @@ func (s *Service) Report(ctx context.Context) (Report, error) {
 	return out, nil
 }
 
+// Shop is one shop as the report shows it, for the answer to a shop action
+// (BR-151). A shop that does not exist is db.ErrNotFound.
+func (s *Service) Shop(ctx context.Context, id uuid.UUID) (Shop, error) {
+	t, err := s.store.Tenant(ctx, id)
+	if err != nil {
+		return Shop{}, err
+	}
+	return s.shop(ctx, t)
+}
+
 func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 	shop := Shop{ID: t.ID, Name: t.Name, Slug: t.Slug, Status: t.Status, CreatedAt: t.CreatedAt}
 	err := s.store.InTenantTx(tenant.NewContext(ctx, t.ID), func(tx pgx.Tx) error {
@@ -138,8 +149,8 @@ func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 		shop.Source = SourceCLI
 		if st.Registered {
 			shop.Source = SourceEmail
-			if st.RegisterVia != nil && *st.RegisterVia == SourceGoogle {
-				shop.Source = SourceGoogle
+			if v := st.RegisterVia; v != nil && (*v == SourceGoogle || *v == SourcePlatform) {
+				shop.Source = *v
 			}
 		}
 		shop.LastActivityAt = latest(st.LastAuditAt, st.LastLoginAt)
@@ -170,7 +181,7 @@ func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 
 // count adds one shop to the summary, if it signed up itself (BR-150).
 func count(sum *Summary, shop Shop, now time.Time) {
-	if shop.Source == SourceCLI {
+	if shop.Source != SourceEmail && shop.Source != SourceGoogle {
 		return
 	}
 	sum.Shops++
