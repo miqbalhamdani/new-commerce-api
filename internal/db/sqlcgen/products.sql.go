@@ -84,9 +84,9 @@ func (q *Queries) ClearProductCategories(ctx context.Context, productID uuid.UUI
 }
 
 const createProduct = `-- name: CreateProduct :one
-INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes)
+INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes, package)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
-        $4, $5, $6)
+        $4, $5, $6, $7)
 RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
 `
 
@@ -97,6 +97,7 @@ type CreateProductParams struct {
 	Description *string
 	BrandID     *uuid.UUID
 	Attributes  []byte
+	Package     []byte
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -107,6 +108,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		arg.Description,
 		arg.BrandID,
 		arg.Attributes,
+		arg.Package,
 	)
 	var i Product
 	err := row.Scan(
@@ -304,10 +306,11 @@ UPDATE products SET
   description = CASE WHEN $3::bool THEN $4 ELSE description END,
   brand_id    = CASE WHEN $5::bool THEN $6::uuid ELSE brand_id END,
   attributes  = coalesce($7, attributes),
-  status      = coalesce($8, status),
+  package     = CASE WHEN $8::bool THEN $9::jsonb ELSE package END,
+  status      = coalesce($10, status),
   version     = version + 1,
   updated_at  = now()
-WHERE id = $9 AND version = $10
+WHERE id = $11 AND version = $12
 RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
 `
 
@@ -319,6 +322,8 @@ type UpdateProductParams struct {
 	SetBrand       bool
 	BrandID        *uuid.UUID
 	Attributes     []byte
+	SetPackage     bool
+	Package        []byte
 	Status         *string
 	ID             uuid.UUID
 	Version        int32
@@ -334,6 +339,8 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		arg.SetBrand,
 		arg.BrandID,
 		arg.Attributes,
+		arg.SetPackage,
+		arg.Package,
 		arg.Status,
 		arg.ID,
 		arg.Version,

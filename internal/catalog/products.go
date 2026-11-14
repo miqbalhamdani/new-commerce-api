@@ -33,6 +33,7 @@ type ProductInput struct {
 	BrandID     *uuid.UUID
 	CategoryIDs []uuid.UUID
 	Attributes  map[string]any
+	Package     *Package // an umrah shop's (BR-171); the caller checks the shop
 }
 
 // ProductPatch is a PATCH: nil leaves a field alone; the Clear flags set a
@@ -46,6 +47,8 @@ type ProductPatch struct {
 	ClearBrand       bool
 	CategoryIDs      *[]uuid.UUID
 	Attributes       map[string]any
+	Package          *Package // replaces the whole object (BR-171)
+	ClearPackage     bool
 	Status           *string
 }
 
@@ -72,8 +75,12 @@ func (s *Service) CreateProduct(ctx context.Context, in ProductInput) (ProductVi
 		if err != nil {
 			return err
 		}
+		pkg, err := packageJSON(in.Package)
+		if err != nil {
+			return err
+		}
 		p, err := q.CreateProduct(ctx, sqlcgen.CreateProductParams{ID: uuid.Must(uuid.NewV7()), Title: in.Title,
-			Slug: slug, Description: in.Description, BrandID: in.BrandID, Attributes: attrs})
+			Slug: slug, Description: in.Description, BrandID: in.BrandID, Attributes: attrs, Package: pkg})
 		if err != nil {
 			return err
 		}
@@ -134,6 +141,12 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, version int, 
 			SetBrand: p.BrandID != nil || p.ClearBrand, BrandID: p.BrandID, Status: p.Status}
 		if p.Attributes != nil {
 			if params.Attributes, err = json.Marshal(p.Attributes); err != nil {
+				return err
+			}
+		}
+		if p.Package != nil || p.ClearPackage {
+			params.SetPackage = true
+			if params.Package, err = packageJSON(p.Package); err != nil {
 				return err
 			}
 		}
@@ -317,6 +330,14 @@ func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.
 func productAudit(p sqlcgen.Product) map[string]any {
 	return map[string]any{"title": p.Title, "slug": p.Slug, "status": p.Status,
 		"description": p.Description, "brand_id": p.BrandID, "version": p.Version}
+}
+
+// packageJSON is a package as products.package stores it; nil for none.
+func packageJSON(p *Package) ([]byte, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return json.Marshal(p)
 }
 
 func orEmpty(m map[string]any) map[string]any {

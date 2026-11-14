@@ -128,7 +128,7 @@ func (q *Queries) StorefrontCategoriesOfProducts(ctx context.Context, productIds
 const storefrontProductBySlug = `-- name: StorefrontProductBySlug :one
 
 SELECT sp.id, sp.slug, sp.title, sp.description, sp.attributes, sp.option_names, sp.updated_at,
-       b.slug AS brand_slug, b.name AS brand_name
+       b.slug AS brand_slug, b.name AS brand_name, sp.package
 FROM storefront_products sp
 LEFT JOIN brands b ON b.id = sp.brand_id AND b.archived_at IS NULL
 WHERE sp.slug = $1
@@ -144,6 +144,7 @@ type StorefrontProductBySlugRow struct {
 	UpdatedAt   time.Time
 	BrandSlug   *string
 	BrandName   *string
+	Package     []byte
 }
 
 // The storefront's catalog reads (P1-203, 04-api-spec.md §11.4). Products
@@ -163,6 +164,7 @@ func (q *Queries) StorefrontProductBySlug(ctx context.Context, slug string) (Sto
 		&i.UpdatedAt,
 		&i.BrandSlug,
 		&i.BrandName,
+		&i.Package,
 	)
 	return i, err
 }

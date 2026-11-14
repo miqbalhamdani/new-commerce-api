@@ -1998,37 +1998,37 @@ type OrderUpdateRequest struct {
 	ShippingAddress *ShippingAddressWrite `json:"shipping_address,omitempty"`
 }
 
-// Package BR-171. Every field is optional on a write and `null` (`[]` for a list) on a read when
-// unset. A field not listed here, or one that breaks its rule, is `422` on
-// `package.{field}`.
+// Package BR-171. A read has every field, `null` (`[]` for a list) when unset. A write may leave
+// any out, which unsets it, since the object is replaced whole. A field not listed here,
+// or one that breaks its rule, is `422` on `package.{field}`.
 type Package struct {
-	Airline *string   `json:"airline,omitempty"`
-	Bonus   *[]string `json:"bonus,omitempty"`
+	Airline *string  `json:"airline"`
+	Bonus   []string `json:"bonus"`
 
 	// CancellationPolicy For this package, in place of the shop's (BR-142).
-	CancellationPolicy *string             `json:"cancellation_policy,omitempty"`
-	DepartureDate      *openapi_types.Date `json:"departure_date,omitempty"`
+	CancellationPolicy *string             `json:"cancellation_policy"`
+	DepartureDate      *openapi_types.Date `json:"departure_date"`
 
 	// DepartureText A departure not yet fixed to a day, such as `Desember 2026`.
 	//
 	// Examples: Desember 2026
-	DepartureText *string         `json:"departure_text,omitempty"`
-	DurationDays  *int            `json:"duration_days,omitempty"`
-	Excludes      *[]string       `json:"excludes,omitempty"`
-	Hotels        *[]PackageHotel `json:"hotels,omitempty"`
-	Includes      *[]string       `json:"includes,omitempty"`
+	DepartureText *string        `json:"departure_text"`
+	DurationDays  *int           `json:"duration_days"`
+	Excludes      []string       `json:"excludes"`
+	Hotels        []PackageHotel `json:"hotels"`
+	Includes      []string       `json:"includes"`
 
 	// Itinerary The days in order; day N is the Nth entry.
-	Itinerary *[]PackageDay `json:"itinerary,omitempty"`
-	PriceNote *string       `json:"price_note,omitempty"`
+	Itinerary []PackageDay `json:"itinerary"`
+	PriceNote *string      `json:"price_note"`
 
 	// ReturnDate Not before `departure_date`.
-	ReturnDate *openapi_types.Date `json:"return_date,omitempty"`
-	Route      *string             `json:"route,omitempty"`
+	ReturnDate *openapi_types.Date `json:"return_date"`
+	Route      *string             `json:"route"`
 
 	// SeatsLeft What the owner types; nothing counts it down (BR-017). Not above `seats_total`.
-	SeatsLeft  *int `json:"seats_left,omitempty"`
-	SeatsTotal *int `json:"seats_total,omitempty"`
+	SeatsLeft  *int `json:"seats_left"`
+	SeatsTotal *int `json:"seats_total"`
 }
 
 // PackageBrief defines model for PackageBrief.
@@ -2041,7 +2041,7 @@ type PackageBrief struct {
 
 // PackageDay defines model for PackageDay.
 type PackageDay struct {
-	Text  *string `json:"text,omitempty"`
+	Text  *string `json:"text"`
 	Title string  `json:"title"`
 }
 
@@ -2050,11 +2050,11 @@ type PackageHotel struct {
 	// City Examples: Makkah
 	City   string `json:"city"`
 	Name   string `json:"name"`
-	Nights *int   `json:"nights,omitempty"`
-	Stars  *int   `json:"stars,omitempty"`
+	Nights *int   `json:"nights"`
+	Stars  *int   `json:"stars"`
 
-	// Variant An option value of the product, for a hotel only that choice uses; `null` for all.
-	Variant *string `json:"variant,omitempty"`
+	// Variant The option value (such as `Promo`) whose choice uses this hotel; `null` for every choice.
+	Variant *string `json:"variant"`
 }
 
 // PlatformShop defines model for PlatformShop.

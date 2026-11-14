@@ -5,9 +5,9 @@
 SELECT EXISTS (SELECT 1 FROM products WHERE slug = $1 AND id IS DISTINCT FROM sqlc.narg(except_id)::uuid);
 
 -- name: CreateProduct :one
-INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes)
+INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes, package)
 VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(title), sqlc.arg(slug),
-        sqlc.narg(description), sqlc.narg(brand_id), sqlc.arg(attributes))
+        sqlc.narg(description), sqlc.narg(brand_id), sqlc.arg(attributes), sqlc.narg(package))
 RETURNING *;
 
 -- name: GetProduct :one
@@ -21,6 +21,7 @@ UPDATE products SET
   description = CASE WHEN sqlc.arg(set_description)::bool THEN sqlc.narg(description) ELSE description END,
   brand_id    = CASE WHEN sqlc.arg(set_brand)::bool THEN sqlc.narg(brand_id)::uuid ELSE brand_id END,
   attributes  = coalesce(sqlc.narg(attributes), attributes),
+  package     = CASE WHEN sqlc.arg(set_package)::bool THEN sqlc.narg(package)::jsonb ELSE package END,
   status      = coalesce(sqlc.narg(status), status),
   version     = version + 1,
   updated_at  = now()
