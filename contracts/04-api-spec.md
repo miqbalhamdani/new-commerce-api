@@ -467,7 +467,7 @@ DELETE /v1/users/{id}
 - Only an owner can grant `owner` (BR-023).
 - The last active owner cannot be demoted or disabled (BR-027).
 - An invitation, or `status: active` for a disabled user, that would take the shop past its
-  plan's accounts is `422` (BR-162).
+  plan's accounts is `422` (BR-162). Disabling an invited user withdraws the invitation.
 - `PATCH` takes `role`, `status` (`active` re-enables a disabled user) and `bio`, without
   `If-Match`. `bio` is the line shown under the user's blog posts (BR-133), at most 300
   characters; `null` or an empty string clears it.

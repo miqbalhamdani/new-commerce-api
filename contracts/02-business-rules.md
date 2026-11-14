@@ -1231,8 +1231,9 @@ is read with the key and cached with it, for at most 60 seconds (BR-085).
 ### BR-162 Accounts per plan
 A shop has at most 1 account on `mulai`, 2 on `katalog` and 5 on `jualan`, counting `active` and
 `invited` users, the owner included, and not `disabled` ones. An invitation, or re-enabling a
-disabled user, that would pass the limit is `422`. A downgrade signs no one out; it only stops new
-accounts until the shop is back under its limit.
+disabled user, that would pass the limit is `422`. Disabling an invited user withdraws the
+invitation and frees its account; the link stops working, as an accepted one does (BR-026). A
+downgrade signs no one out; it only stops new accounts until the shop is back under its limit.
 
 *Why:* the pricing page promises these numbers.
 
