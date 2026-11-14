@@ -39,7 +39,8 @@ type Keys struct {
 
 type cachedKey struct {
 	key      db.APIKey
-	inactive bool // the key's shop is suspended or closed (BR-151)
+	inactive bool   // the key's shop is suspended or closed (BR-151)
+	plan     string // the key's shop's plan (BR-161)
 	at       time.Time
 }
 
@@ -93,7 +94,7 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 			k.platform(w, r, origin, next)
 			return
 		}
-		key, active, err := k.resolve(r.Context(), auth.HashRefreshToken(raw))
+		key, active, plan, err := k.resolve(r.Context(), auth.HashRefreshToken(raw))
 		if errors.Is(err, db.ErrNotFound) || err == nil && key.RevokedAt != nil {
 			httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
 			return
@@ -122,6 +123,10 @@ func (k *Keys) Middleware(next http.Handler) http.Handler {
 			// So the page can read its limits (BR-014).
 			w.Header().Set("Access-Control-Expose-Headers", "RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After")
 		}
+		if !takesOrders(plan, r.URL.Path) {
+			httpkit.WriteError(w, r, notOnJualan())
+			return
+		}
 
 		ctx := tenant.NewContext(r.Context(), key.TenantID)
 		ctx = context.WithValue(ctx, keyCtx{}, Key{ID: key.ID, AllowedOrigin: key.AllowedOrigin, Browser: origin != ""})
@@ -137,13 +142,17 @@ func (k *Keys) platform(w http.ResponseWriter, r *http.Request, origin string, n
 		httpkit.WriteError(w, r, apperrors.InvalidAPIKey())
 		return
 	}
-	id, err := k.shop(r.Context(), r.Header.Get("X-Shop"))
+	id, plan, err := k.shop(r.Context(), r.Header.Get("X-Shop"))
 	if errors.Is(err, db.ErrNotFound) {
 		httpkit.WriteError(w, r, apperrors.NotFound("No such shop."))
 		return
 	}
 	if err != nil {
 		httpkit.WriteError(w, r, err)
+		return
+	}
+	if !takesOrders(plan, r.URL.Path) {
+		httpkit.WriteError(w, r, notOnJualan())
 		return
 	}
 	ctx := tenant.NewContext(r.Context(), id)
@@ -156,22 +165,45 @@ func (k *Keys) platform(w http.ResponseWriter, r *http.Request, origin string, n
 // shop resolves a slug to its active shop through the same cache as keys,
 // so a slug the owner gives up stops working within the TTL (BR-140). As
 // with keys, only hits are cached.
-func (k *Keys) shop(ctx context.Context, slug string) (uuid.UUID, error) {
+func (k *Keys) shop(ctx context.Context, slug string) (uuid.UUID, string, error) {
 	entry := "slug:" + slug
 	k.mu.Lock()
 	c, ok := k.cache[entry]
 	k.mu.Unlock()
 	if ok && k.now().Sub(c.at) < k.ttl {
-		return c.key.TenantID, nil
+		return c.key.TenantID, c.plan, nil
 	}
-	id, err := k.store.ActiveTenantBySlug(ctx, slug)
+	id, plan, err := k.store.ActiveTenantBySlug(ctx, slug)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, "", err
 	}
 	k.mu.Lock()
-	k.cache[entry] = cachedKey{key: db.APIKey{TenantID: id}, at: k.now()}
+	k.cache[entry] = cachedKey{key: db.APIKey{TenantID: id}, plan: plan, at: k.now()}
 	k.mu.Unlock()
-	return id, nil
+	return id, plan, nil
+}
+
+// ordering is BR-161's routes, under BaseURL: the cart, checkout, customer
+// accounts and orders, which only a shop on jualan answers.
+var ordering = []string{"/carts", "/customers", "/auth", "/me", "/orders"}
+
+// takesOrders reports whether a shop on plan may be asked for path: anything
+// but BR-161's routes, and those only on jualan.
+func takesOrders(plan, path string) bool {
+	if plan == auth.PlanJualan {
+		return true
+	}
+	rest := strings.TrimPrefix(path, BaseURL)
+	for _, p := range ordering {
+		if rest == p || strings.HasPrefix(rest, p+"/") {
+			return false
+		}
+	}
+	return true
+}
+
+func notOnJualan() error {
+	return apperrors.Forbidden("This shop's plan takes no orders on a website: carts, checkout, customer accounts and orders need the jualan plan (BR-161).")
 }
 
 // allowedHeaders are the request headers a storefront call may carry
@@ -193,28 +225,29 @@ func preflight(w http.ResponseWriter, origin string) {
 // database. Only keys that exist are cached, revoked ones included: caching
 // misses would let anyone grow the map without bound by sending random keys.
 //
-// active is whether the key's shop is active (BR-151), cached with the key.
-func (k *Keys) resolve(ctx context.Context, hash string) (key db.APIKey, active bool, err error) {
+// active is whether the key's shop is active (BR-151), and plan its plan
+// (BR-161), both cached with the key.
+func (k *Keys) resolve(ctx context.Context, hash string) (key db.APIKey, active bool, plan string, err error) {
 	k.mu.Lock()
 	c, ok := k.cache[hash]
 	k.mu.Unlock()
 	if ok && k.now().Sub(c.at) < k.ttl {
-		return c.key, !c.inactive, nil
+		return c.key, !c.inactive, c.plan, nil
 	}
 
 	key, err = k.store.ResolveAPIKey(ctx, hash)
 	if err != nil {
-		return db.APIKey{}, false, err
+		return db.APIKey{}, false, "", err
 	}
 	// tenants has no RLS: this reads one column of the shop the key just
 	// named, not a boundary crossed (BR-003).
 	shop, err := k.store.Tenant(ctx, key.TenantID)
 	if err != nil {
-		return db.APIKey{}, false, err
+		return db.APIKey{}, false, "", err
 	}
 	active = shop.Status == "active"
 	k.mu.Lock()
-	k.cache[hash] = cachedKey{key: key, inactive: !active, at: k.now()}
+	k.cache[hash] = cachedKey{key: key, inactive: !active, plan: shop.Plan, at: k.now()}
 	k.mu.Unlock()
 
 	if key.RevokedAt == nil {
@@ -223,5 +256,5 @@ func (k *Keys) resolve(ctx context.Context, hash string) (key db.APIKey, active 
 			slog.WarnContext(ctx, "could not record API key use", "error", err)
 		}
 	}
-	return key, active, nil
+	return key, active, shop.Plan, nil
 }
