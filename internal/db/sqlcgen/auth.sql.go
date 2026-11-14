@@ -41,7 +41,8 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const getSession = `-- name: GetSession :one
 
 SELECT u.id AS user_id, u.name AS user_name, u.email, u.role,
-       t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.status AS tenant_status
+       t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.status AS tenant_status,
+       t.plan
   FROM users u
   JOIN tenants t ON t.id = u.tenant_id
  WHERE u.id = $1
@@ -56,6 +57,7 @@ type GetSessionRow struct {
 	TenantName   string
 	Timezone     string
 	TenantStatus string
+	Plan         string
 }
 
 // Queries over the auth tables.
@@ -78,6 +80,7 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (GetSessionRow, 
 		&i.TenantName,
 		&i.Timezone,
 		&i.TenantStatus,
+		&i.Plan,
 	)
 	return i, err
 }

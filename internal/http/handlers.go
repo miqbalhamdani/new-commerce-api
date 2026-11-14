@@ -160,6 +160,7 @@ func (s *Server) writeSessionStatus(w http.ResponseWriter, r *http.Request, sess
 			Id:       session.Tenant.ID,
 			Name:     session.Tenant.Name,
 			Timezone: session.Tenant.Timezone,
+			Plan:     ShopPlan(session.Tenant.Plan),
 		},
 	}
 

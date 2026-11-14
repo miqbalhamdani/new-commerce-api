@@ -43,3 +43,10 @@ UPDATE refresh_tokens SET revoked_at = now() WHERE revoked_at IS NULL;
 UPDATE users SET email = coalesce(sqlc.narg(email), email), name = coalesce(sqlc.narg(name), name)
  WHERE id = $1 AND status = 'invited' AND password_hash IS NULL
 RETURNING email, name;
+
+-- name: SetShopPlan :one
+-- BR-160. Returns the plan and date it replaced.
+UPDATE tenants t SET plan = sqlc.arg(plan), plan_until = sqlc.narg(plan_until)
+  FROM (SELECT plan, plan_until FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.plan, old.plan_until;

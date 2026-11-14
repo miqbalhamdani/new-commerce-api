@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.14.0
+  version: 0.15.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -35,6 +35,12 @@ info:
     `404`. It is not available to shops: a shop's own website uses its own key. `/config` tells
     it which of the eight themes, and which of that theme's four colours, to draw the shop in
     (BR-142, BR-143).
+
+    ## Plans (BR-161)
+
+    Only a shop on the `jualan` plan takes orders on a website. On any other shop the cart,
+    checkout, customer-account and order routes (`/carts…`, `/customers`, `/auth/…`, `/me…`,
+    `/orders/…`) answer `403 permission_denied`; the catalog, the blog and `/config` stay open.
 
     ## Conventions
 

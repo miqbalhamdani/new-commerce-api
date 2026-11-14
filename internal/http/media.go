@@ -25,8 +25,7 @@ type presignBody struct {
 // blog:write for a blog cover or body image and settings:write for the shop's
 // logo; the purpose decides which, so it is checked after decoding.
 func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
-	role, ok := auth.RoleFromContext(r.Context())
-	if !ok {
+	if _, ok := auth.RoleFromContext(r.Context()); !ok {
 		writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 		return
 	}
@@ -66,7 +65,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch body.Purpose.Value {
 	case "blog_cover", "blog_image": // the same upload; a body image is linked by its public URL
-		if !auth.Can(role, auth.PermBlogWrite) {
+		if !auth.Allowed(r.Context(), auth.PermBlogWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermBlogWrite))
 			return
 		}
@@ -83,7 +82,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 			PublicUrl: &c.PublicURL})
 		return
 	case "shop_logo", "shop_hero":
-		if !auth.Can(role, auth.PermSettingsWrite) {
+		if !auth.Allowed(r.Context(), auth.PermSettingsWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermSettingsWrite))
 			return
 		}
@@ -104,7 +103,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 			PublicUrl: &c.PublicURL})
 		return
 	case "product_image":
-		if !auth.Can(role, auth.PermMediaWrite) {
+		if !auth.Allowed(r.Context(), auth.PermMediaWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermMediaWrite))
 			return
 		}
@@ -114,7 +113,7 @@ func (s *Server) PresignMedia(w http.ResponseWriter, r *http.Request) {
 		}
 		p, err = s.catalog.PresignImage(r.Context(), body.ProductID.Value, body.MimeType.Value, body.Bytes.Value, body.SHA256.Value)
 	case "product_import":
-		if !auth.Can(role, auth.PermProductsWrite) {
+		if !auth.Allowed(r.Context(), auth.PermProductsWrite) {
 			writeError(w, r, apperrors.PermissionDenied(auth.PermProductsWrite))
 			return
 		}

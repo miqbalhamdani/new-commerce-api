@@ -684,36 +684,57 @@ func (e SettingsStatus) Valid() bool {
 	}
 }
 
+// Defines values for ShopPlan.
+const (
+	ShopPlanJualan  ShopPlan = "jualan"
+	ShopPlanKatalog ShopPlan = "katalog"
+	ShopPlanMulai   ShopPlan = "mulai"
+)
+
+// Valid indicates whether the value is a known member of the ShopPlan enum.
+func (e ShopPlan) Valid() bool {
+	switch e {
+	case ShopPlanJualan:
+		return true
+	case ShopPlanKatalog:
+		return true
+	case ShopPlanMulai:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ShopTheme.
 const (
-	Busana         ShopTheme = "busana"
-	Clothing       ShopTheme = "clothing"
-	Furnitur       ShopTheme = "furnitur"
-	FurniturCeria  ShopTheme = "furnitur-ceria"
-	FurniturEarthy ShopTheme = "furnitur-earthy"
-	Katalog        ShopTheme = "katalog"
-	KatalogHangat  ShopTheme = "katalog-hangat"
-	Woman          ShopTheme = "woman"
+	ShopThemeBusana         ShopTheme = "busana"
+	ShopThemeClothing       ShopTheme = "clothing"
+	ShopThemeFurnitur       ShopTheme = "furnitur"
+	ShopThemeFurniturCeria  ShopTheme = "furnitur-ceria"
+	ShopThemeFurniturEarthy ShopTheme = "furnitur-earthy"
+	ShopThemeKatalog        ShopTheme = "katalog"
+	ShopThemeKatalogHangat  ShopTheme = "katalog-hangat"
+	ShopThemeWoman          ShopTheme = "woman"
 )
 
 // Valid indicates whether the value is a known member of the ShopTheme enum.
 func (e ShopTheme) Valid() bool {
 	switch e {
-	case Busana:
+	case ShopThemeBusana:
 		return true
-	case Clothing:
+	case ShopThemeClothing:
 		return true
-	case Furnitur:
+	case ShopThemeFurnitur:
 		return true
-	case FurniturCeria:
+	case ShopThemeFurniturCeria:
 		return true
-	case FurniturEarthy:
+	case ShopThemeFurniturEarthy:
 		return true
-	case Katalog:
+	case ShopThemeKatalog:
 		return true
-	case KatalogHangat:
+	case ShopThemeKatalogHangat:
 		return true
-	case Woman:
+	case ShopThemeWoman:
 		return true
 	default:
 		return false
@@ -1957,13 +1978,21 @@ type OrderUpdateRequest struct {
 
 // PlatformShop defines model for PlatformShop.
 type PlatformShop struct {
-	CreatedAt      time.Time            `json:"created_at"`
-	Id             openapi_types.UUID   `json:"id"`
-	LastActivityAt *time.Time           `json:"last_activity_at"`
-	Name           string               `json:"name"`
-	Orders         PlatformShopOrders   `json:"orders"`
-	Owner          *PlatformShopOwner   `json:"owner"`
-	Products       PlatformShopProducts `json:"products"`
+	CreatedAt      time.Time          `json:"created_at"`
+	Id             openapi_types.UUID `json:"id"`
+	LastActivityAt *time.Time         `json:"last_activity_at"`
+	Name           string             `json:"name"`
+	Orders         PlatformShopOrders `json:"orders"`
+	Owner          *PlatformShopOwner `json:"owner"`
+
+	// Plan BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
+	// does not include; the admin reads it only for what no permission covers, such as the
+	// storefront's checkout settings, which only `jualan` uses (BR-161).
+	Plan ShopPlan `json:"plan"`
+
+	// PlanUntil When the paid period is expected to end. Display only (BR-160).
+	PlanUntil *openapi_types.Date  `json:"plan_until"`
+	Products  PlatformShopProducts `json:"products"`
 
 	// Slug The website is `https://{slug}.belli.id` (BR-140).
 	Slug string `json:"slug"`
@@ -1986,6 +2015,9 @@ type PlatformShopStatus string
 type PlatformShopCreate struct {
 	OwnerEmail openapi_types.Email `json:"owner_email"`
 	OwnerName  string              `json:"owner_name"`
+
+	// Plan The shop's plan; `mulai` when left out (BR-160).
+	Plan *ShopPlan `json:"plan,omitempty"`
 
 	// SendInvite Email the owner their signup code and link now. False holds the shop.
 	SendInvite bool   `json:"send_invite"`
@@ -2017,6 +2049,17 @@ type PlatformShopOwnerStatus string
 type PlatformShopOwnerUpdate struct {
 	Email *openapi_types.Email `json:"email,omitempty"`
 	Name  *string              `json:"name,omitempty"`
+}
+
+// PlatformShopPlanUpdate defines model for PlatformShopPlanUpdate.
+type PlatformShopPlanUpdate struct {
+	// Plan BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
+	// does not include; the admin reads it only for what no permission covers, such as the
+	// storefront's checkout settings, which only `jualan` uses (BR-161).
+	Plan ShopPlan `json:"plan"`
+
+	// PlanUntil When the paid period is expected to end, or `null`. Display only (BR-160).
+	PlanUntil *openapi_types.Date `json:"plan_until"`
 }
 
 // PlatformShopProducts defines model for PlatformShopProducts.
@@ -2283,6 +2326,11 @@ type SessionTenant struct {
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
 
+	// Plan BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
+	// does not include; the admin reads it only for what no permission covers, such as the
+	// storefront's checkout settings, which only `jualan` uses (BR-161).
+	Plan ShopPlan `json:"plan"`
+
 	// Timezone IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
 	//
 	// Examples: Asia/Jakarta
@@ -2400,6 +2448,11 @@ type ShippingRatesRequest struct {
 		VariantId openapi_types.UUID `json:"variant_id"`
 	} `json:"lines"`
 }
+
+// ShopPlan BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
+// does not include; the admin reads it only for what no permission covers, such as the
+// storefront's checkout settings, which only `jualan` uses (BR-161).
+type ShopPlan string
 
 // ShopTheme The hosted website's theme (BR-143).
 type ShopTheme string
@@ -3058,6 +3111,9 @@ type UpdatePlatformShopJSONRequestBody = PlatformShopUpdate
 // UpdatePlatformShopOwnerJSONRequestBody defines body for UpdatePlatformShopOwner for application/json ContentType.
 type UpdatePlatformShopOwnerJSONRequestBody = PlatformShopOwnerUpdate
 
+// UpdatePlatformShopPlanJSONRequestBody defines body for UpdatePlatformShopPlan for application/json ContentType.
+type UpdatePlatformShopPlanJSONRequestBody = PlatformShopPlanUpdate
+
 // CreateProductJSONRequestBody defines body for CreateProduct for application/json ContentType.
 type CreateProductJSONRequestBody = ProductCreate
 
@@ -3504,6 +3560,9 @@ type ServerInterface interface {
 	// UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
 	// (PATCH /platform/shops/{id}/owner)
 	UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdatePlatformShopPlan Set a shop's plan
+	// (PATCH /platform/shops/{id}/plan)
+	UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request, id Id)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams)
@@ -3954,6 +4013,12 @@ func (_ Unimplemented) SendPlatformShopInvite(w http.ResponseWriter, r *http.Req
 // UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
 // (PATCH /platform/shops/{id}/owner)
 func (_ Unimplemented) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// UpdatePlatformShopPlan Set a shop's plan
+// (PATCH /platform/shops/{id}/plan)
+func (_ Unimplemented) UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5914,6 +5979,32 @@ func (siw *ServerInterfaceWrapper) UpdatePlatformShopOwner(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// UpdatePlatformShopPlan operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlatformShopPlan(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
 
@@ -7019,6 +7110,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/platform/shops/{id}/owner", wrapper.UpdatePlatformShopOwner)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/platform/shops/{id}/plan", wrapper.UpdatePlatformShopPlan)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/platform/shops/{id}/invite", wrapper.SendPlatformShopInvite)
@@ -11602,6 +11696,93 @@ func (response UpdatePlatformShopOwner422ApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type UpdatePlatformShopPlanRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdatePlatformShopPlanJSONRequestBody
+}
+
+type UpdatePlatformShopPlanResponseObject interface {
+	VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlatformShopPlan200JSONResponse PlatformShop
+
+func (response UpdatePlatformShopPlan200JSONResponse) VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopPlan401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopPlan401ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopPlan403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopPlan403ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopPlan404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopPlan404ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopPlan422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopPlan422ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopPlanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListProductsRequestObject struct {
 	Params ListProductsParams
 }
@@ -13676,6 +13857,9 @@ type StrictServerInterface interface {
 	// UpdatePlatformShopOwner Change the email or name of a shop's owner before they confirm it
 	// (PATCH /platform/shops/{id}/owner)
 	UpdatePlatformShopOwner(ctx context.Context, request UpdatePlatformShopOwnerRequestObject) (UpdatePlatformShopOwnerResponseObject, error)
+	// UpdatePlatformShopPlan Set a shop's plan
+	// (PATCH /platform/shops/{id}/plan)
+	UpdatePlatformShopPlan(ctx context.Context, request UpdatePlatformShopPlanRequestObject) (UpdatePlatformShopPlanResponseObject, error)
 	// ListProducts Products, filtered and paginated
 	// (GET /products)
 	ListProducts(ctx context.Context, request ListProductsRequestObject) (ListProductsResponseObject, error)
@@ -15573,6 +15757,39 @@ func (sh *strictHandler) UpdatePlatformShopOwner(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdatePlatformShopOwnerResponseObject); ok {
 		if err := validResponse.VisitUpdatePlatformShopOwnerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePlatformShopPlan operation middleware
+func (sh *strictHandler) UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdatePlatformShopPlanRequestObject
+
+	request.Id = id
+
+	var body UpdatePlatformShopPlanJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlatformShopPlan(ctx, request.(UpdatePlatformShopPlanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlatformShopPlan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlatformShopPlanResponseObject); ok {
+		if err := validResponse.VisitUpdatePlatformShopPlanResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

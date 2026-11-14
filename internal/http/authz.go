@@ -20,16 +20,16 @@ import (
 // users:write", and BR-024 makes it an acceptance criterion.
 func requirePermission(permission string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		role, ok := auth.RoleFromContext(r.Context())
-		if !ok {
+		if _, ok := auth.RoleFromContext(r.Context()); !ok {
 			// No role in the context means the request never passed
 			// authentication. Fail closed rather than treating it as a role
 			// with no permissions, which would report the wrong problem.
 			writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 			return
 		}
-		// An impersonation is the owner's role less customers:purge (BR-152).
-		if !auth.Can(role, permission) || permission == auth.PermCustomersPurge && auth.Impersonating(r.Context()) {
+		// The role, capped by the shop's plan (BR-160); an impersonation is
+		// the owner's role less customers:purge (BR-152).
+		if !auth.Allowed(r.Context(), permission) {
 			writeError(w, r, apperrors.PermissionDenied(permission))
 			return
 		}

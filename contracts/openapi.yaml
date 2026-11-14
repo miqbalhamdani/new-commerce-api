@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.26.0
+  version: 2.27.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -1253,7 +1253,8 @@ paths:
       description: |
         Creates an `invited` user and emails them a link after the change commits (BR-026,
         BR-128). An email already used in any shop is `422` on `email` (BR-020). Only an owner
-        can invite an owner (BR-023). Requires `users:write`.
+        can invite an owner (BR-023). An invitation that would take the shop past its plan's
+        accounts is `422` (BR-162). Requires `users:write`.
       requestBody:
         required: true
         content:
@@ -1302,10 +1303,12 @@ paths:
       description: |
         No `If-Match` (BR-010). `bio` is the public line under their blog posts; `null` or `""`
         clears it (BR-133). `status` is `active` (re-enable a disabled user) or `disabled`;
-        an invited user becomes active only by accepting. Disabling revokes their refresh
-        tokens, so they are out within 15 minutes (BR-027). Only an owner can grant `owner` or
-        change an owner (BR-023), else `403`. The last active owner cannot be demoted or
-        disabled (`422`). Requires `users:write`.
+        an invited user becomes active only by accepting, and disabling one withdraws the
+        invitation (BR-162). Disabling revokes their refresh tokens, so they are out within 15
+        minutes (BR-027). Only an owner can grant `owner` or change an owner (BR-023), else
+        `403`. The last active owner cannot be demoted or disabled (`422`). Re-enabling a user
+        past the plan's accounts is `422` (BR-162).
+        Requires `users:write`.
       requestBody:
         required: true
         content:
@@ -2191,6 +2194,39 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /platform/shops/{id}/plan:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updatePlatformShopPlan
+      summary: Set a shop's plan
+      description: |
+        BR-160: the plan and the date its paid period is expected to end, set together and audited
+        `tenant.plan` in the shop. Payment happens outside Belli; `plan_until` is shown and changes
+        nothing when it passes. The shop's staff get the new plan at their next sign-in or
+        refresh, within 15 minutes. Platform admins only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformShopPlanUpdate"
+      responses:
+        "200":
+          description: The shop, as the report shows it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
   /platform/shops/{id}/invite:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -2718,7 +2754,7 @@ components:
 
     SessionTenant:
       type: object
-      required: [id, name, timezone]
+      required: [id, name, timezone, plan]
       properties:
         id:
           type: string
@@ -2729,6 +2765,16 @@ components:
           type: string
           description: IANA name. Display only; the wire is always WIB, `+07:00` (BR-007).
           examples: ["Asia/Jakarta"]
+        plan:
+          $ref: "#/components/schemas/ShopPlan"
+
+    ShopPlan:
+      type: string
+      enum: [mulai, katalog, jualan]
+      description: |
+        BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
+        does not include; the admin reads it only for what no permission covers, such as the
+        storefront's checkout settings, which only `jualan` uses (BR-161).
 
     PlatformShops:
       type: object
@@ -2780,8 +2826,8 @@ components:
 
     PlatformShop:
       type: object
-      required: [id, name, slug, status, created_at, source, owner, website, products, orders,
-                 last_activity_at]
+      required: [id, name, slug, status, plan, plan_until, created_at, source, owner, website,
+                 products, orders, last_activity_at]
       properties:
         id:
           type: string
@@ -2794,6 +2840,12 @@ components:
         status:
           type: string
           enum: [active, suspended, closed]
+        plan:
+          $ref: "#/components/schemas/ShopPlan"
+        plan_until:
+          type: [string, "null"]
+          format: date
+          description: When the paid period is expected to end. Display only (BR-160).
         created_at:
           type: string
           format: date-time
@@ -2835,6 +2887,9 @@ components:
         send_invite:
           type: boolean
           description: Email the owner their signup code and link now. False holds the shop.
+        plan:
+          $ref: "#/components/schemas/ShopPlan"
+          description: The shop's plan; `mulai` when left out (BR-160).
 
     PlatformShopUpdate:
       type: object
@@ -2844,6 +2899,18 @@ components:
         status:
           type: string
           enum: [active, suspended, closed]
+
+    PlatformShopPlanUpdate:
+      type: object
+      required: [plan, plan_until]
+      additionalProperties: false
+      properties:
+        plan:
+          $ref: "#/components/schemas/ShopPlan"
+        plan_until:
+          type: [string, "null"]
+          format: date
+          description: When the paid period is expected to end, or `null`. Display only (BR-160).
 
     PlatformShopOwnerUpdate:
       type: object

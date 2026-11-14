@@ -21,8 +21,7 @@ var jobPermission = map[string]string{
 // so the row is read before the check; another tenant's job is a 404 either
 // way (RLS).
 func (s *Server) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
-	role, ok := auth.RoleFromContext(r.Context())
-	if !ok {
+	if _, ok := auth.RoleFromContext(r.Context()); !ok {
 		writeError(w, r, apperrors.Unauthenticated("A bearer token is required."))
 		return
 	}
@@ -31,7 +30,7 @@ func (s *Server) GetJob(w http.ResponseWriter, r *http.Request, id Id) {
 		writeError(w, r, err)
 		return
 	}
-	if perm := jobPermission[j.Kind]; !auth.Can(role, perm) {
+	if perm := jobPermission[j.Kind]; !auth.Allowed(r.Context(), perm) {
 		writeError(w, r, apperrors.PermissionDenied(perm))
 		return
 	}

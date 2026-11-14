@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
@@ -88,6 +89,8 @@ type Shop struct {
 	ID             uuid.UUID
 	Name, Slug     string
 	Status         string
+	Plan           string
+	PlanUntil      *time.Time // a date (BR-160)
 	CreatedAt      time.Time
 	Source         string
 	Owner          *Owner
@@ -153,6 +156,37 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status string) er
 	})
 }
 
+// SetPlan is BR-160's plan and the date its paid period is expected to end
+// (nil for none), audited tenant.plan in the shop. The caller has checked the
+// plan. A shop that does not exist is db.ErrNotFound.
+func (s *Service) SetPlan(ctx context.Context, id uuid.UUID, plan string, until *time.Time) error {
+	if _, err := s.store.Tenant(ctx, id); err != nil {
+		return err
+	}
+	var date pgtype.Date
+	if until != nil {
+		date = pgtype.Date{Time: *until, Valid: true}
+	}
+	tctx := tenant.NewContext(ctx, id)
+	return s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		before, err := sqlcgen.New(tx).SetShopPlan(tctx, sqlcgen.SetShopPlanParams{Plan: plan, PlanUntil: date})
+		if err != nil {
+			return err
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.plan", SubjectType: "tenant", SubjectID: id.String(),
+			Before: map[string]any{"plan": before.Plan, "plan_until": dateOf(before.PlanUntil)},
+			After:  map[string]any{"plan": plan, "plan_until": dateOf(date)}})
+	})
+}
+
+// dateOf is a date for the audit row: YYYY-MM-DD, or nil for none.
+func dateOf(d pgtype.Date) any {
+	if !d.Valid {
+		return nil
+	}
+	return d.Time.Format(time.DateOnly)
+}
+
 // Shop is one shop as the report shows it, for the answer to a shop action
 // (BR-151). A shop that does not exist is db.ErrNotFound.
 func (s *Service) Shop(ctx context.Context, id uuid.UUID) (Shop, error) {
@@ -164,7 +198,8 @@ func (s *Service) Shop(ctx context.Context, id uuid.UUID) (Shop, error) {
 }
 
 func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
-	shop := Shop{ID: t.ID, Name: t.Name, Slug: t.Slug, Status: t.Status, CreatedAt: t.CreatedAt}
+	shop := Shop{ID: t.ID, Name: t.Name, Slug: t.Slug, Status: t.Status, Plan: t.Plan, PlanUntil: t.PlanUntil,
+		CreatedAt: t.CreatedAt}
 	err := s.store.InTenantTx(tenant.NewContext(ctx, t.ID), func(tx pgx.Tx) error {
 		st, err := db.PlatformShopStats(ctx, tx)
 		if err != nil {

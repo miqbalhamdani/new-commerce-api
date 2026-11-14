@@ -35,6 +35,15 @@ UPDATE users SET bio = sqlc.narg(bio) WHERE id = sqlc.arg(id) RETURNING *;
 -- BR-027: the last active owner cannot be demoted or disabled.
 SELECT count(*)::int FROM users WHERE role = 'owner' AND status = 'active' AND id <> $1;
 
+-- name: LockShopPlan :one
+-- BR-162: the shop's plan, its row locked so two invitations cannot both take
+-- the last account. tenants has no RLS, so the WHERE names the caller's own.
+SELECT plan FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE;
+
+-- name: CountAccounts :one
+-- BR-162: active and invited users, the owner included.
+SELECT count(*)::int FROM users WHERE status IN ('active', 'invited');
+
 -- name: AcceptInvitation :one
 -- Only an invited user accepts, so a link stops working once it has been used
 -- (BR-026).
@@ -55,8 +64,8 @@ RETURNING *;
 -- name: CreateTenant :one
 -- Signup (P1-084). tenants has no RLS; the id is the one the transaction set
 -- as app.tenant_id, so the owner inserted next lands in this tenant.
-INSERT INTO tenants (id, name, slug, order_prefix)
-VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix))
+INSERT INTO tenants (id, name, slug, order_prefix, plan)
+VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix), sqlc.arg(plan))
 RETURNING *;
 
 -- name: CreateActiveOwner :one

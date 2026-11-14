@@ -224,3 +224,48 @@ func assertCode(t *testing.T, what string, rec *httptest.ResponseRecorder, statu
 		t.Errorf("%s: %d %s, want %d %s", what, rec.Code, rec.Body, status, code)
 	}
 }
+
+// TestOrdersNeedJualan is P1-924's acceptance (BR-161): on a shop not on
+// jualan the ordering routes are 403, with a shop key or the platform key,
+// within the key cache's TTL; everything else is answered as before.
+func TestOrdersNeedJualan(t *testing.T) {
+	store := openStore(t)
+	id, key := seedKey(t, store, "https://tokoabc.com")
+	keys := NewKeys(store)
+	keys.Platform = "platform-test-key"
+	clock := time.Now()
+	keys.now = func() time.Time { return clock }
+	h := NewRouter(NewServer(Services{}), keys, testSigner(t), nil)
+	send := func(method, path string, platform bool) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, "/v1/storefront"+path, nil)
+		if platform {
+			r.Header.Set("X-Api-Key", keys.Platform)
+			r.Header.Set("X-Shop", "sf-"+id.String())
+		} else {
+			r.Header.Set("X-Api-Key", key)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+	plan := func(p string) {
+		execTenant(t, store, id, `UPDATE tenants SET plan = '`+p+`' WHERE id = '`+id.String()+`'`)
+		clock = clock.Add(KeyCacheTTL + time.Second)
+	}
+
+	plan("katalog")
+	for _, rt := range [][2]string{{"POST", "/carts"}, {"GET", "/carts/" + uuid.NewString()}, {"POST", "/customers"},
+		{"POST", "/auth/login"}, {"GET", "/me"}, {"GET", "/me/orders"}, {"GET", "/orders/TKA-000001"}} {
+		assertCode(t, "katalog "+rt[0]+" "+rt[1], send(rt[0], rt[1], false), 403, "permission_denied")
+	}
+	assertCode(t, "katalog, the platform key", send("GET", "/me", true), 403, "permission_denied")
+	// Not an ordering route, so it reaches the router: no such route.
+	assertCode(t, "katalog, another route", send("GET", "/meja", false), 404, "not_found")
+
+	plan("jualan")
+	assertCode(t, "jualan", send("GET", "/me", false), 401, "customer_auth_required")
+	plan("mulai")
+	if rec := send("GET", "/me", true); rec.Code != 403 {
+		t.Errorf("mulai through the platform key: %d", rec.Code)
+	}
+}

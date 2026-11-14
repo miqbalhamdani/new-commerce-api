@@ -53,9 +53,11 @@ func platformServer(t *testing.T, store *db.Store, emails ...string) http.Handle
 }
 
 type platformShop struct {
-	ID     string `json:"id"`
-	Source string `json:"source"`
-	Owner  *struct {
+	ID        string  `json:"id"`
+	Source    string  `json:"source"`
+	Plan      string  `json:"plan"`
+	PlanUntil *string `json:"plan_until"`
+	Owner     *struct {
 		Email, Status string
 	} `json:"owner"`
 	Products struct {

@@ -10,7 +10,8 @@ lives in the ERD or the API spec.
 Ids are grouped by area and never reused: `001–019` platform · `020–029` auth & team ·
 `030–049` catalog · `050–059` media · `060–069` jobs, export & reporting · `070–079` orders ·
 `080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email ·
-`130–139` blog · `140–149` hosted website. A rule that no longer applies is marked
+`130–139` blog · `140–149` hosted website · `150–159` platform admin · `160–169` plans. A rule
+that no longer applies is marked
 **retired** and keeps its number.
 
 ---
@@ -1163,6 +1164,8 @@ there, with the platform admin as the actor.
   name, and send them the signup email (BR-026) at their current address. Once the owner has
   confirmed, the shop is theirs and neither is allowed. A link already sent to an earlier address
   keeps working until it expires, so the address is changed before the email is sent.
+- **Plan:** `mulai`, `katalog` or `jualan`, picked when the shop is opened and changed at any time,
+  with an optional `plan_until` date (BR-160).
 
 *Why:* the founder sets up shops for client demos before the client has an account, and needs to
 take a shop offline without a database console.
@@ -1182,6 +1185,57 @@ email and `active` status again on every request made with it.
 
 *Why:* setting up a demo shop, and helping an owner, both need the shop's own screens. A token for
 one shop keeps RLS, the permission matrix and the audit log doing what they do for everyone else.
+
+## 13. Plans
+
+### BR-160 A plan caps the role
+Every shop is on one plan: `mulai`, `katalog` or `jualan`. The plan is a ceiling on the role
+(BR-023): a staff user may do what both their role and their shop's plan allow. The session's
+`permissions` already leave out what the plan does not include, so the admin hides those screens
+with no plan logic of its own (BR-025), and a `403` from the plan names the permission like any
+other (BR-024).
+
+| Permission | `mulai` | `katalog` | `jualan` |
+|---|:--:|:--:|:--:|
+| `products`, `variants`, `categories`, `brands`, `media`, `channels` (read and write) | ✓ | ✓ | ✓ |
+| `settings:read`, `settings:write`, `audit_log:read` | ✓ | ✓ | ✓ |
+| `blog`, `users`, `api_keys` (read and write) | | ✓ | ✓ |
+| `orders:read`, `orders:write`, `customers:read`, `customers:purge`, `exports:read` | | | ✓ |
+
+- **Who sets it:** only a platform admin (BR-151), audited `tenant.plan` in the shop. Payment
+  happens outside Belli. `plan_until` is the date the paid period is expected to end; it is shown on
+  the Platform page and nothing happens when it passes.
+- **Where it starts:** a signup, by email or Google, opens on `mulai`. A platform admin picks the
+  plan when opening a shop, `mulai` unless they choose. Shops from before plans, and shops made by
+  `create-tenant` or `demo-seed`, are `jualan`.
+- **When a change applies:** the plan travels in the access token as the role does, so a change
+  applies at the next sign-in or refresh, and within the token's 15 minutes at the latest
+  (BR-022). An impersonation (BR-152) carries the shop's plan too.
+- **Downgrading deletes nothing.** Orders, customers, posts, users and keys stay, and come back
+  with the plan. A key already issued keeps reading the catalog (BR-161).
+- The admin shows the storefront's checkout settings (shipping, payments, customer sign-in) only
+  on `jualan`, the one plan whose website takes orders.
+
+*Why:* Belli sells three plans and invoices by hand. Capping the permissions reuses the one check
+every route already has, instead of a second set of checks that could disagree with it.
+
+### BR-161 Only `jualan` takes orders on a website
+On a shop not on `jualan`, the storefront API's cart, checkout, customer-account and order routes
+(`/carts…`, `/customers`, `/auth/…`, `/me…`, `/orders/…`) answer `403 permission_denied`,
+whichever credential is used. The catalog, the blog and `/config` stay open on every plan. The plan
+is read with the key and cached with it, for at most 60 seconds (BR-085).
+
+*Why:* the cheaper plans take orders through WhatsApp, as the hosted website already does
+(BR-140). A shop's own website should not take orders its plan does not include.
+
+### BR-162 Accounts per plan
+A shop has at most 1 account on `mulai`, 2 on `katalog` and 5 on `jualan`, counting `active` and
+`invited` users, the owner included, and not `disabled` ones. An invitation, or re-enabling a
+disabled user, that would pass the limit is `422`. Disabling an invited user withdraws the
+invitation and frees its account; the link stops working, as an accepted one does (BR-026). A
+downgrade signs no one out; it only stops new accounts until the shop is back under its limit.
+
+*Why:* the pricing page promises these numbers.
 
 ---
 
@@ -1235,3 +1289,5 @@ one shop keeps RLS, the permission matrix and the audit log doing what they do f
 | 140–142 | settings, storefront settings, hosted website | P1-701–706, P1-801–805 |
 | 143 | storefront settings, hosted website, demo shops | P1-801–815 |
 | 150 | platform admin page | P1-901–903 |
+| 151–152 | platform console | P1-911–917 |
+| 160–162 | every admin route, storefront orders, team, platform | P1-921–927 |

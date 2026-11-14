@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -146,12 +147,19 @@ func TestRegister(t *testing.T) {
 		newServer(t).ServeHTTP(rec, jsonRequest(t, "/v1/auth/accept-invite",
 			map[string]any{"token": tokenFor(t, seeded{}, s.userID.String()), "password": "budi-password"}))
 		var session struct {
-			User   struct{ Role string }
-			Tenant struct{ ID string }
+			User struct {
+				Role        string
+				Permissions []string
+			}
+			Tenant struct{ ID, Plan string }
 		}
 		_ = json.Unmarshal(rec.Body.Bytes(), &session)
 		if rec.Code != 200 || session.User.Role != "owner" || session.Tenant.ID != s.tenantID.String() {
 			t.Fatalf("accept: %d %s", rec.Code, rec.Body)
+		}
+		// A signup opens on mulai (BR-160).
+		if session.Tenant.Plan != auth.PlanMulai || slices.Contains(session.User.Permissions, auth.PermOrdersRead) {
+			t.Errorf("a new shop's plan %q, permissions %v", session.Tenant.Plan, session.User.Permissions)
 		}
 		before := emails()
 		if rec := register(map[string]any{"shop_name": "Erigo", "name": "Budi", "email": address}); rec.Code != 202 {

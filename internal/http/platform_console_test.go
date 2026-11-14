@@ -27,6 +27,7 @@ func init() {
 	for _, rt := range []route{
 		{http.MethodPost, "/v1/platform/shops"},
 		{http.MethodPatch, "/v1/platform/shops/{id}"},
+		{http.MethodPatch, "/v1/platform/shops/{id}/plan"},
 		{http.MethodPatch, "/v1/platform/shops/{id}/owner"},
 		{http.MethodPost, "/v1/platform/shops/{id}/invite"},
 		{http.MethodPost, "/v1/platform/shops/{id}/impersonate"},
@@ -97,12 +98,16 @@ func TestPlatformConsole(t *testing.T) {
 		return n
 	}
 
-	// open opens a shop for a fresh address and returns it.
-	open := func(t *testing.T, sendInvite bool) (shop platformShop, address string) {
+	// open opens a shop for a fresh address and returns it; extra fields go
+	// into the body.
+	open := func(t *testing.T, sendInvite bool, extra ...any) (shop platformShop, address string) {
 		t.Helper()
 		address = "klien-" + uuid.NewString() + "@example.com"
-		rec := call(http.MethodPost, "/v1/platform/shops", founder.accessToken, map[string]any{
-			"shop_name": "Toko Klien", "owner_name": "Rina", "owner_email": address, "send_invite": sendInvite})
+		body := map[string]any{"shop_name": "Toko Klien", "owner_name": "Rina", "owner_email": address, "send_invite": sendInvite}
+		for i := 0; i+1 < len(extra); i += 2 {
+			body[extra[i].(string)] = extra[i+1]
+		}
+		rec := call(http.MethodPost, "/v1/platform/shops", founder.accessToken, body)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("open: %d %s", rec.Code, rec.Body)
 		}
@@ -124,6 +129,67 @@ func TestPlatformConsole(t *testing.T) {
 		}
 		if n := audits(uuid.MustParse(shop.ID), "tenant.register"); n != 1 {
 			t.Errorf("%d tenant.register rows by the founder, want 1", n)
+		}
+	})
+
+	t.Run("open: mulai unless a plan is given; an unknown plan is 422", func(t *testing.T) {
+		if shop, _ := open(t, false); shop.Plan != auth.PlanMulai || shop.PlanUntil != nil {
+			t.Errorf("default plan %q until %v", shop.Plan, shop.PlanUntil)
+		}
+		if shop, _ := open(t, false, "plan", "katalog"); shop.Plan != auth.PlanKatalog {
+			t.Errorf("plan %q, want katalog", shop.Plan)
+		}
+		rec := call(http.MethodPost, "/v1/platform/shops", founder.accessToken, map[string]any{
+			"shop_name": "Toko", "owner_name": "Rina", "owner_email": "x-" + uuid.NewString() + "@example.com",
+			"send_invite": false, "plan": "pintar"})
+		if rec.Code != http.StatusUnprocessableEntity || !bytes.Contains(rec.Body.Bytes(), []byte(`"plan"`)) {
+			t.Errorf("unknown plan: %d %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("plan: set with its date, audited; the next session carries it", func(t *testing.T) {
+		shop, _ := open(t, false)
+		shopID := uuid.MustParse(shop.ID)
+		path := "/v1/platform/shops/" + shop.ID + "/plan"
+		rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"plan": "jualan", "plan_until": "2027-11-30"})
+		var got platformShop
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got.Plan != auth.PlanJualan ||
+			got.PlanUntil == nil || *got.PlanUntil != "2027-11-30" {
+			t.Fatalf("set plan: %d %s", rec.Code, rec.Body)
+		}
+		if n := audits(shopID, "tenant.plan"); n != 1 {
+			t.Errorf("%d tenant.plan rows, want 1", n)
+		}
+		rec = call(http.MethodPatch, path, founder.accessToken, map[string]any{"plan": "katalog", "plan_until": nil})
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got.Plan != auth.PlanKatalog || got.PlanUntil != nil {
+			t.Fatalf("clear the date: %d %s", rec.Code, rec.Body)
+		}
+		rec = call(http.MethodPost, "/v1/platform/shops/"+shop.ID+"/impersonate", founder.accessToken, nil)
+		var session struct {
+			User   struct{ Permissions []string } `json:"user"`
+			Tenant struct{ Plan string }          `json:"tenant"`
+		}
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &session) != nil || session.Tenant.Plan != auth.PlanKatalog ||
+			!slices.Contains(session.User.Permissions, auth.PermAPIKeysWrite) || slices.Contains(session.User.Permissions, auth.PermOrdersRead) {
+			t.Errorf("impersonating a katalog shop: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodGet, "/v1/orders", jsonField(t, rec, "access_token"), nil); rec.Code != http.StatusForbidden {
+			t.Errorf("orders in a katalog shop: %d", rec.Code)
+		}
+	})
+
+	t.Run("plan: an unknown plan is 422, an unknown shop 404, anyone else 403", func(t *testing.T) {
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+homeID.String()+"/plan", founder.accessToken,
+			map[string]any{"plan": "pintar", "plan_until": nil}); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("unknown plan: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+uuid.NewString()+"/plan", founder.accessToken,
+			map[string]any{"plan": "mulai", "plan_until": nil}); rec.Code != http.StatusNotFound {
+			t.Errorf("unknown shop: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+homeID.String()+"/plan", other.accessToken,
+			map[string]any{"plan": "mulai", "plan_until": nil}); rec.Code != http.StatusForbidden {
+			t.Errorf("not an admin: %d %s", rec.Code, rec.Body)
 		}
 	})
 
@@ -322,4 +388,15 @@ func homeOf(t *testing.T, owner *pgx.Conn, address string) uuid.UUID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// jsonField is one string field of a JSON response.
+func jsonField(t *testing.T, rec *httptest.ResponseRecorder, field string) string {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	v, _ := m[field].(string)
+	return v
 }

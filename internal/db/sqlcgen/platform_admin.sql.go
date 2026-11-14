@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const platformActor = `-- name: PlatformActor :one
@@ -131,6 +132,31 @@ func (q *Queries) SetInvitedOwner(ctx context.Context, arg SetInvitedOwnerParams
 	row := q.db.QueryRow(ctx, setInvitedOwner, arg.ID, arg.Email, arg.Name)
 	var i SetInvitedOwnerRow
 	err := row.Scan(&i.Email, &i.Name)
+	return i, err
+}
+
+const setShopPlan = `-- name: SetShopPlan :one
+UPDATE tenants t SET plan = $1, plan_until = $2
+  FROM (SELECT plan, plan_until FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.plan, old.plan_until
+`
+
+type SetShopPlanParams struct {
+	Plan      string
+	PlanUntil pgtype.Date
+}
+
+type SetShopPlanRow struct {
+	Plan      string
+	PlanUntil pgtype.Date
+}
+
+// BR-160. Returns the plan and date it replaced.
+func (q *Queries) SetShopPlan(ctx context.Context, arg SetShopPlanParams) (SetShopPlanRow, error) {
+	row := q.db.QueryRow(ctx, setShopPlan, arg.Plan, arg.PlanUntil)
+	var i SetShopPlanRow
+	err := row.Scan(&i.Plan, &i.PlanUntil)
 	return i, err
 }
 

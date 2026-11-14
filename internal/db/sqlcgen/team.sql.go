@@ -68,6 +68,18 @@ func (q *Queries) ActivateInvited(ctx context.Context, id uuid.UUID) (User, erro
 	return i, err
 }
 
+const countAccounts = `-- name: CountAccounts :one
+SELECT count(*)::int FROM users WHERE status IN ('active', 'invited')
+`
+
+// BR-162: active and invited users, the owner included.
+func (q *Queries) CountAccounts(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countAccounts)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createActiveOwner = `-- name: CreateActiveOwner :one
 INSERT INTO users (id, tenant_id, email, name, role, status)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, 'owner', 'active')
@@ -101,21 +113,27 @@ func (q *Queries) CreateActiveOwner(ctx context.Context, arg CreateActiveOwnerPa
 }
 
 const createTenant = `-- name: CreateTenant :one
-INSERT INTO tenants (id, name, slug, order_prefix)
-VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3)
-RETURNING id, name, slug, timezone, status, created_at, order_prefix
+INSERT INTO tenants (id, name, slug, order_prefix, plan)
+VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)
+RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until
 `
 
 type CreateTenantParams struct {
 	Name        string
 	Slug        string
 	OrderPrefix string
+	Plan        string
 }
 
 // Signup (P1-084). tenants has no RLS; the id is the one the transaction set
 // as app.tenant_id, so the owner inserted next lands in this tenant.
 func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Tenant, error) {
-	row := q.db.QueryRow(ctx, createTenant, arg.Name, arg.Slug, arg.OrderPrefix)
+	row := q.db.QueryRow(ctx, createTenant,
+		arg.Name,
+		arg.Slug,
+		arg.OrderPrefix,
+		arg.Plan,
+	)
 	var i Tenant
 	err := row.Scan(
 		&i.ID,
@@ -125,12 +143,14 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.Status,
 		&i.CreatedAt,
 		&i.OrderPrefix,
+		&i.Plan,
+		&i.PlanUntil,
 	)
 	return i, err
 }
 
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, timezone, status, created_at, order_prefix FROM tenants WHERE id = $1
+SELECT id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until FROM tenants WHERE id = $1
 `
 
 // tenants has no RLS; the id comes from the caller's own tenant context.
@@ -145,6 +165,8 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.OrderPrefix,
+		&i.Plan,
+		&i.PlanUntil,
 	)
 	return i, err
 }
@@ -262,6 +284,19 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockShopPlan = `-- name: LockShopPlan :one
+SELECT plan FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE
+`
+
+// BR-162: the shop's plan, its row locked so two invitations cannot both take
+// the last account. tenants has no RLS, so the WHERE names the caller's own.
+func (q *Queries) LockShopPlan(ctx context.Context) (string, error) {
+	row := q.db.QueryRow(ctx, lockShopPlan)
+	var plan string
+	err := row.Scan(&plan)
+	return plan, err
 }
 
 const otherActiveOwners = `-- name: OtherActiveOwners :one
@@ -387,7 +422,7 @@ UPDATE tenants SET
   timezone     = coalesce($3, timezone),
   order_prefix = coalesce($4, order_prefix)
 WHERE id = current_setting('app.tenant_id')::uuid
-RETURNING id, name, slug, timezone, status, created_at, order_prefix
+RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until
 `
 
 type UpdateSettingsParams struct {
@@ -414,6 +449,8 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.Status,
 		&i.CreatedAt,
 		&i.OrderPrefix,
+		&i.Plan,
+		&i.PlanUntil,
 	)
 	return i, err
 }

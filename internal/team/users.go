@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -79,6 +80,9 @@ func (s *Service) Invite(ctx context.Context, address, name, role string) (User,
 	}
 	var u User
 	err := s.tx(ctx, func(q *sqlcgen.Queries, tx pgx.Tx) (err error) {
+		if err := roomForOne(ctx, q); err != nil {
+			return err
+		}
 		u, err = q.InviteUser(ctx, sqlcgen.InviteUserParams{ID: uuid.Must(uuid.NewV7()), Email: address, Name: name, Role: role})
 		if code, constraint, ok := db.Violation(err); ok && code == "23505" && constraint == "users_email_key" {
 			// Email is unique system-wide (BR-020): a staff email identifies
@@ -166,8 +170,15 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, role, status, bio *s
 			}
 		}
 		if status != nil && *status != before.Status {
-			if before.Status == "invited" {
+			// Disabling an invited user withdraws the invitation, which frees
+			// its account (BR-162); the link then no longer works (BR-026).
+			if before.Status == "invited" && *status == "active" {
 				return fieldError("status", "an invited user becomes active by accepting the invitation")
+			}
+			if *status == "active" {
+				if err := roomForOne(ctx, q); err != nil {
+					return err
+				}
 			}
 			if u, err = q.SetUserStatus(ctx, sqlcgen.SetUserStatusParams{ID: id, Status: *status}); err != nil {
 				return err
@@ -215,6 +226,25 @@ func grantable(ctx context.Context, role string) error {
 	case auth.RoleAdmin, auth.RoleOps, auth.RoleViewer:
 	default:
 		return fieldError("role", "role is owner, admin, ops or viewer")
+	}
+	return nil
+}
+
+// roomForOne is BR-162: whether the shop's plan has room for one more account.
+// It locks the shop's row, so it runs before the user is written.
+func roomForOne(ctx context.Context, q *sqlcgen.Queries) error {
+	plan, err := q.LockShopPlan(ctx)
+	if err != nil {
+		return err
+	}
+	n, err := q.CountAccounts(ctx)
+	if err != nil {
+		return err
+	}
+	if limit := auth.PlanSeats[plan]; int(n) >= limit {
+		return apperrors.ValidationFailed(fmt.Sprintf(
+			"The %s plan has room for %d accounts, owner included, and this shop has %d. Disable one first, or move to a bigger plan (BR-162).",
+			plan, limit, n))
 	}
 	return nil
 }
