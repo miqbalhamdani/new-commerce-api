@@ -22,7 +22,8 @@ func (s *Server) GetConfig(w http.ResponseWriter, r *http.Request) {
 		Theme: StorefrontConfigTheme(c.Theme), BrandColor: team.ResolveColor(c.Theme, c.BrandColor),
 		LogoUrl: s.team.LogoURL(c.LogoR2Key), HeroUrl: s.team.LogoURL(c.HeroR2Key), WhatsappNumber: c.WhatsappNumber,
 		Tagline: c.Tagline, Instagram: c.Instagram, Address: c.Address, OpeningHours: c.OpeningHours,
-		ShopeeUrl: c.ShopeeUrl, TokopediaUrl: c.TokopediaUrl}
+		ShopeeUrl: c.ShopeeUrl, TokopediaUrl: c.TokopediaUrl,
+		License: c.License, CancellationPolicy: c.CancellationPolicy, DocumentRequirements: c.DocumentRequirements}
 	if c.BankTransferEnabled {
 		out.PaymentMethods = append(out.PaymentMethods, "bank_transfer")
 	}

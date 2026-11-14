@@ -118,7 +118,8 @@ SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
        coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
        coalesce(s.theme, 'katalog')::text AS theme, s.brand_color, s.logo_r2_key, s.hero_r2_key,
-       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url
+       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url,
+       s.license, s.cancellation_policy, s.document_requirements
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid
@@ -143,6 +144,9 @@ type StorefrontConfigRow struct {
 	OpeningHours             *string
 	ShopeeUrl                *string
 	TokopediaUrl             *string
+	License                  *string
+	CancellationPolicy       *string
+	DocumentRequirements     *string
 }
 
 // What a website renders sign-in, payment and its look from (P1-224, P1-703,
@@ -170,6 +174,9 @@ func (q *Queries) StorefrontConfig(ctx context.Context) (StorefrontConfigRow, er
 		&i.OpeningHours,
 		&i.ShopeeUrl,
 		&i.TokopediaUrl,
+		&i.License,
+		&i.CancellationPolicy,
+		&i.DocumentRequirements,
 	)
 	return i, err
 }
@@ -197,6 +204,9 @@ UPDATE storefront_settings SET
     opening_hours = $19,
     shopee_url = $20,
     tokopedia_url = $21,
+    license = $22,
+    cancellation_policy = $23,
+    document_requirements = $24,
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url, license, cancellation_policy, document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status
@@ -224,6 +234,9 @@ type UpdateStorefrontSettingsParams struct {
 	OpeningHours             *string
 	ShopeeUrl                *string
 	TokopediaUrl             *string
+	License                  *string
+	CancellationPolicy       *string
+	DocumentRequirements     *string
 }
 
 func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStorefrontSettingsParams) (StorefrontSetting, error) {
@@ -249,6 +262,9 @@ func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStoref
 		arg.OpeningHours,
 		arg.ShopeeUrl,
 		arg.TokopediaUrl,
+		arg.License,
+		arg.CancellationPolicy,
+		arg.DocumentRequirements,
 	)
 	var i StorefrontSetting
 	err := row.Scan(

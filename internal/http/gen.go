@@ -2834,7 +2834,7 @@ type VariantMatrixRow struct {
 	Barcode      *string  `json:"barcode,omitempty"`
 	OptionValues []string `json:"option_values"`
 
-	// PriceUsd US cents; only in an `umrah` shop, else the row fails (BR-171).
+	// PriceUsd US cents; only in an `umrah` shop, else the request is `422` (BR-171).
 	PriceUsd *int64 `json:"price_usd,omitempty"`
 
 	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never

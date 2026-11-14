@@ -31,12 +31,12 @@ func TestConfig(t *testing.T) {
 	execTenant(t, store, tenantID, `INSERT INTO storefront_settings (tenant_id, midtrans_webhook_id, google_client_id,
 		bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key,
 		logo_r2_key, whatsapp_number, tagline, theme, brand_color, instagram, hero_r2_key, address, opening_hours,
-		shopee_url, tokopedia_url)
+		shopee_url, tokopedia_url, license, document_requirements)
 		VALUES (current_setting('app.tenant_id')::uuid, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', '1234-abc.apps.googleusercontent.com',
 		        'Transfer to BCA 123', true, 'sandbox', 'Mid-client-abc', '\x`+hex.EncodeToString(sealed)+`',
 		        current_setting('app.tenant_id') || '/shop/logo.png', '6281234567890', 'Sprei katun lokal', 'busana', '#7a3e52', 'tokoabc',
 		        current_setting('app.tenant_id') || '/shop/hero.jpg', 'Jl. Braga No. 10, Bandung', 'Setiap hari 09.00–21.00',
-		        'https://shopee.co.id/tokoabc', NULL)`)
+		        'https://shopee.co.id/tokoabc', NULL, 'PPIU No. U.133 Tahun 2020', 'Paspor, KTP')`)
 	code, c, raw = s.get(t, "/v1/storefront/config")
 	mt, _ := c["midtrans"].(map[string]any)
 	if code != 200 || c["google_client_id"] != "1234-abc.apps.googleusercontent.com" || len(c["payment_methods"].([]any)) != 2 ||
@@ -44,7 +44,8 @@ func TestConfig(t *testing.T) {
 		!strings.HasSuffix(c["logo_url"].(string), "/"+tenantID.String()+"/shop/logo.png") || c["whatsapp_number"] != "6281234567890" ||
 		c["tagline"] != "Sprei katun lokal" || c["theme"] != "busana" || c["brand_color"] != "#7a3e52" || c["instagram"] != "tokoabc" ||
 		!strings.HasSuffix(c["hero_url"].(string), "/"+tenantID.String()+"/shop/hero.jpg") || c["address"] != "Jl. Braga No. 10, Bandung" ||
-		c["opening_hours"] != "Setiap hari 09.00–21.00" || c["shopee_url"] != "https://shopee.co.id/tokoabc" || c["tokopedia_url"] != nil {
+		c["opening_hours"] != "Setiap hari 09.00–21.00" || c["shopee_url"] != "https://shopee.co.id/tokoabc" || c["tokopedia_url"] != nil ||
+		c["license"] != "PPIU No. U.133 Tahun 2020" || c["document_requirements"] != "Paspor, KTP" || c["cancellation_policy"] != nil {
 		t.Fatalf("configured: %d %s", code, raw)
 	}
 	// No colour picked: the theme's first.

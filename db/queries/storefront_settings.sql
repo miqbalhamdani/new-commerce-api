@@ -39,6 +39,9 @@ UPDATE storefront_settings SET
     opening_hours = sqlc.narg(opening_hours),
     shopee_url = sqlc.narg(shopee_url),
     tokopedia_url = sqlc.narg(tokopedia_url),
+    license = sqlc.narg(license),
+    cancellation_policy = sqlc.narg(cancellation_policy),
+    document_requirements = sqlc.narg(document_requirements),
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
@@ -51,7 +54,8 @@ SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
        coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
        coalesce(s.theme, 'katalog')::text AS theme, s.brand_color, s.logo_r2_key, s.hero_r2_key,
-       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url
+       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url,
+       s.license, s.cancellation_policy, s.document_requirements
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid;
