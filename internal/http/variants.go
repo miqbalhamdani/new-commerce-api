@@ -22,6 +22,7 @@ type variantFieldsBody struct {
 	SaleStartsAt optional[time.Time] `json:"sale_starts_at"`
 	SaleEndsAt   optional[time.Time] `json:"sale_ends_at"`
 	WeightGrams  optional[int32]     `json:"weight_grams"`
+	PriceUSD     optional[int64]     `json:"price_usd"`
 }
 
 type variantCreateBody struct {
@@ -33,7 +34,7 @@ type variantCreateBody struct {
 // already refused; on PATCH a null clears a nullable column.
 func (b variantFieldsBody) fields() catalog.VariantFields {
 	f := catalog.VariantFields{ClearSKU: b.SKU.Null, ClearBarcode: b.Barcode.Null, ClearSalePrice: b.SalePrice.Null,
-		ClearSaleStarts: b.SaleStartsAt.Null, ClearSale: b.SaleEndsAt.Null}
+		ClearSaleStarts: b.SaleStartsAt.Null, ClearSale: b.SaleEndsAt.Null, ClearPriceUSD: b.PriceUSD.Null}
 	if b.SKU.Set && !b.SKU.Null {
 		f.SKU = &b.SKU.Value
 	}
@@ -55,13 +56,31 @@ func (b variantFieldsBody) fields() catalog.VariantFields {
 	if b.WeightGrams.Set && !b.WeightGrams.Null {
 		f.WeightGrams = &b.WeightGrams.Value
 	}
+	if b.PriceUSD.Set && !b.PriceUSD.Null {
+		f.PriceUSD = &b.PriceUSD.Value
+	}
 	return f
+}
+
+// checkUSD refuses a USD price outside an umrah shop, and one not above zero
+// (BR-171).
+func (b variantFieldsBody) checkUSD(r *http.Request) error {
+	if !b.PriceUSD.Set || b.PriceUSD.Null {
+		return nil
+	}
+	if !auth.Umrah(r.Context()) {
+		return notUmrah("price_usd")
+	}
+	if b.PriceUSD.Value <= 0 {
+		return fieldErr("price_usd", "price_usd must be greater than zero")
+	}
+	return nil
 }
 
 func (b variantFieldsBody) nulls() map[string]bool {
 	return map[string]bool{"sku": b.SKU.Null, "barcode": b.Barcode.Null, "regular_price": b.RegularPrice.Null,
 		"sale_price": b.SalePrice.Null, "sale_starts_at": b.SaleStartsAt.Null, "sale_ends_at": b.SaleEndsAt.Null,
-		"weight_grams": b.WeightGrams.Null}
+		"weight_grams": b.WeightGrams.Null, "price_usd": b.PriceUSD.Null}
 }
 
 func (s *Server) ListVariants(w http.ResponseWriter, r *http.Request, id Id, params ListVariantsParams) {
@@ -91,6 +110,10 @@ func (s *Server) CreateVariant(w http.ResponseWriter, r *http.Request, id Id) {
 			writeError(w, r, err)
 			return
 		}
+		if err := body.checkUSD(r); err != nil {
+			writeError(w, r, err)
+			return
+		}
 		v, err := s.catalog.CreateVariant(r.Context(), id, body.OptionValues.Value, body.fields())
 		if err != nil {
 			writeError(w, r, err)
@@ -107,6 +130,10 @@ func (s *Server) UpdateVariant(w http.ResponseWriter, r *http.Request, id Id, pa
 			return
 		}
 		if err := rejectNull(map[string]bool{"regular_price": body.RegularPrice.Null, "weight_grams": body.WeightGrams.Null}); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		if err := body.checkUSD(r); err != nil {
 			writeError(w, r, err)
 			return
 		}
@@ -133,5 +160,6 @@ func variantOut(v catalog.Variant) Variant {
 	return Variant{Id: v.ID, ProductId: v.ProductID, Version: int(v.Version), OptionValues: v.OptionValues,
 		Sku: v.Sku, Barcode: v.Barcode, RegularPrice: v.RegularPriceAmount, SalePrice: v.SalePriceAmount,
 		SaleStartsAt: v.SaleStartsAt, SaleEndsAt: v.SaleEndsAt, Price: v.Price, OnSale: catalog.OnSale(v),
-		WeightGrams: int(v.WeightGrams), ArchivedAt: v.ArchivedAt, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+		WeightGrams: int(v.WeightGrams), PriceUsd: v.PriceUsd, ArchivedAt: v.ArchivedAt, CreatedAt: v.CreatedAt,
+		UpdatedAt: v.UpdatedAt}
 }

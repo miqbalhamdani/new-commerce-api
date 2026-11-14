@@ -19,7 +19,9 @@ func TestStorefrontPackages(t *testing.T) {
 		     "seats_left":3,"seats_total":45,"itinerary":[{"title":"Jakarta – Madinah","text":null}],
 		     "includes":["Visa"],"excludes":[],"bonus":[],"price_note":null,"cancellation_policy":null}')`,
 		`INSERT INTO variants (id, tenant_id, product_id, option_values, regular_price_amount)
-		   VALUES (gen_random_uuid(), `+tid+`, '{ida003}', '{"Quad"}', 3190000000)`)
+		   VALUES (gen_random_uuid(), `+tid+`, '{ida003}', '{"Quad"}', 3190000000)`,
+		`INSERT INTO variants (id, tenant_id, product_id, option_values, regular_price_amount, price_usd)
+		   VALUES (gen_random_uuid(), `+tid+`, '{ida003}', '{"Double"}', 0, 1850000)`)
 	s := newShop(t, store, key)
 
 	code, body, raw := s.get(t, "/v1/storefront/products")
@@ -35,9 +37,13 @@ func TestStorefrontPackages(t *testing.T) {
 				len(pkg["hotels"].([]any)) != 1 || pkg["itinerary"] != nil || len(pkg) != 8 {
 				t.Errorf("card summary: %v", pkg)
 			}
+			// P1-935: the lowest USD price, while the rupiah ones ignore it.
+			if p["price_usd_min"] != float64(1850000) || p["price_max"] != float64(3190000000) {
+				t.Errorf("prices: usd %v, rupiah max %v", p["price_usd_min"], p["price_max"])
+			}
 		default:
-			if v, ok := p["package"]; !ok || v != nil {
-				t.Errorf("%s: package %v, want null", p["slug"], v)
+			if v, ok := p["package"]; !ok || v != nil || p["price_usd_min"] != nil {
+				t.Errorf("%s: package %v, price_usd_min %v, want null", p["slug"], v, p["price_usd_min"])
 			}
 		}
 	}
@@ -46,6 +52,15 @@ func TestStorefrontPackages(t *testing.T) {
 	pkg, _ := detail["package"].(map[string]any)
 	if code != 200 || len(pkg) != 15 || pkg["route"] != nil || len(pkg["itinerary"].([]any)) != 1 {
 		t.Fatalf("detail: %d %s", code, raw)
+	}
+	usd := 0
+	for _, v := range detail["variants"].([]any) {
+		if v.(map[string]any)["price_usd"] == float64(1850000) {
+			usd++
+		}
+	}
+	if usd != 1 {
+		t.Errorf("variants' USD prices: %s", raw)
 	}
 	if _, tee, _ := s.get(t, "/v1/storefront/products/basic-tee"); tee["package"] != nil {
 		t.Errorf("a retail product's package: %v", tee["package"])

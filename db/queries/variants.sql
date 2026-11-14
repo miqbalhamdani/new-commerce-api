@@ -3,10 +3,10 @@
 
 -- name: CreateVariant :one
 INSERT INTO variants (id, tenant_id, product_id, sku, barcode, option_values,
-                      regular_price_amount, sale_price_amount, sale_starts_at, sale_ends_at, weight_grams)
+                      regular_price_amount, sale_price_amount, sale_starts_at, sale_ends_at, weight_grams, price_usd)
 VALUES (sqlc.arg(id), current_setting('app.tenant_id')::uuid, sqlc.arg(product_id), sqlc.narg(sku), sqlc.narg(barcode),
         sqlc.arg(option_values), sqlc.arg(regular_price), sqlc.narg(sale_price),
-        sqlc.narg(sale_starts_at), sqlc.narg(sale_ends_at), sqlc.arg(weight_grams))
+        sqlc.narg(sale_starts_at), sqlc.narg(sale_ends_at), sqlc.arg(weight_grams), sqlc.narg(price_usd))
 RETURNING id;
 
 -- name: GetVariant :one
@@ -27,6 +27,7 @@ UPDATE variants SET
   sale_starts_at       = CASE WHEN sqlc.arg(set_sale_starts)::bool THEN sqlc.narg(sale_starts_at) ELSE sale_starts_at END,
   sale_ends_at         = CASE WHEN sqlc.arg(set_sale_ends)::bool THEN sqlc.narg(sale_ends_at) ELSE sale_ends_at END,
   weight_grams         = coalesce(sqlc.narg(weight_grams), weight_grams),
+  price_usd            = CASE WHEN sqlc.arg(set_price_usd)::bool THEN sqlc.narg(price_usd) ELSE price_usd END,
   version              = version + 1,
   updated_at           = now()
 WHERE id = sqlc.arg(id) AND version = sqlc.arg(version)

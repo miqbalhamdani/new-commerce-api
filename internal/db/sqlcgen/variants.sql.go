@@ -93,10 +93,10 @@ func (q *Queries) ArchiveVariant(ctx context.Context, id uuid.UUID) (uuid.UUID, 
 const createVariant = `-- name: CreateVariant :one
 
 INSERT INTO variants (id, tenant_id, product_id, sku, barcode, option_values,
-                      regular_price_amount, sale_price_amount, sale_starts_at, sale_ends_at, weight_grams)
+                      regular_price_amount, sale_price_amount, sale_starts_at, sale_ends_at, weight_grams, price_usd)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3, $4,
         $5, $6, $7,
-        $8, $9, $10)
+        $8, $9, $10, $11)
 RETURNING id
 `
 
@@ -111,6 +111,7 @@ type CreateVariantParams struct {
 	SaleStartsAt *time.Time
 	SaleEndsAt   *time.Time
 	WeightGrams  int32
+	PriceUsd     *int64
 }
 
 // Variants (P1-029, 04-api-spec.md §7.2). price is variant_price() -- the one
@@ -127,6 +128,7 @@ func (q *Queries) CreateVariant(ctx context.Context, arg CreateVariantParams) (u
 		arg.SaleStartsAt,
 		arg.SaleEndsAt,
 		arg.WeightGrams,
+		arg.PriceUsd,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -292,9 +294,10 @@ UPDATE variants SET
   sale_starts_at       = CASE WHEN $8::bool THEN $9 ELSE sale_starts_at END,
   sale_ends_at         = CASE WHEN $10::bool THEN $11 ELSE sale_ends_at END,
   weight_grams         = coalesce($12, weight_grams),
+  price_usd            = CASE WHEN $13::bool THEN $14 ELSE price_usd END,
   version              = version + 1,
   updated_at           = now()
-WHERE id = $13 AND version = $14
+WHERE id = $15 AND version = $16
 RETURNING id
 `
 
@@ -311,6 +314,8 @@ type UpdateVariantParams struct {
 	SetSaleEnds   bool
 	SaleEndsAt    *time.Time
 	WeightGrams   *int32
+	SetPriceUsd   bool
+	PriceUsd      *int64
 	ID            uuid.UUID
 	Version       int32
 }
@@ -329,6 +334,8 @@ func (q *Queries) UpdateVariant(ctx context.Context, arg UpdateVariantParams) (u
 		arg.SetSaleEnds,
 		arg.SaleEndsAt,
 		arg.WeightGrams,
+		arg.SetPriceUsd,
+		arg.PriceUsd,
 		arg.ID,
 		arg.Version,
 	)

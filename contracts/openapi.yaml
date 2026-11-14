@@ -3802,7 +3802,7 @@ components:
           type: [integer, "null"]
           format: int64
           minimum: 1
-          description: US cents; only in an `umrah` shop, else the row fails (BR-171).
+          description: US cents; only in an `umrah` shop, else the request is `422` (BR-171).
 
     VariantMatrix:
       type: object

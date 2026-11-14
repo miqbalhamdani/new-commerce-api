@@ -37,6 +37,10 @@ func (s *Server) PutVariantMatrix(w http.ResponseWriter, r *http.Request, id Id,
 				writeError(w, r, fieldErr("rows", "every row needs option_values; regular_price and weight_grams cannot be null"))
 				return
 			}
+			if err := row.checkUSD(r); err != nil {
+				writeError(w, r, err)
+				return
+			}
 			rows = append(rows, catalog.MatrixRow{OptionValues: row.OptionValues.Value, Fields: row.fields()})
 		}
 		res, err := s.catalog.SaveMatrix(r.Context(), id, params.IfMatch, body.OptionNames.Value, rows, body.ArchiveMissing.Value)

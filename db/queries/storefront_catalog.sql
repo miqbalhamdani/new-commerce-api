@@ -11,7 +11,7 @@ LEFT JOIN brands b ON b.id = sp.brand_id AND b.archived_at IS NULL
 WHERE sp.slug = $1;
 
 -- name: StorefrontVariantsOfProduct :many
-SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams
+SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams, price_usd
 FROM storefront_variants
 WHERE product_id = $1
 ORDER BY id;

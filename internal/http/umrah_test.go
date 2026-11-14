@@ -84,3 +84,57 @@ func TestPackages(t *testing.T) {
 		}
 	})
 }
+
+// TestUSDPrices is P1-935's acceptance (BR-171): an umrah shop's variants
+// carry a USD price, display only; a retail shop cannot send one.
+func TestUSDPrices(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	retailOwner := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), auth.RoleOwner)
+	umrahShop := umrahOwner(ctx, t, store)
+	retail, umrah := apiClient(t, retailOwner), apiClient(t, umrahShop)
+	newProduct := func(do func(string, string, any) (int, map[string]any)) string {
+		t.Helper()
+		code, p := do("POST", "/v1/products", map[string]any{"title": "Haji Furoda"})
+		if code != http.StatusCreated {
+			t.Fatalf("product: %d %v", code, p)
+		}
+		return p["id"].(string)
+	}
+
+	t.Run("a retail shop cannot send price_usd", func(t *testing.T) {
+		id := newProduct(retail)
+		code, p := retail("POST", "/v1/products/"+id+"/variants", map[string]any{"option_values": []any{}, "price_usd": 1850000})
+		assertProblem(t, code, p, http.StatusUnprocessableEntity, "validation_failed", "price_usd")
+		code, p = doWithHeaders(t, retailOwner, http.MethodPut, "/v1/products/"+id+"/variant-matrix", map[string]any{
+			"option_names": []any{}, "archive_missing": true,
+			"rows": []any{map[string]any{"option_values": []any{}, "price_usd": 1850000}}}, map[string]string{"If-Match": "1"})
+		assertProblem(t, code, p, http.StatusUnprocessableEntity, "validation_failed", "price_usd")
+		code, p = retail("POST", "/v1/products/bulk", map[string]any{"on_conflict": "error",
+			"items": []any{map[string]any{"title": "X", "sku": "X-1", "price_usd": 100}}})
+		if code != http.StatusUnprocessableEntity {
+			t.Errorf("bulk with price_usd: %d %v", code, p)
+		}
+	})
+
+	t.Run("an umrah shop's USD price: set, kept out of the rupiah price, cleared", func(t *testing.T) {
+		id := newProduct(umrah)
+		code, p := umrah("POST", "/v1/products/"+id+"/variants", map[string]any{"option_values": []any{}, "price_usd": 0})
+		assertProblem(t, code, p, http.StatusUnprocessableEntity, "validation_failed", "price_usd")
+		code, v := umrah("POST", "/v1/products/"+id+"/variants", map[string]any{"option_values": []any{}, "price_usd": 1850000})
+		if code != http.StatusCreated || v["price_usd"] != float64(1850000) || v["price"] != float64(0) {
+			t.Fatalf("create: %d %v", code, v)
+		}
+		code, v = doWithHeaders(t, umrahShop, http.MethodPatch, "/v1/variants/"+v["id"].(string),
+			map[string]any{"price_usd": nil}, map[string]string{"If-Match": "1"})
+		if code != http.StatusOK || v["price_usd"] != nil {
+			t.Errorf("clear: %d %v", code, v)
+		}
+		code, m := doWithHeaders(t, umrahShop, http.MethodPut, "/v1/products/"+id+"/variant-matrix", map[string]any{
+			"option_names": []any{}, "archive_missing": true,
+			"rows": []any{map[string]any{"option_values": []any{}, "price_usd": 2000000}}}, map[string]string{"If-Match": "1"})
+		if code != http.StatusOK || m["updated"] != float64(1) {
+			t.Errorf("matrix: %d %v", code, m)
+		}
+	})
+}

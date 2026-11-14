@@ -240,7 +240,7 @@ func (q *Queries) StorefrontProductImages(ctx context.Context, productID uuid.UU
 }
 
 const storefrontVariantsOfProduct = `-- name: StorefrontVariantsOfProduct :many
-SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams
+SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams, price_usd
 FROM storefront_variants
 WHERE product_id = $1
 ORDER BY id
@@ -254,6 +254,7 @@ type StorefrontVariantsOfProductRow struct {
 	RegularPriceAmount int64
 	OnSale             bool
 	WeightGrams        int32
+	PriceUsd           *int64
 }
 
 func (q *Queries) StorefrontVariantsOfProduct(ctx context.Context, productID uuid.UUID) ([]StorefrontVariantsOfProductRow, error) {
@@ -273,6 +274,7 @@ func (q *Queries) StorefrontVariantsOfProduct(ctx context.Context, productID uui
 			&i.RegularPriceAmount,
 			&i.OnSale,
 			&i.WeightGrams,
+			&i.PriceUsd,
 		); err != nil {
 			return nil, err
 		}
