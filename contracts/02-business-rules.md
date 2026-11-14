@@ -440,8 +440,8 @@ table constraint.
 **A SKU is given on publish.** Before the check, every unarchived variant with no SKU gets one: the
 product's slug and the variant's option values, slugified, joined by `-` and upper-cased
 (`UMRAH-REGULER-9-HARI-QUAD`), cut to 64 characters. If the tenant already holds it, `-2`, `-3`, …
-is added until it is free (BR-039). A SKU someone set is never changed. A publish that then fails
-keeps the SKUs it gave.
+is added until it is free (BR-039). A SKU someone set is never changed. A publish that fails gives
+none: it changes nothing.
 
 *Why:* drafts must be quick to create. But a variant without a SKU cannot be bulk-upserted,
 CSV-imported or matched by a marketplace import (BR-043, BR-044, BR-103), and a shopper must never
