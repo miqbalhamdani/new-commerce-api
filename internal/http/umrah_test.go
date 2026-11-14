@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -13,6 +14,20 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
+
+// The duplicate route (P1-939) in the isolation and audit suites.
+func init() {
+	isolationCases = append(isolationCases,
+		isolationCase{route: route{"POST", "/v1/products/{id}/duplicate"}, seed: seedProduct,
+			request: func(t *testing.T, s seeded) *http.Request {
+				return bearerRequest(t, http.MethodPost, "/v1/products/"+s.otherID+"/duplicate", s.accessToken)
+			}})
+	auditCases = append(auditCases,
+		auditCase{route: route{"POST", "/v1/products/{id}/duplicate"}, request: func(t *testing.T, s seeded) (*http.Request, string, string) {
+			id := apiCreate(t, s, "/v1/products", map[string]any{"title": "Original"})
+			return bearerRequest(t, http.MethodPost, "/v1/products/"+id+"/duplicate", s.accessToken), "product", ""
+		}})
+}
 
 // umrahOwner is a signed-in owner of a new umrah shop (BR-170), and the shop.
 func umrahOwner(ctx context.Context, t *testing.T, store *db.Store) (seeded, uuid.UUID) {
@@ -240,5 +255,81 @@ func TestSKUOnPublish(t *testing.T) {
 	}
 	if got["King Size"] != "SPREI-KATUN-CAFE-KING-SIZE" || got["Queen"] != "SPREI-KATUN-CAFE-QUEEN-2" || got["Single"] != "MINE-1" {
 		t.Errorf("SKUs given: %v", got)
+	}
+}
+
+// TestDuplicateProduct is P1-939's acceptance (BR-047): a draft copy with the
+// same details, its live variants without SKUs, and its images sharing their
+// files, which survive deleting the copy's image.
+func TestDuplicateProduct(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	owner, shopID := umrahOwner(ctx, t, store)
+	do := apiClient(t, owner)
+	_, cat := do("POST", "/v1/categories", map[string]any{"name": "Umrah"})
+	code, p := do("POST", "/v1/products", map[string]any{"title": "Umrah Desember", "category_ids": []any{cat["id"]},
+		"attributes": map[string]any{"Catatan": "x"}, "package": map[string]any{"departure_text": "Desember 2026", "seats_left": 9}})
+	if code != http.StatusCreated {
+		t.Fatalf("product: %d %v", code, p)
+	}
+	id := p["id"].(string)
+	code, m := doWithHeaders(t, owner, http.MethodPut, "/v1/products/"+id+"/variant-matrix", map[string]any{
+		"option_names": []any{"Kamar"}, "archive_missing": true,
+		"rows": []any{
+			map[string]any{"option_values": []any{"Quad"}, "regular_price": 3190000000, "sku": "UD-QUAD"},
+			map[string]any{"option_values": []any{"Double"}, "regular_price": 0, "price_usd": 1850000},
+		}}, map[string]string{"If-Match": "1"})
+	if code != http.StatusOK {
+		t.Fatalf("matrix: %d %v", code, m)
+	}
+	key := shopID.String() + "/products/" + id + "/" + strings.Repeat("cd", 32) + ".jpg"
+	if err := testFiles(t).Put(ctx, key, strings.NewReader("jpeg"), 4, "image/jpeg"); err != nil {
+		t.Fatal(err)
+	}
+	tctx := tenant.NewContext(ctx, shopID)
+	if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(tctx, `INSERT INTO product_media (id, tenant_id, product_id, variant_id, r2_key, mime_type, bytes, position)
+			SELECT gen_random_uuid(), $1, $2, v.id, $3, 'image/jpeg', 4, 0 FROM variants v
+			 WHERE v.product_id = $2 AND v.option_values = '{Quad}'`, shopID, id, key)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, c := do("POST", "/v1/products/"+id+"/duplicate", nil)
+	if code != http.StatusCreated || c["title"] != "Umrah Desember (copy)" || c["slug"] != "umrah-desember-copy" ||
+		c["status"] != "draft" || c["package"].(map[string]any)["seats_left"] != float64(9) ||
+		len(c["categories"].([]any)) != 1 || c["attributes"].(map[string]any)["Catatan"] != "x" ||
+		len(c["option_names"].([]any)) != 1 || c["variant_count"] != float64(2) {
+		t.Fatalf("duplicate: %d %v", code, c)
+	}
+	copyID := c["id"].(string)
+	_, vs := do("GET", "/v1/products/"+copyID+"/variants", nil)
+	quad := ""
+	for _, v := range vs["data"].([]any) {
+		v := v.(map[string]any)
+		if v["sku"] != nil {
+			t.Errorf("a copied variant kept its SKU: %v", v)
+		}
+		if v["option_values"].([]any)[0] == "Double" && v["price_usd"] != float64(1850000) {
+			t.Errorf("Double's USD price: %v", v)
+		}
+		if v["option_values"].([]any)[0] == "Quad" {
+			quad = v["id"].(string)
+		}
+	}
+	media := c["media"].([]any)
+	if len(media) != 1 || !strings.HasSuffix(media[0].(map[string]any)["url"].(string), "/"+key) ||
+		media[0].(map[string]any)["variant_id"] != quad {
+		t.Fatalf("copied media: %v (Quad %s)", media, quad)
+	}
+	if code, _ := do("DELETE", "/v1/media/"+media[0].(map[string]any)["id"].(string), nil); code != http.StatusNoContent {
+		t.Fatalf("delete the copy's image: %d", code)
+	}
+	if _, _, err := testFiles(t).Head(ctx, key); err != nil {
+		t.Errorf("the original's file went with the copy's image: %v", err)
+	}
+	if code, _ := do("POST", "/v1/products/"+uuid.NewString()+"/duplicate", nil); code != http.StatusNotFound {
+		t.Errorf("unknown product: %d", code)
 	}
 }

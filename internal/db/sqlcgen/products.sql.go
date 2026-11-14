@@ -83,6 +83,64 @@ func (q *Queries) ClearProductCategories(ctx context.Context, productID uuid.UUI
 	return err
 }
 
+const copyProduct = `-- name: CopyProduct :one
+INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes, option_names, package)
+SELECT $1, s.tenant_id, $2, $3, s.description, s.brand_id, s.attributes,
+       s.option_names, s.package
+  FROM products s WHERE s.id = $4
+RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
+`
+
+type CopyProductParams struct {
+	ID     uuid.UUID
+	Title  string
+	Slug   string
+	Source uuid.UUID
+}
+
+// BR-047: a draft copy of a product, under its own title and slug.
+func (q *Queries) CopyProduct(ctx context.Context, arg CopyProductParams) (Product, error) {
+	row := q.db.QueryRow(ctx, copyProduct,
+		arg.ID,
+		arg.Title,
+		arg.Slug,
+		arg.Source,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Title,
+		&i.Slug,
+		&i.Description,
+		&i.BrandID,
+		&i.Status,
+		&i.Attributes,
+		&i.OptionNames,
+		&i.Version,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Package,
+	)
+	return i, err
+}
+
+const copyProductCategories = `-- name: CopyProductCategories :exec
+INSERT INTO product_categories (tenant_id, product_id, category_id)
+SELECT s.tenant_id, $1, s.category_id FROM product_categories s WHERE s.product_id = $2
+`
+
+type CopyProductCategoriesParams struct {
+	Target uuid.UUID
+	Source uuid.UUID
+}
+
+func (q *Queries) CopyProductCategories(ctx context.Context, arg CopyProductCategoriesParams) error {
+	_, err := q.db.Exec(ctx, copyProductCategories, arg.Target, arg.Source)
+	return err
+}
+
 const createProduct = `-- name: CreateProduct :one
 INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes, package)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,

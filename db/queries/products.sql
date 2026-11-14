@@ -74,3 +74,15 @@ SELECT
 -- name: SetProductStatus :exec
 UPDATE products SET status = sqlc.arg(status), version = version + 1, updated_at = now()
 WHERE id = sqlc.arg(id) AND archived_at IS NULL;
+
+-- name: CopyProduct :one
+-- BR-047: a draft copy of a product, under its own title and slug.
+INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes, option_names, package)
+SELECT sqlc.arg(id), s.tenant_id, sqlc.arg(title), sqlc.arg(slug), s.description, s.brand_id, s.attributes,
+       s.option_names, s.package
+  FROM products s WHERE s.id = sqlc.arg(source)
+RETURNING *;
+
+-- name: CopyProductCategories :exec
+INSERT INTO product_categories (tenant_id, product_id, category_id)
+SELECT s.tenant_id, sqlc.arg(target), s.category_id FROM product_categories s WHERE s.product_id = sqlc.arg(source);
