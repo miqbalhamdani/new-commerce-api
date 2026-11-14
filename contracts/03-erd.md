@@ -163,6 +163,11 @@ CREATE TABLE tenants (
     timezone     text NOT NULL DEFAULT 'Asia/Jakarta',       -- BR-029
     status       text NOT NULL DEFAULT 'active'
                  CHECK (status IN ('active','suspended','closed')),
+    -- BR-160. Signup and the platform console write the plan; the default is for the CLI and
+    -- demo seeds, and for every shop that predates plans.
+    plan         text NOT NULL DEFAULT 'jualan'
+                 CHECK (plan IN ('mulai','katalog','jualan')),
+    plan_until   date,                                      -- BR-160, display only
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 -- tenants has no RLS; it is reached only through the auth paths (BR-003).

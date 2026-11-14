@@ -126,13 +126,14 @@ POST /v1/auth/login
   "user":   { "id": "0192…", "name": "Budi", "role": "ops",
               "permissions": ["orders:read", "orders:write", "…"], "platform_admin": false,
               "impersonating": false },
-  "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta" } }
+  "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta", "plan": "jualan" } }
 ```
 
 This body is a **Session**; `refresh` and `accept-invite` return it too. The tenant comes from the
 user row (BR-020): there is no tenant, workspace or subdomain parameter. Wrong password, unknown
 email and disabled account all return the same `401` (BR-021). `platform_admin` is `true` only for an
 email in `PLATFORM_ADMIN_EMAILS` (BR-150, §14); it is not a role and grants nothing in the shop.
+`permissions` are the role's less whatever the shop's `plan` leaves out (BR-160).
 
 ### Refresh and logout
 
@@ -316,6 +317,10 @@ Four seeded, fixed roles (BR-023). A permission is `resource:action`, with `read
 - **There is no `customers:write`.** Staff never create customer accounts or touch credentials
   (BR-092). `customers:purge` only erases (BR-097).
 
+- **The shop's plan caps every role** (BR-160). `mulai`, `katalog` and `jualan` each allow a
+  subset of the permissions above; the session and every check use the role's permissions less
+  what the plan leaves out.
+
 `403` names the required permission in `detail` (BR-024). The client does not render what the user
 cannot do (BR-025).
 
@@ -331,9 +336,9 @@ cannot do (BR-025).
 | `PATCH` | `/v1/storefront-settings` | `settings:write` | 009, 120, 122, 127, 129, 142 |
 | `GET` | `/v1/roles` | `users:read` | 023 |
 | `GET` | `/v1/users?status=&role=&limit=&cursor=` | `users:read` | — |
-| `POST` | `/v1/users/invite` | `users:write` | 020, 023, 026 |
+| `POST` | `/v1/users/invite` | `users:write` | 020, 023, 026, 162 |
 | `POST` | `/v1/users/{id}/resend-invite` | `users:write` | 026 |
-| `PATCH` | `/v1/users/{id}` | `users:write` | 023, 027, 133 |
+| `PATCH` | `/v1/users/{id}` | `users:write` | 023, 027, 133, 162 |
 | `DELETE` | `/v1/users/{id}` | `users:write` | 027 |
 | `GET` | `/v1/api-keys` | `api_keys:read` | 028 |
 | `POST` | `/v1/api-keys` | `api_keys:write` | 028, 083 |
@@ -461,6 +466,8 @@ DELETE /v1/users/{id}
 - An email already used in any tenant is `422` on `email` (BR-020).
 - Only an owner can grant `owner` (BR-023).
 - The last active owner cannot be demoted or disabled (BR-027).
+- An invitation, or `status: active` for a disabled user, that would take the shop past its
+  plan's accounts is `422` (BR-162).
 - `PATCH` takes `role`, `status` (`active` re-enables a disabled user) and `bio`, without
   `If-Match`. `bio` is the line shown under the user's blog posts (BR-133), at most 300
   characters; `null` or an empty string clears it.
@@ -1315,6 +1322,9 @@ Every storefront request runs this before any handler (BR-083, BR-085):
    the origin and add `Vary: Origin`. Browser rate limits apply.
 3. **No `Origin`** (from a server): accepted; server rate limits apply (BR-014).
 4. Set the tenant from the key; every query then runs through `InTenantTx` like any admin query.
+5. **A shop not on `jualan`** (BR-161): the cart, checkout, customer-account and order routes
+   (`/carts…`, `/customers`, `/auth/…`, `/me…`, `/orders/…`) are `403 permission_denied`. The plan
+   is cached with the key.
 
 Preflight `OPTIONS` carries no key and is answered for any origin with the allowed methods and
 headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
@@ -1873,6 +1883,7 @@ DELETE /v1/blog/posts/{id}
 | `GET` | `/v1/platform/shops` | an `active` user whose email is in `PLATFORM_ADMIN_EMAILS` | 003, 150 |
 | `POST` | `/v1/platform/shops` | the same | 020, 151 |
 | `PATCH` | `/v1/platform/shops/{id}` | the same | 140, 151 |
+| `PATCH` | `/v1/platform/shops/{id}/plan` | the same | 151, 160 |
 | `PATCH` | `/v1/platform/shops/{id}/owner` | the same | 020, 151 |
 | `POST` | `/v1/platform/shops/{id}/invite` | the same | 026, 151 |
 | `POST` | `/v1/platform/shops/{id}/impersonate` | the same | 003, 152 |
@@ -1885,6 +1896,7 @@ GET /v1/platform/shops
                "with_products": 7, "with_orders": 2, "active_7d": 5, "sleeping": 3 },
   "shops": [
     { "id": "0192…", "name": "Lelap", "slug": "lelap-3f9a1c", "status": "active",
+      "plan": "mulai", "plan_until": null,
       "created_at": "2026-11-04T10:12:00+07:00", "source": "google",
       "owner": { "name": "Rina", "email": "rina@lelap.id", "status": "active",
                  "last_login_at": "2026-11-05T08:30:00+07:00" },
@@ -1898,7 +1910,8 @@ The report is BR-150's: one entry per shop, newest first, unpaginated. `source` 
 `google` or `cli`, and `summary` counts only `email` and `google` shops. `owner` is the shop's
 first owner, `null` if it has none. `website.theme` is `null` until the shop first opens its
 storefront settings. `products.total` leaves out archived products. `last_activity_at` is the
-latest staff sign-in or audit-log entry, `null` when there is neither. Anyone else, and everyone when
+latest staff sign-in or audit-log entry, `null` when there is neither. `plan` is BR-160's, and
+`plan_until` the date its paid period is expected to end, or `null`. Anyone else, and everyone when
 `PLATFORM_ADMIN_EMAILS` is empty, gets `403` with that requirement in `detail` (BR-024). The
 website address is `https://{slug}.belli.id` (BR-140).
 
@@ -1907,7 +1920,7 @@ website address is `https://{slug}.belli.id` (BR-140).
 ```json
 POST /v1/platform/shops
 { "shop_name": "Toko Klien", "owner_name": "Rina", "owner_email": "rina@klien.id",
-  "send_invite": false }
+  "send_invite": false, "plan": "katalog" }
 201 Created
 { "id": "0192…", "name": "Toko Klien", "slug": "toko-klien-a1b2c3", "status": "active",
   "source": "platform", "owner": { "name": "Rina", "email": "rina@klien.id", "status": "invited",
@@ -1915,6 +1928,7 @@ POST /v1/platform/shops
 
 PATCH /v1/platform/shops/{id}          { "status": "suspended" }      → 200, the shop
 PATCH /v1/platform/shops/{id}/owner    { "email": "owner@klien.id" }  → 200, the shop
+PATCH /v1/platform/shops/{id}/plan     { "plan": "jualan", "plan_until": "2027-11-30" } → 200, the shop
 POST  /v1/platform/shops/{id}/invite                                  → 204
 ```
 
@@ -1923,7 +1937,9 @@ and nothing is emailed unless `send_invite` is true. A taken email is `422` on `
 `email` on `…/owner`, BR-020). `…/owner` and `…/invite` are `422` once the owner has confirmed.
 `status` is `active`, `suspended` or `closed`; anything but `active` signs the shop's staff out,
 refuses their sign-ins (`401`, as for a disabled account, BR-021) and takes the website and the
-storefront API offline (`404`, BR-140). A shop that does not exist is `404`.
+storefront API offline (`404`, BR-140). `plan` is `mulai` unless given, and `…/plan` sets the plan
+and `plan_until` together, audited `tenant.plan`; `plan_until` is a date or `null` (BR-160). A
+shop that does not exist is `404`.
 
 ### 14.2 Impersonation (BR-152)
 
@@ -1933,10 +1949,10 @@ POST /v1/platform/shops/{id}/impersonate
 { "access_token": "eyJ…", "expires_in": 3600,
   "user": { "id": "<the platform admin>", "name": "Iqbal", "role": "owner",
             "permissions": ["…"], "platform_admin": false, "impersonating": true },
-  "tenant": { "id": "0192…", "name": "Toko Klien", "timezone": "Asia/Jakarta" } }
+  "tenant": { "id": "0192…", "name": "Toko Klien", "timezone": "Asia/Jakarta", "plan": "katalog" } }
 ```
 
 An owner's session in that shop for one hour, with no refresh cookie: when it ends, refresh returns
 the platform admin's own session. It grants the owner's permissions except `customers:purge`, and
 the server checks the platform admin's email and status again on every request made with it. The
-`/v1/platform` routes are `403` in it.
+shop's plan caps it as it caps the owner (BR-160). The `/v1/platform` routes are `403` in it.

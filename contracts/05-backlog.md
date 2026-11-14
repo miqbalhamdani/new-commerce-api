@@ -470,6 +470,27 @@ website is `404`.
 | P1-916 | Platform shop actions in the admin | FE | 912, 913, 914 | Platform has New shop (with "Send invite now") and per-shop actions: Open as owner, Send invite and Change owner while `invited`, Suspend / Activate / Close behind a confirmation; `422`s land on their fields (BR-151) | done | Iqbal Hamdani |
 | P1-917 | Impersonation in the admin | FE | 915, 916 | Open as owner swaps the session in memory and lands on the dashboard; a banner on every screen names the shop with Back to Platform, which restores the founder's session; the activity log shows a platform admin's entries as Belli (BR-152) | done | Iqbal Hamdani |
 
+## Phase 12 · Plans
+
+Added in v2.27 so each shop gets what its plan includes: Mulai, Katalog or Jualan, set by hand from
+the Platform page while payment is manual (BR-160–162). The hosted website's cart and checkout,
+removing the Belli label, custom domains and Asisten AI are not in it.
+
+**Exit:** from Platform the founder puts a shop on `mulai`, and its owner sees only the catalog
+(without the blog), the storefront's look and contact, settings and the activity log; on `katalog`
+the blog, team and API keys appear and a third account is refused; on `jualan` the sales screens and
+checkout settings appear, and only then does the storefront API take a cart.
+
+| ID | Item | Repo | Depends | Acceptance | Status | Owner |
+|---|---|---|---|---|---|---|
+| P1-921 | Plans contracts | CT | 917 | v2.27.0: BR-160–162; `tenants.plan` and `plan_until` in `03-erd.md`; §3, §4, §11.2 and §14 in `04-api-spec.md`; `openapi.yaml`: `SessionTenant.plan`, `PlatformShop.plan` and `plan_until`, `PlatformShopCreate.plan`, `PATCH /v1/platform/shops/{id}/plan`; `storefront.yaml` 0.15.0 | done | Iqbal Hamdani |
+| P1-922 | A plan caps the role | BE | 921 | Existing shops are `jualan`, a signup opens on `mulai`; login, refresh and impersonation return `permissions` capped by the plan and `tenant.plan`; every permission check, including media presign and jobs, refuses what the plan leaves out with `403` naming the permission (BR-160) | todo | Iqbal Hamdani |
+| P1-923 | Accounts per plan | BE | 922 | An invitation or a re-enable past 1 / 2 / 5 active and invited accounts, the owner included, is `422`; disabled users do not count, and a downgrade signs no one out (BR-162) | todo | Iqbal Hamdani |
+| P1-924 | Storefront orders need `jualan` | BE | 922 | On a shop not on `jualan`, cart, checkout, customer-account and order routes are `403` with a shop key or the platform key, within the key cache's 60 s; the catalog, blog and `/config` answer on every plan (BR-161) | todo | Iqbal Hamdani |
+| P1-925 | Plans in the platform console | BE | 922 | `PATCH /v1/platform/shops/{id}/plan` sets `plan` and `plan_until`, audited `tenant.plan`; `POST /v1/platform/shops` takes `plan` (`mulai` when left out); the report shows both per shop (BR-160, BR-151) | todo | Iqbal Hamdani |
+| P1-926 | The admin follows the plan | FE | 922 | Without `orders:read` the dashboard sends the user to Products, so `mulai` and `katalog` never land on a screen they cannot use; the storefront's Checkout tab, and its fields, only on `jualan` (BR-160) | todo | Iqbal Hamdani |
+| P1-927 | Plans on the Platform page | FE | 925 | A plan column with its paid-until date, counts per plan and of plans ending within 7 days, a Change plan action (plan and an optional date) and a plan choice in New shop, `mulai` by default (BR-160) | todo | Iqbal Hamdani |
+
 ## Dropped in v2
 
 | ID | Item | Why |
