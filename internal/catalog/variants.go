@@ -32,6 +32,8 @@ type VariantFields struct {
 	SaleStartsAt, SaleEndsAt   *time.Time
 	ClearSaleStarts, ClearSale bool // ClearSale ends the schedule's end
 	WeightGrams                *int32
+	PriceUSD                   *int64 // an umrah shop's display price (BR-171)
+	ClearPriceUSD              bool
 }
 
 func (s *Service) CreateVariant(ctx context.Context, productID uuid.UUID, options []string, f VariantFields) (Variant, error) {
@@ -157,6 +159,8 @@ func variantWriteError(err error) error {
 		return fieldError("sale_ends_at", "the sale must end after it starts")
 	case code == "23514" && strings.Contains(constraint, "regular_price"):
 		return fieldError("regular_price", "regular_price cannot be negative")
+	case code == "23514" && strings.Contains(constraint, "price_usd"):
+		return fieldError("price_usd", "price_usd must be greater than zero")
 	case code == "23514" && strings.Contains(constraint, "weight"):
 		return fieldError("weight_grams", "weight_grams cannot be negative")
 	}
@@ -165,7 +169,7 @@ func variantWriteError(err error) error {
 
 func createParams(id, product uuid.UUID, options []string, f VariantFields) sqlcgen.CreateVariantParams {
 	p := sqlcgen.CreateVariantParams{ID: id, ProductID: product, OptionValues: options, Sku: f.SKU, Barcode: f.Barcode,
-		SalePrice: f.SalePrice, SaleStartsAt: f.SaleStartsAt, SaleEndsAt: f.SaleEndsAt}
+		SalePrice: f.SalePrice, SaleStartsAt: f.SaleStartsAt, SaleEndsAt: f.SaleEndsAt, PriceUsd: f.PriceUSD}
 	if p.OptionValues == nil {
 		p.OptionValues = []string{}
 	}
@@ -186,11 +190,12 @@ func updateParams(id uuid.UUID, version int, f VariantFields) sqlcgen.UpdateVari
 		SetSalePrice: f.SalePrice != nil || f.ClearSalePrice, SalePrice: f.SalePrice,
 		SetSaleStarts: f.SaleStartsAt != nil || f.ClearSaleStarts, SaleStartsAt: f.SaleStartsAt,
 		SetSaleEnds: f.SaleEndsAt != nil || f.ClearSale, SaleEndsAt: f.SaleEndsAt,
-		WeightGrams: f.WeightGrams}
+		WeightGrams: f.WeightGrams,
+		SetPriceUsd: f.PriceUSD != nil || f.ClearPriceUSD, PriceUsd: f.PriceUSD}
 }
 
 func variantAudit(v Variant) map[string]any {
 	return map[string]any{"sku": v.Sku, "option_values": v.OptionValues, "regular_price": v.RegularPriceAmount,
 		"sale_price": v.SalePriceAmount, "sale_starts_at": v.SaleStartsAt, "sale_ends_at": v.SaleEndsAt,
-		"weight_grams": v.WeightGrams, "version": v.Version}
+		"weight_grams": v.WeightGrams, "price_usd": v.PriceUsd, "version": v.Version}
 }

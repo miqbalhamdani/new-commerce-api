@@ -64,8 +64,9 @@ RETURNING *;
 -- name: CreateTenant :one
 -- Signup (P1-084). tenants has no RLS; the id is the one the transaction set
 -- as app.tenant_id, so the owner inserted next lands in this tenant.
-INSERT INTO tenants (id, name, slug, order_prefix, plan)
-VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix), sqlc.arg(plan))
+INSERT INTO tenants (id, name, slug, order_prefix, plan, business_type)
+VALUES (current_setting('app.tenant_id')::uuid, sqlc.arg(name), sqlc.arg(slug), sqlc.arg(order_prefix), sqlc.arg(plan),
+        sqlc.arg(business_type))
 RETURNING *;
 
 -- name: CreateActiveOwner :one

@@ -39,6 +39,10 @@ UPDATE storefront_settings SET
     opening_hours = sqlc.narg(opening_hours),
     shopee_url = sqlc.narg(shopee_url),
     tokopedia_url = sqlc.narg(tokopedia_url),
+    license = sqlc.narg(license),
+    cancellation_policy = sqlc.narg(cancellation_policy),
+    document_requirements = sqlc.narg(document_requirements),
+    rebuild_hook_url = sqlc.narg(rebuild_hook_url),
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
@@ -51,7 +55,30 @@ SELECT t.name AS shop_name, s.google_client_id,
        coalesce(s.bank_transfer_enabled, true)::bool AS bank_transfer_enabled, s.bank_transfer_instructions,
        coalesce(s.midtrans_enabled, false)::bool AS midtrans_enabled, s.midtrans_environment, s.midtrans_client_key,
        coalesce(s.theme, 'katalog')::text AS theme, s.brand_color, s.logo_r2_key, s.hero_r2_key,
-       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url
+       s.whatsapp_number, s.tagline, s.instagram, s.address, s.opening_hours, s.shopee_url, s.tokopedia_url,
+       s.license, s.cancellation_policy, s.document_requirements
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid;
+
+-- name: FirstChangeSince :one
+-- BR-098: the oldest write since the last rebuild that a static website shows:
+-- the catalog, the blog, marketplace imports and the storefront settings.
+SELECT created_at FROM audit_log
+ WHERE created_at > sqlc.arg(since)::timestamptz
+   AND split_part(action, '.', 1) IN ('product', 'variant', 'media', 'category', 'brand',
+                                      'blog_post', 'blog_category', 'channel', 'storefront_settings')
+ ORDER BY created_at
+ LIMIT 1;
+
+-- name: ClaimRebuild :one
+-- One worker calls the hook: the claim holds only if no other moved
+-- rebuild_last_at since this one read it. Not audited, so it is no change.
+UPDATE storefront_settings SET rebuild_last_at = sqlc.arg(at), rebuild_last_status = NULL
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_hook_url IS NOT NULL
+   AND rebuild_last_at IS NOT DISTINCT FROM sqlc.narg(seen)::timestamptz
+RETURNING rebuild_hook_url;
+
+-- name: SetRebuildStatus :exec
+UPDATE storefront_settings SET rebuild_last_status = sqlc.narg(status)
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_last_at = sqlc.arg(at);

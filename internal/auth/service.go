@@ -57,10 +57,11 @@ type SessionUser struct {
 }
 
 type SessionTenant struct {
-	ID       uuid.UUID
-	Name     string
-	Timezone string
-	Plan     string // BR-160
+	ID           uuid.UUID
+	Name         string
+	Timezone     string
+	Plan         string // BR-160
+	BusinessType string // BR-170
 }
 
 // Service is the auth use cases. Everything it does that touches a tenant's
@@ -266,7 +267,7 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 		}
 		// The plan comes from the shop's row, so the token is minted here,
 		// after reading it (BR-160).
-		access, err := s.signer.Issue(userID, tenantID, role, row.Plan, now)
+		access, err := s.signer.Issue(userID, tenantID, role, row.Plan, row.BusinessType, now)
 		if err != nil {
 			return err
 		}
@@ -285,10 +286,11 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 				PlatformAdmin: s.admins.Has(row.Email),
 			},
 			Tenant: SessionTenant{
-				ID:       row.TenantID,
-				Name:     row.TenantName,
-				Timezone: row.Timezone,
-				Plan:     row.Plan,
+				ID:           row.TenantID,
+				Name:         row.TenantName,
+				Timezone:     row.Timezone,
+				Plan:         row.Plan,
+				BusinessType: row.BusinessType,
 			},
 		}
 		return nil
@@ -479,14 +481,15 @@ func (s *Service) Impersonate(ctx context.Context, target uuid.UUID) (Session, e
 			return err
 		}
 		// The shop's plan caps the impersonation as it caps its owner (BR-160).
-		access, err := s.signer.IssueImpersonation(actor.UserID, home, target, shop.Plan, s.now())
+		access, err := s.signer.IssueImpersonation(actor.UserID, home, target, shop.Plan, shop.BusinessType, s.now())
 		if err != nil {
 			return err
 		}
 		out = Session{AccessToken: access, ExpiresIn: int(ImpersonationTTL.Seconds()),
 			User: SessionUser{ID: actor.UserID, Name: name, Role: RoleOwner,
 				Permissions: ImpersonationPermissions(shop.Plan), Impersonating: true},
-			Tenant: SessionTenant{ID: shop.ID, Name: shop.Name, Timezone: shop.Timezone, Plan: shop.Plan}}
+			Tenant: SessionTenant{ID: shop.ID, Name: shop.Name, Timezone: shop.Timezone, Plan: shop.Plan,
+				BusinessType: shop.BusinessType}}
 		return db.Audit(tctx, tx, db.AuditEntry{Action: "platform.impersonate", SubjectType: "tenant", SubjectID: target.String()})
 	})
 	return out, err

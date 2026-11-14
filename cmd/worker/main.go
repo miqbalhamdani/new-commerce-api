@@ -123,6 +123,8 @@ func run() error {
 
 	// BR-096, nightly; one replica a night.
 	go retention.Nightly(ctx, pool, redis)
+	// BR-098: static websites' deploy hooks, a minute after a change.
+	go team.RebuildHooks(ctx, pool, 15*time.Second)
 
 	slog.Info("worker consuming", "addr", jobs.Stream)
 	return runner.Run(ctx)

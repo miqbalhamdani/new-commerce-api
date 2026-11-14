@@ -58,7 +58,7 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 func productListItem(p catalog.ShopProduct) ProductListItem {
 	item := ProductListItem{Slug: p.Slug, Title: p.Title, PriceMin: p.PriceMin, PriceMax: p.PriceMax,
 		OnSale: p.OnSale, RegularPriceMin: p.RegularMin, Options: make([]ProductOption, 0, len(p.Options)),
-		WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax),
+		WeightGramsMin: int(p.WeightMin), WeightGramsMax: int(p.WeightMax), PriceUsdMin: p.PriceUSDMin,
 		Categories: make([]ProductCategory, 0, len(p.Categories))}
 	for _, o := range p.Options {
 		item.Options = append(item.Options, ProductOption{Name: o.Name, Values: o.Values})
@@ -72,7 +72,18 @@ func productListItem(p catalog.ShopProduct) ProductListItem {
 	if p.Image != nil {
 		item.Image = &Image{Url: p.Image.URL, Sizes: p.Image.Sizes}
 	}
+	if p.Package != nil {
+		item.Package = &PackageSummary{}
+		convert(p.Package, item.Package)
+	}
 	return item
+}
+
+// convert copies a catalog value into the generated type that shares its
+// JSON: a package or its summary, which reads the fields it has (BR-171).
+func convert(from, to any) {
+	b, _ := json.Marshal(from)
+	_ = json.Unmarshal(b, to)
 }
 
 func (s *Server) GetProduct(w http.ResponseWriter, r *http.Request, slug string) {
@@ -98,6 +109,10 @@ func (s *Server) GetProduct(w http.ResponseWriter, r *http.Request, slug string)
 	if d.BrandSlug != nil {
 		out.Brand = &BrandRef{Slug: *d.BrandSlug, Name: *d.BrandName}
 	}
+	if pkg := catalog.LoadPackage(d.Package); pkg != nil {
+		out.Package = &Package{}
+		convert(pkg, out.Package)
+	}
 	for _, c := range d.Categories {
 		out.Categories = append(out.Categories, ProductCategory{Kind: CategoryKind(c.Kind), Name: c.Name, Path: c.Path})
 	}
@@ -106,7 +121,8 @@ func (s *Server) GetProduct(w http.ResponseWriter, r *http.Request, slug string)
 	}
 	for _, v := range d.Variants {
 		out.Variants = append(out.Variants, ProductVariant{Id: v.ID, Sku: v.Sku, OptionValues: v.OptionValues,
-			Price: v.PriceAmount, RegularPrice: v.RegularPriceAmount, OnSale: v.OnSale, WeightGrams: int(v.WeightGrams)})
+			Price: v.PriceAmount, RegularPrice: v.RegularPriceAmount, OnSale: v.OnSale, WeightGrams: int(v.WeightGrams),
+			PriceUsd: v.PriceUsd})
 	}
 	httpkit.WriteJSON(w, http.StatusOK, out)
 }

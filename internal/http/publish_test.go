@@ -47,7 +47,9 @@ func TestPublishCheck(t *testing.T) {
 
 	variant := apiCreate(t, admin, "/v1/products/"+product+"/variants", map[string]any{"option_values": []string{}})
 	code, p = publish()
-	want := []string{"categories", "media", "price@" + variant, "sku@" + variant, "weight@" + variant}
+	// No sku@: publishing gives the variant one (P1-938), undone with the
+	// failed publish.
+	want := []string{"categories", "media", "price@" + variant, "weight@" + variant}
 	if got := fields(p); code != 422 || !slices.Equal(got, want) {
 		t.Errorf("bare variant: %d %v, want %v", code, got, want)
 	}

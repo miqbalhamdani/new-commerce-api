@@ -135,6 +135,21 @@ func (q *Queries) SetInvitedOwner(ctx context.Context, arg SetInvitedOwnerParams
 	return i, err
 }
 
+const setShopBusinessType = `-- name: SetShopBusinessType :one
+UPDATE tenants t SET business_type = $1
+  FROM (SELECT business_type FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.business_type
+`
+
+// BR-170. Returns the type it replaced.
+func (q *Queries) SetShopBusinessType(ctx context.Context, businessType string) (string, error) {
+	row := q.db.QueryRow(ctx, setShopBusinessType, businessType)
+	var business_type string
+	err := row.Scan(&business_type)
+	return business_type, err
+}
+
 const setShopPlan = `-- name: SetShopPlan :one
 UPDATE tenants t SET plan = $1, plan_until = $2
   FROM (SELECT plan, plan_until FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old

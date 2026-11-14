@@ -168,6 +168,9 @@ CREATE TABLE tenants (
     plan         text NOT NULL DEFAULT 'jualan'
                  CHECK (plan IN ('mulai','katalog','jualan')),
     plan_until   date,                                      -- BR-160, display only
+    -- BR-170. Only the platform console writes it; every other shop is retail.
+    business_type text NOT NULL DEFAULT 'retail'
+                 CHECK (business_type IN ('retail','umrah')),
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 -- tenants has no RLS; it is reached only through the auth paths (BR-003).
@@ -337,6 +340,9 @@ CREATE TABLE products (
     -- when present. variants.option_values is positional against THIS array --
     -- that pairing is what makes the matrix editor a pivot rather than a join.
     option_names text[] NOT NULL DEFAULT '{}',
+    -- BR-171. An umrah shop's package details; NULL for every retail product. Its shape is
+    -- checked by the API, which writes it only in an umrah shop.
+    package      jsonb,
     version      integer NOT NULL DEFAULT 1,
     archived_at  timestamptz,
     created_at   timestamptz NOT NULL DEFAULT now(),
@@ -367,6 +373,9 @@ CREATE TABLE variants (
     sale_ends_at         timestamptz,     -- NULL = the sale runs until removed
     currency      char(3) NOT NULL DEFAULT 'IDR',
     weight_grams  integer NOT NULL DEFAULT 0 CHECK (weight_grams >= 0),
+    -- BR-171. US cents an umrah shop shows in place of rupiah; never charged, never in
+    -- variant_price().
+    price_usd     bigint CHECK (price_usd > 0),
     -- BR-017: no quantity column, ever.
     archived_at   timestamptz,
     version       integer NOT NULL DEFAULT 1,
@@ -528,6 +537,14 @@ CREATE TABLE storefront_settings (
                            AND shopee_url ~ '^https://([a-z0-9-]+\.)*shopee\.co\.id(/\S*)?$'),
     tokopedia_url          text CHECK (char_length(tokopedia_url) <= 300
                            AND tokopedia_url ~ '^https://([a-z0-9-]+\.)*tokopedia\.com(/\S*)?$'),
+    license                text CHECK (char_length(license) <= 120),                 -- BR-142
+    cancellation_policy    text CHECK (char_length(cancellation_policy) <= 3000),    -- BR-142
+    document_requirements  text CHECK (char_length(document_requirements) <= 3000),  -- BR-142
+    -- BR-098. A static website's deploy hook; the host list is checked by the API. The worker
+    -- writes the last call's time and HTTP status (NULL status: no answer).
+    rebuild_hook_url       text CHECK (char_length(rebuild_hook_url) <= 500),
+    rebuild_last_at        timestamptz,
+    rebuild_last_status    integer,
     updated_at             timestamptz NOT NULL DEFAULT now(),
     CHECK (NOT midtrans_enabled OR (midtrans_environment IS NOT NULL
            AND midtrans_client_key IS NOT NULL AND midtrans_server_key IS NOT NULL)),
@@ -949,7 +966,8 @@ columns.
 -- would be visible through it.
 CREATE VIEW storefront_products WITH (security_invoker = true) AS
 SELECT p.id, p.tenant_id, p.slug, p.title, p.description, p.brand_id,
-       p.attributes, p.option_names, p.updated_at
+       p.attributes, p.option_names, p.updated_at,
+       p.package                                  -- BR-171
 FROM products p
 WHERE p.status = 'active' AND p.archived_at IS NULL;
 
@@ -959,7 +977,8 @@ SELECT v.id, v.tenant_id, v.product_id, v.sku, v.option_values,
        v.regular_price_amount,
        variant_price(v) < v.regular_price_amount AS on_sale,
        v.currency, v.weight_grams,
-       sp.title AS product_title
+       sp.title AS product_title,
+       v.price_usd                                -- BR-171, never charged
 FROM variants v
 JOIN storefront_products sp ON sp.id = v.product_id
 WHERE v.archived_at IS NULL;

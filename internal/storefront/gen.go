@@ -695,6 +695,69 @@ type OrderLine struct {
 // OrderStatus defines model for OrderStatus.
 type OrderStatus string
 
+// Package BR-171. Every field is present; unset ones are `null`, and unset lists `[]`.
+type Package struct {
+	Airline *string  `json:"airline"`
+	Bonus   []string `json:"bonus"`
+
+	// CancellationPolicy This package's own; when `null`, show the shop's from `/config`.
+	CancellationPolicy *string             `json:"cancellation_policy"`
+	DepartureDate      *openapi_types.Date `json:"departure_date"`
+
+	// DepartureText A departure not yet fixed to a day.
+	//
+	// Examples: Desember 2026
+	DepartureText *string        `json:"departure_text"`
+	DurationDays  *int           `json:"duration_days"`
+	Excludes      []string       `json:"excludes"`
+	Hotels        []PackageHotel `json:"hotels"`
+	Includes      []string       `json:"includes"`
+
+	// Itinerary The days in order; day N is the Nth entry.
+	Itinerary  []PackageDay        `json:"itinerary"`
+	PriceNote  *string             `json:"price_note"`
+	ReturnDate *openapi_types.Date `json:"return_date"`
+	Route      *string             `json:"route"`
+
+	// SeatsLeft What the owner typed; nothing counts it down (BR-017). 0 is full.
+	SeatsLeft  *int `json:"seats_left"`
+	SeatsTotal *int `json:"seats_total"`
+}
+
+// PackageDay defines model for PackageDay.
+type PackageDay struct {
+	Text  *string `json:"text"`
+	Title string  `json:"title"`
+}
+
+// PackageHotel defines model for PackageHotel.
+type PackageHotel struct {
+	// City Examples: Makkah
+	City   string `json:"city"`
+	Name   string `json:"name"`
+	Nights *int   `json:"nights"`
+	Stars  *int   `json:"stars"`
+
+	// Variant The option value this hotel is for; `null` for every choice.
+	Variant *string `json:"variant"`
+}
+
+// PackageSummary The fields of `Package` a card needs.
+type PackageSummary struct {
+	Airline       *string             `json:"airline"`
+	DepartureDate *openapi_types.Date `json:"departure_date"`
+
+	// DepartureText Examples: Desember 2026
+	DepartureText *string             `json:"departure_text"`
+	DurationDays  *int                `json:"duration_days"`
+	Hotels        []PackageHotel      `json:"hotels"`
+	ReturnDate    *openapi_types.Date `json:"return_date"`
+
+	// SeatsLeft What the owner typed; nothing counts it down (BR-017). 0 is full.
+	SeatsLeft  *int `json:"seats_left"`
+	SeatsTotal *int `json:"seats_total"`
+}
+
 // PasswordResetConfirm defines model for PasswordResetConfirm.
 type PasswordResetConfirm struct {
 	Password string `json:"password"`
@@ -767,10 +830,13 @@ type ProductDetail struct {
 	Id          openapi_types.UUID     `json:"id"`
 	Images      []ProductImage         `json:"images"`
 	OptionNames []string               `json:"option_names"`
-	Slug        string                 `json:"slug"`
-	Title       string                 `json:"title"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	Variants    []ProductVariant       `json:"variants"`
+
+	// Package A travel package's details (BR-171); `null` without them.
+	Package   *Package         `json:"package"`
+	Slug      string           `json:"slug"`
+	Title     string           `json:"title"`
+	UpdatedAt time.Time        `json:"updated_at"`
+	Variants  []ProductVariant `json:"variants"`
 }
 
 // ProductImage defines model for ProductImage.
@@ -796,6 +862,9 @@ type ProductListItem struct {
 	// Options Each option name in the product's order, with its distinct values in the order the visible variants first use them; empty for a product without options.
 	Options []ProductOption `json:"options"`
 
+	// Package A travel package's card details (BR-171); `null` without package details.
+	Package *PackageSummary `json:"package"`
+
 	// PriceMax Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
 	// Examples: 19900000
@@ -805,6 +874,9 @@ type ProductListItem struct {
 	//
 	// Examples: 19900000
 	PriceMin Money `json:"price_min"`
+
+	// PriceUsdMin The lowest `price_usd` among the visible variants, in US cents, or `null` when none has one (BR-171). A package priced only in dollars has `price_min` 0.
+	PriceUsdMin *int64 `json:"price_usd_min"`
 
 	// RegularPriceMin Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
@@ -856,6 +928,9 @@ type ProductVariant struct {
 	//
 	// Examples: 19900000
 	Price Money `json:"price"`
+
+	// PriceUsd US cents to show in place of rupiah; never charged (BR-171).
+	PriceUsd *int64 `json:"price_usd,omitempty"`
 
 	// RegularPrice Minor units of IDR, so `19900000` is Rp 199.000 (BR-006).
 	//
@@ -932,14 +1007,25 @@ type StorefrontConfig struct {
 	// BrandColor One of the theme's four colours, `#rrggbb` in lower case; its first when the owner picked none (BR-143).
 	//
 	// Examples: #2f5a4c
-	BrandColor     string  `json:"brand_color"`
-	GoogleClientId *string `json:"google_client_id"`
-	HeroUrl        *string `json:"hero_url"`
+	BrandColor string `json:"brand_color"`
+
+	// CancellationPolicy Shown on a travel package without its own (BR-142, BR-171).
+	CancellationPolicy *string `json:"cancellation_policy"`
+
+	// DocumentRequirements The documents a pilgrim brings, shown on every travel package (BR-142).
+	DocumentRequirements *string `json:"document_requirements"`
+	GoogleClientId       *string `json:"google_client_id"`
+	HeroUrl              *string `json:"hero_url"`
 
 	// Instagram The handle, without `@`.
-	Instagram *string         `json:"instagram"`
-	LogoUrl   *string         `json:"logo_url"`
-	Midtrans  *MidtransConfig `json:"midtrans"`
+	Instagram *string `json:"instagram"`
+
+	// License The business licence to show (BR-142).
+	//
+	// Examples: PPIU No. U.133 Tahun 2020
+	License  *string         `json:"license"`
+	LogoUrl  *string         `json:"logo_url"`
+	Midtrans *MidtransConfig `json:"midtrans"`
 
 	// OpeningHours Examples: Setiap hari 09.00–21.00
 	OpeningHours   *string                          `json:"opening_hours"`

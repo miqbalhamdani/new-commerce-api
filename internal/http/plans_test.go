@@ -127,7 +127,7 @@ func TestPlans(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		old, err := signer.Issue(userID, id, auth.RoleOwner, "", time.Now())
+		old, err := signer.Issue(userID, id, auth.RoleOwner, "", "", time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

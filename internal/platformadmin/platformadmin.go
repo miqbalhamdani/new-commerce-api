@@ -91,6 +91,7 @@ type Shop struct {
 	Status         string
 	Plan           string
 	PlanUntil      *time.Time // a date (BR-160)
+	BusinessType   string     // BR-170
 	CreatedAt      time.Time
 	Source         string
 	Owner          *Owner
@@ -179,6 +180,24 @@ func (s *Service) SetPlan(ctx context.Context, id uuid.UUID, plan string, until 
 	})
 }
 
+// SetBusinessType is BR-170's type, audited tenant.business_type in the
+// shop. The caller has checked it. A shop that does not exist is
+// db.ErrNotFound.
+func (s *Service) SetBusinessType(ctx context.Context, id uuid.UUID, businessType string) error {
+	if _, err := s.store.Tenant(ctx, id); err != nil {
+		return err
+	}
+	tctx := tenant.NewContext(ctx, id)
+	return s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		before, err := sqlcgen.New(tx).SetShopBusinessType(tctx, businessType)
+		if err != nil {
+			return err
+		}
+		return db.Audit(tctx, tx, db.AuditEntry{Action: "tenant.business_type", SubjectType: "tenant", SubjectID: id.String(),
+			Before: map[string]any{"business_type": before}, After: map[string]any{"business_type": businessType}})
+	})
+}
+
 // dateOf is a date for the audit row: YYYY-MM-DD, or nil for none.
 func dateOf(d pgtype.Date) any {
 	if !d.Valid {
@@ -199,7 +218,8 @@ func (s *Service) Shop(ctx context.Context, id uuid.UUID) (Shop, error) {
 
 func (s *Service) shop(ctx context.Context, t db.TenantRow) (Shop, error) {
 	shop := Shop{ID: t.ID, Name: t.Name, Slug: t.Slug, Status: t.Status, Plan: t.Plan, PlanUntil: t.PlanUntil,
-		CreatedAt: t.CreatedAt}
+		BusinessType: t.BusinessType,
+		CreatedAt:    t.CreatedAt}
 	err := s.store.InTenantTx(tenant.NewContext(ctx, t.ID), func(tx pgx.Tx) error {
 		st, err := db.PlatformShopStats(ctx, tx)
 		if err != nil {

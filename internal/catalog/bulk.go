@@ -145,7 +145,7 @@ func (s *Service) bulkStatus(ctx context.Context, q *sqlcgen.Queries, product uu
 		return err
 	}
 	if *status == "active" {
-		return s.publishCheck(ctx, q, product)
+		return s.publish(ctx, q, product)
 	}
 	return nil
 }

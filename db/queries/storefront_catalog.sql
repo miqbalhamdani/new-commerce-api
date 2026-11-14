@@ -5,13 +5,13 @@
 
 -- name: StorefrontProductBySlug :one
 SELECT sp.id, sp.slug, sp.title, sp.description, sp.attributes, sp.option_names, sp.updated_at,
-       b.slug AS brand_slug, b.name AS brand_name
+       b.slug AS brand_slug, b.name AS brand_name, sp.package
 FROM storefront_products sp
 LEFT JOIN brands b ON b.id = sp.brand_id AND b.archived_at IS NULL
 WHERE sp.slug = $1;
 
 -- name: StorefrontVariantsOfProduct :many
-SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams
+SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams, price_usd
 FROM storefront_variants
 WHERE product_id = $1
 ORDER BY id;

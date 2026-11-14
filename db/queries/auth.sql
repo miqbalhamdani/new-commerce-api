@@ -10,7 +10,7 @@
 -- InTenantTx, so RLS has already scoped users; tenants has no RLS by design.
 SELECT u.id AS user_id, u.name AS user_name, u.email, u.role,
        t.id AS tenant_id, t.name AS tenant_name, t.timezone, t.status AS tenant_status,
-       t.plan
+       t.plan, t.business_type
   FROM users u
   JOIN tenants t ON t.id = u.tenant_id
  WHERE u.id = $1;

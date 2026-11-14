@@ -128,7 +128,7 @@ func (q *Queries) StorefrontCategoriesOfProducts(ctx context.Context, productIds
 const storefrontProductBySlug = `-- name: StorefrontProductBySlug :one
 
 SELECT sp.id, sp.slug, sp.title, sp.description, sp.attributes, sp.option_names, sp.updated_at,
-       b.slug AS brand_slug, b.name AS brand_name
+       b.slug AS brand_slug, b.name AS brand_name, sp.package
 FROM storefront_products sp
 LEFT JOIN brands b ON b.id = sp.brand_id AND b.archived_at IS NULL
 WHERE sp.slug = $1
@@ -144,6 +144,7 @@ type StorefrontProductBySlugRow struct {
 	UpdatedAt   time.Time
 	BrandSlug   *string
 	BrandName   *string
+	Package     []byte
 }
 
 // The storefront's catalog reads (P1-203, 04-api-spec.md §11.4). Products
@@ -163,6 +164,7 @@ func (q *Queries) StorefrontProductBySlug(ctx context.Context, slug string) (Sto
 		&i.UpdatedAt,
 		&i.BrandSlug,
 		&i.BrandName,
+		&i.Package,
 	)
 	return i, err
 }
@@ -238,7 +240,7 @@ func (q *Queries) StorefrontProductImages(ctx context.Context, productID uuid.UU
 }
 
 const storefrontVariantsOfProduct = `-- name: StorefrontVariantsOfProduct :many
-SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams
+SELECT id, sku, option_values, price_amount, regular_price_amount, on_sale, weight_grams, price_usd
 FROM storefront_variants
 WHERE product_id = $1
 ORDER BY id
@@ -252,6 +254,7 @@ type StorefrontVariantsOfProductRow struct {
 	RegularPriceAmount int64
 	OnSale             bool
 	WeightGrams        int32
+	PriceUsd           *int64
 }
 
 func (q *Queries) StorefrontVariantsOfProduct(ctx context.Context, productID uuid.UUID) ([]StorefrontVariantsOfProductRow, error) {
@@ -271,6 +274,7 @@ func (q *Queries) StorefrontVariantsOfProduct(ctx context.Context, productID uui
 			&i.RegularPriceAmount,
 			&i.OnSale,
 			&i.WeightGrams,
+			&i.PriceUsd,
 		); err != nil {
 			return nil, err
 		}

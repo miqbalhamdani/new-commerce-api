@@ -11,6 +11,33 @@ import (
 	"github.com/google/uuid"
 )
 
+const copyMedia = `-- name: CopyMedia :exec
+INSERT INTO product_media (id, tenant_id, product_id, variant_id, r2_key, mime_type, bytes, width, height,
+                           position, derivatives, source_url)
+SELECT $1, s.tenant_id, $2, $3, s.r2_key, s.mime_type, s.bytes,
+       s.width, s.height, s.position, s.derivatives, s.source_url
+  FROM product_media s WHERE s.id = $4
+`
+
+type CopyMediaParams struct {
+	ID        uuid.UUID
+	ProductID uuid.UUID
+	VariantID *uuid.UUID
+	Source    uuid.UUID
+}
+
+// BR-047: an image of a duplicate, sharing the original's files. DeleteMedia
+// deletes the files only once no row uses the key.
+func (q *Queries) CopyMedia(ctx context.Context, arg CopyMediaParams) error {
+	_, err := q.db.Exec(ctx, copyMedia,
+		arg.ID,
+		arg.ProductID,
+		arg.VariantID,
+		arg.Source,
+	)
+	return err
+}
+
 const createMedia = `-- name: CreateMedia :one
 
 INSERT INTO product_media (id, tenant_id, product_id, variant_id, r2_key, mime_type, bytes, position)

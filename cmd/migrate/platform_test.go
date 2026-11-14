@@ -50,6 +50,8 @@ func TestPlatformSchema(t *testing.T) {
 			// 000031 adds both, so they sit last too (BR-160).
 			{"plan", "text", false},
 			{"plan_until", "date", true},
+			// 000032 (BR-170).
+			{"business_type", "text", false},
 		}},
 		{"users", []column{
 			{"id", "uuid", false},

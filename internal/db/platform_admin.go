@@ -13,17 +13,18 @@ import (
 // TenantRow is one shop as tenants holds it, for the platform admin report
 // (BR-150).
 type TenantRow struct {
-	ID        uuid.UUID
-	Name      string
-	Slug      string
-	Status    string
-	Plan      string     // BR-160
-	PlanUntil *time.Time // a date; display only
-	CreatedAt time.Time
+	ID           uuid.UUID
+	Name         string
+	Slug         string
+	Status       string
+	Plan         string     // BR-160
+	PlanUntil    *time.Time // a date; display only
+	BusinessType string     // BR-170
+	CreatedAt    time.Time
 }
 
 // tenantColumns are TenantRow's, in its order.
-const tenantColumns = "id, name, slug, status, plan, plan_until, created_at"
+const tenantColumns = "id, name, slug, status, plan, plan_until, business_type, created_at"
 
 // Tenants is every shop, newest first, for BR-150's report. tenants has no
 // RLS; everything else the report reads runs in each shop's own InTenantTx.

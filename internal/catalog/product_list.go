@@ -53,6 +53,7 @@ type ProductRow struct {
 	VariantCount       int
 	PriceMin, PriceMax *int64
 	CoverURL           *string
+	Package            *Package // an umrah shop's (BR-171)
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -142,7 +143,7 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) (ProductLis
 	  coalesce((SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'path', c.path::text) ORDER BY c.path)
 	              FROM product_categories pc JOIN categories c ON c.id = pc.category_id
 	             WHERE pc.product_id = p.id AND c.kind = 'category'), '[]'::json),
-	  v.n, v.lo, v.hi, ` + coverURLSQL + `
+	  v.n, v.lo, v.hi, ` + coverURLSQL + `, p.package
 	FROM page p
 	LEFT JOIN brands b ON b.id = p.brand_id
 	LEFT JOIN LATERAL (SELECT count(*)::int AS n, min(variant_price(x)) AS lo, max(variant_price(x)) AS hi
@@ -166,10 +167,12 @@ func (s *Service) ListProducts(ctx context.Context, f ProductFilter) (ProductLis
 			var r ProductRow
 			var cats []byte
 			var cover *string
+			var pkg []byte
 			if err := rows.Scan(&r.ID, &r.Version, &r.Title, &r.Slug, &r.Status, &r.BrandID, &r.BrandName,
-				&r.CreatedAt, &r.UpdatedAt, &cats, &r.VariantCount, &r.PriceMin, &r.PriceMax, &cover); err != nil {
+				&r.CreatedAt, &r.UpdatedAt, &cats, &r.VariantCount, &r.PriceMin, &r.PriceMax, &cover, &pkg); err != nil {
 				return err
 			}
+			r.Package = LoadPackage(pkg)
 			if err := json.Unmarshal(cats, &r.Categories); err != nil {
 				return err
 			}

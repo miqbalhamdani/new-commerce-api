@@ -21,7 +21,7 @@ func TestSigner(t *testing.T) {
 	now := time.Now()
 
 	t.Run("round trips the tenant and user", func(t *testing.T) {
-		raw, err := signer.Issue(userID, tenantID, "ops", PlanJualan, now)
+		raw, err := signer.Issue(userID, tenantID, "ops", PlanJualan, "", now)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -45,7 +45,7 @@ func TestSigner(t *testing.T) {
 		if err != nil {
 			t.Fatalf("new signer: %v", err)
 		}
-		raw, err := other.Issue(userID, tenantID, "ops", PlanJualan, now)
+		raw, err := other.Issue(userID, tenantID, "ops", PlanJualan, "", now)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -55,7 +55,7 @@ func TestSigner(t *testing.T) {
 	})
 
 	t.Run("rejects an expired token", func(t *testing.T) {
-		raw, err := signer.Issue(userID, tenantID, "ops", PlanJualan, now.Add(-2*AccessTokenTTL))
+		raw, err := signer.Issue(userID, tenantID, "ops", PlanJualan, "", now.Add(-2*AccessTokenTTL))
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -123,7 +123,7 @@ func TestAudiences(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	staff, _ := signer.Issue(uuid.New(), uuid.New(), RoleOwner, PlanJualan, now)
+	staff, _ := signer.Issue(uuid.New(), uuid.New(), RoleOwner, PlanJualan, "", now)
 	customer, _ := signer.IssueCustomer(uuid.New(), uuid.New(), now)
 	noAudience, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{TenantID: uuid.New(),
 		RegisteredClaims: jwt.RegisteredClaims{Subject: uuid.NewString(),

@@ -46,6 +46,10 @@ func (s *Server) BulkProducts(w http.ResponseWriter, r *http.Request) {
 					WithFields(apperrors.Field{Name: "items", Detail: "null", Extra: map[string]any{"index": i}}))
 				return
 			}
+			if it.PriceUSD.Set { // the variant body is shared, but bulk upsert has no USD price (§7.5)
+				writeError(w, r, apperrors.UnknownField("items["+strconv.Itoa(i)+"].price_usd"))
+				return
+			}
 			item := catalog.BulkItem{Fields: it.fields()}
 			if it.SKU.Set {
 				item.SKU = &it.SKU.Value

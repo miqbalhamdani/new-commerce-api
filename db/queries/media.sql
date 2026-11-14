@@ -39,3 +39,12 @@ WHERE id = sqlc.arg(id);
 
 -- name: LiveVariantOfProduct :one
 SELECT EXISTS (SELECT 1 FROM variants WHERE id = sqlc.arg(id) AND product_id = sqlc.arg(product_id) AND archived_at IS NULL);
+
+-- name: CopyMedia :exec
+-- BR-047: an image of a duplicate, sharing the original's files. DeleteMedia
+-- deletes the files only once no row uses the key.
+INSERT INTO product_media (id, tenant_id, product_id, variant_id, r2_key, mime_type, bytes, width, height,
+                           position, derivatives, source_url)
+SELECT sqlc.arg(id), s.tenant_id, sqlc.arg(product_id), sqlc.narg(variant_id), s.r2_key, s.mime_type, s.bytes,
+       s.width, s.height, s.position, s.derivatives, s.source_url
+  FROM product_media s WHERE s.id = sqlc.arg(source);

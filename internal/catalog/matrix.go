@@ -240,6 +240,9 @@ func changes(v Variant, f VariantFields) bool {
 		return true
 	case f.WeightGrams != nil && *f.WeightGrams != v.WeightGrams:
 		return true
+	case f.ClearPriceUSD && v.PriceUsd != nil,
+		f.PriceUSD != nil && (v.PriceUsd == nil || *f.PriceUSD != *v.PriceUsd):
+		return true
 	}
 	return false
 }

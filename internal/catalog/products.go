@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -33,6 +34,7 @@ type ProductInput struct {
 	BrandID     *uuid.UUID
 	CategoryIDs []uuid.UUID
 	Attributes  map[string]any
+	Package     *Package // an umrah shop's (BR-171); the caller checks the shop
 }
 
 // ProductPatch is a PATCH: nil leaves a field alone; the Clear flags set a
@@ -46,6 +48,8 @@ type ProductPatch struct {
 	ClearBrand       bool
 	CategoryIDs      *[]uuid.UUID
 	Attributes       map[string]any
+	Package          *Package // replaces the whole object (BR-171)
+	ClearPackage     bool
 	Status           *string
 }
 
@@ -72,8 +76,12 @@ func (s *Service) CreateProduct(ctx context.Context, in ProductInput) (ProductVi
 		if err != nil {
 			return err
 		}
+		pkg, err := packageJSON(in.Package)
+		if err != nil {
+			return err
+		}
 		p, err := q.CreateProduct(ctx, sqlcgen.CreateProductParams{ID: uuid.Must(uuid.NewV7()), Title: in.Title,
-			Slug: slug, Description: in.Description, BrandID: in.BrandID, Attributes: attrs})
+			Slug: slug, Description: in.Description, BrandID: in.BrandID, Attributes: attrs, Package: pkg})
 		if err != nil {
 			return err
 		}
@@ -137,6 +145,12 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, version int, 
 				return err
 			}
 		}
+		if p.Package != nil || p.ClearPackage {
+			params.SetPackage = true
+			if params.Package, err = packageJSON(p.Package); err != nil {
+				return err
+			}
+		}
 		after, err := q.UpdateProduct(ctx, params)
 		if errors.Is(err, pgx.ErrNoRows) { // the version moved between the read and the write
 			return apperrors.VersionConflict(int(before.Version)+1, version)
@@ -153,7 +167,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, version int, 
 			}
 		}
 		if p.Status != nil && *p.Status == "active" && before.Status != "active" {
-			if err := s.publishCheck(ctx, q, id); err != nil {
+			if err := s.publish(ctx, q, id); err != nil {
 				return err
 			}
 		}
@@ -265,9 +279,76 @@ func freeSlug(ctx context.Context, q *sqlcgen.Queries, title string) (string, er
 	}
 }
 
+// publish gives each live variant without a SKU one, then runs the publish
+// check (BR-038).
+func (s *Service) publish(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	if err := giveSKUs(ctx, q, id); err != nil {
+		return err
+	}
+	return s.publishCheck(ctx, q, id)
+}
+
+// maxSKU is the longest SKU publishing gives (BR-038).
+const maxSKU = 64
+
+// giveSKUs is BR-038's SKU on publish: the product's slug and the variant's
+// option values, slugified, joined by - and upper-cased, with -2, -3, ...
+// when the tenant already holds it (BR-039). A SKU someone set is untouched.
+func giveSKUs(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	variants, err := q.ListVariants(ctx, sqlcgen.ListVariantsParams{ProductID: id, Archived: false})
+	if err != nil {
+		return err
+	}
+	var product *sqlcgen.Product
+	for _, v := range variants {
+		if v.Sku != nil {
+			continue
+		}
+		if product == nil {
+			p, err := q.GetProduct(ctx, id)
+			if err != nil {
+				return err
+			}
+			product = &p
+		}
+		parts := []string{product.Slug}
+		for _, value := range v.OptionValues {
+			slug, err := q.Slugify(ctx, value)
+			if err != nil {
+				return err
+			}
+			if slug != "" {
+				parts = append(parts, slug)
+			}
+		}
+		base := strings.ToUpper(strings.Join(parts, "-"))
+		for n := 1; ; n++ {
+			suffix := ""
+			if n > 1 {
+				suffix = "-" + strconv.Itoa(n)
+			}
+			sku := strings.TrimRight(base[:min(len(base), maxSKU-len(suffix))], "-") + suffix
+			_, err := q.SKUHolder(ctx, sku)
+			if errors.Is(err, pgx.ErrNoRows) {
+				if err := q.SetVariantSKU(ctx, sqlcgen.SetVariantSKUParams{ID: v.ID, Sku: &sku}); err != nil {
+					return err
+				}
+				break
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // publishCheck is BR-038, run when a product goes active: every failure is
-// listed, so the client can link each to its field or matrix cell.
+// listed, so the client can link each to its field or matrix cell. In an
+// umrah shop BR-172 replaces its price and weight checks: a rupiah or USD
+// price, no weight, and a departure in the package.
 func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	umrah := auth.Umrah(ctx)
 	variants, err := q.ListVariants(ctx, sqlcgen.ListVariantsParams{ProductID: id, Archived: false})
 	if err != nil {
 		return err
@@ -295,11 +376,23 @@ func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.
 		if v.Sku == nil {
 			add("sku", &v.ID, "Variant "+label+" has no SKU")
 		}
-		if v.RegularPriceAmount <= 0 {
+		switch {
+		case umrah && v.RegularPriceAmount <= 0 && (v.PriceUsd == nil || *v.PriceUsd <= 0):
+			add("price", &v.ID, "Variant "+label+": a rupiah or USD price is required")
+		case !umrah && v.RegularPriceAmount <= 0:
 			add("price", &v.ID, "Variant "+label+": price must be greater than zero")
 		}
-		if v.WeightGrams <= 0 {
+		if !umrah && v.WeightGrams <= 0 {
 			add("weight", &v.ID, "Variant "+label+": weight must be greater than zero")
+		}
+	}
+	if umrah {
+		product, err := q.GetProduct(ctx, id)
+		if err != nil {
+			return err
+		}
+		if p := LoadPackage(product.Package); p == nil || p.DepartureDate == nil && p.DepartureText == nil {
+			add("package.departure", nil, "A package needs a departure date or month")
 		}
 	}
 	if facts.Media == 0 {
@@ -317,6 +410,14 @@ func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.
 func productAudit(p sqlcgen.Product) map[string]any {
 	return map[string]any{"title": p.Title, "slug": p.Slug, "status": p.Status,
 		"description": p.Description, "brand_id": p.BrandID, "version": p.Version}
+}
+
+// packageJSON is a package as products.package stores it; nil for none.
+func packageJSON(p *Package) ([]byte, error) {
+	if p == nil {
+		return nil, nil
+	}
+	return json.Marshal(p)
 }
 
 func orEmpty(m map[string]any) map[string]any {

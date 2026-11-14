@@ -3,8 +3,10 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/catalog"
@@ -13,21 +15,23 @@ import (
 // Products: 04-api-spec.md §7.1 (P1-028).
 
 type productCreateBody struct {
-	Title       optional[string]         `json:"title"`
-	Description optional[string]         `json:"description"`
-	BrandID     optional[uuid.UUID]      `json:"brand_id"`
-	CategoryIDs optional[[]uuid.UUID]    `json:"category_ids"`
-	Attributes  optional[map[string]any] `json:"attributes"`
+	Title       optional[string]          `json:"title"`
+	Description optional[string]          `json:"description"`
+	BrandID     optional[uuid.UUID]       `json:"brand_id"`
+	CategoryIDs optional[[]uuid.UUID]     `json:"category_ids"`
+	Attributes  optional[map[string]any]  `json:"attributes"`
+	Package     optional[json.RawMessage] `json:"package"`
 }
 
 type productUpdateBody struct {
-	Title       optional[string]         `json:"title"`
-	Slug        optional[string]         `json:"slug"`
-	Description optional[string]         `json:"description"`
-	BrandID     optional[uuid.UUID]      `json:"brand_id"`
-	CategoryIDs optional[[]uuid.UUID]    `json:"category_ids"`
-	Attributes  optional[map[string]any] `json:"attributes"`
-	Status      optional[string]         `json:"status"`
+	Title       optional[string]          `json:"title"`
+	Slug        optional[string]          `json:"slug"`
+	Description optional[string]          `json:"description"`
+	BrandID     optional[uuid.UUID]       `json:"brand_id"`
+	CategoryIDs optional[[]uuid.UUID]     `json:"category_ids"`
+	Attributes  optional[map[string]any]  `json:"attributes"`
+	Package     optional[json.RawMessage] `json:"package"`
+	Status      optional[string]          `json:"status"`
 }
 
 func (s *Server) CreateProduct(w http.ResponseWriter, r *http.Request) {
@@ -37,11 +41,19 @@ func (s *Server) CreateProduct(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := rejectNull(map[string]bool{"title": body.Title.Null, "description": body.Description.Null,
-			"brand_id": body.BrandID.Null, "category_ids": body.CategoryIDs.Null, "attributes": body.Attributes.Null}); err != nil {
+			"brand_id": body.BrandID.Null, "category_ids": body.CategoryIDs.Null, "attributes": body.Attributes.Null,
+			"package": body.Package.Null}); err != nil {
 			writeError(w, r, err)
 			return
 		}
 		in := catalog.ProductInput{Title: body.Title.Value, CategoryIDs: body.CategoryIDs.Value, Attributes: body.Attributes.Value}
+		if body.Package.Set {
+			var err error
+			if in.Package, err = packageIn(r, body.Package.Value); err != nil {
+				writeError(w, r, err)
+				return
+			}
+		}
 		if body.Description.Set {
 			in.Description = &body.Description.Value
 		}
@@ -101,6 +113,20 @@ func (s *Server) UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, pa
 		if body.Attributes.Set {
 			p.Attributes = body.Attributes.Value
 		}
+		if body.Package.Set {
+			if !auth.Umrah(r.Context()) {
+				writeError(w, r, notUmrah("package"))
+				return
+			}
+			p.ClearPackage = body.Package.Null
+			if !body.Package.Null {
+				var err error
+				if p.Package, err = packageIn(r, body.Package.Value); err != nil {
+					writeError(w, r, err)
+					return
+				}
+			}
+		}
 		if body.Status.Set {
 			if body.Status.Value != "draft" && body.Status.Value != "active" {
 				writeError(w, r, fieldErr("status", "status is draft or active; archive with DELETE"))
@@ -145,7 +171,33 @@ func productOut(v catalog.ProductView) Product {
 	if p.Attributes == nil {
 		p.Attributes = map[string]any{}
 	}
+	p.Package = packageOut(catalog.LoadPackage(v.Package))
 	return p
+}
+
+// packageIn is a request's package details, only in an umrah shop (BR-171).
+func packageIn(r *http.Request, raw json.RawMessage) (*catalog.Package, error) {
+	if !auth.Umrah(r.Context()) {
+		return nil, notUmrah("package")
+	}
+	return catalog.ParsePackage(raw)
+}
+
+// packageOut is a stored package as the admin API returns it; nil for none.
+// The two types share their JSON, so a round trip converts them.
+func packageOut(p *catalog.Package) *Package {
+	if p == nil {
+		return nil
+	}
+	b, _ := json.Marshal(p)
+	var out Package
+	_ = json.Unmarshal(b, &out)
+	return &out
+}
+
+// notUmrah is a field only an umrah shop may send (BR-171).
+func notUmrah(field string) error {
+	return fieldErr(field, field+" is for an umrah shop's packages only (BR-171)")
 }
 
 func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params ListProductsParams) {
@@ -189,6 +241,10 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 			item := ProductListItem{Id: p.ID, Version: p.Version, Title: p.Title, Slug: p.Slug,
 				Status: ProductStatus(p.Status), VariantCount: p.VariantCount, PriceMin: p.PriceMin,
 				PriceMax: p.PriceMax, CoverUrl: p.CoverURL, UpdatedAt: p.UpdatedAt}
+			if pkg := p.Package; pkg != nil {
+				item.Package = &PackageBrief{DepartureText: pkg.DepartureText, SeatsLeft: pkg.SeatsLeft, SeatsTotal: pkg.SeatsTotal,
+					DepartureDate: dateOut(pkg.DepartureDate)}
+			}
 			if p.BrandID != nil && p.BrandName != nil {
 				item.Brand = &Ref{Id: *p.BrandID, Name: *p.BrandName}
 			}
@@ -203,4 +259,16 @@ func (s *Server) ListProducts(w http.ResponseWriter, r *http.Request, params Lis
 		}
 		writeJSON(w, http.StatusOK, page)
 	})(w, r)
+}
+
+// dateOut is a stored YYYY-MM-DD as the API's date type; nil for none.
+func dateOut(d *string) *openapi_types.Date {
+	if d == nil {
+		return nil
+	}
+	t, err := time.Parse(time.DateOnly, *d)
+	if err != nil {
+		return nil
+	}
+	return &openapi_types.Date{Time: t}
 }

@@ -52,6 +52,7 @@ func Authenticate(signer *auth.Signer, imp impersonationCheck) func(http.Handler
 			ctx := tenant.NewContext(r.Context(), claims.TenantID)
 			ctx = auth.NewRoleContext(ctx, claims.Role)
 			ctx = auth.NewPlanContext(ctx, claims.Plan)
+			ctx = auth.NewBusinessTypeContext(ctx, claims.BusinessType)
 			ctx = tenant.NewActorContext(ctx, actor)
 			if claims.Imp != nil {
 				allowed := false

@@ -268,4 +268,13 @@ func TestOrdersNeedJualan(t *testing.T) {
 	if rec := send("GET", "/me", true); rec.Code != 403 {
 		t.Errorf("mulai through the platform key: %d", rec.Code)
 	}
+
+	// P1-933 (BR-173): an umrah shop takes no orders, on jualan too; other
+	// routes still reach the router.
+	plan("jualan")
+	execTenant(t, store, id, `UPDATE tenants SET business_type = 'umrah' WHERE id = '`+id.String()+`'`)
+	clock = clock.Add(KeyCacheTTL + time.Second)
+	assertCode(t, "umrah on jualan", send("POST", "/carts", false), 403, "permission_denied")
+	assertCode(t, "umrah, the platform key", send("GET", "/me", true), 403, "permission_denied")
+	assertCode(t, "umrah, another route", send("GET", "/meja", true), 404, "not_found")
 }

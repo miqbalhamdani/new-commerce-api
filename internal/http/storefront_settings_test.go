@@ -180,7 +180,10 @@ func TestShopLook(t *testing.T) {
 	look := map[string]any{"whatsapp_number": "6281234567890", "tagline": "Sprei katun lokal",
 		"brand_color": "#9a4e3a", "instagram": "toko.abc_", "address": "Jl. Braga No. 10, Bandung",
 		"opening_hours": "Setiap hari 09.00–21.00", "shopee_url": "https://shopee.co.id/tokoabc",
-		"tokopedia_url": "https://www.tokopedia.com/tokoabc"}
+		"tokopedia_url": "https://www.tokopedia.com/tokoabc",
+		// P1-937: the licence and an umrah shop's policies (BR-142).
+		"license": "PPIU No. U.133 Tahun 2020", "cancellation_policy": "Pembatalan H-30: biaya visa hangus.",
+		"document_requirements": "Paspor, KTP, KK"}
 	code, st := do("PATCH", "/v1/storefront-settings", look)
 	if code != 200 || st["logo_url"] != nil || st["hero_url"] != nil || st["theme"] != "katalog" {
 		t.Fatalf("look: %d %v", code, st)
@@ -193,7 +196,8 @@ func TestShopLook(t *testing.T) {
 	for field, bad := range map[string]any{"whatsapp_number": "081234567890", "brand_color": "#0A7D6E",
 		"instagram": "@tokoabc", "tagline": strings.Repeat("a", 161), "logo_url": "https://x.test/a.png",
 		"hero_url": "https://x.test/a.png", "address": strings.Repeat("a", 301), "opening_hours": "  ",
-		"shopee_url": "https://shopee.co.id.evil.test/x", "tokopedia_url": "http://tokopedia.com/x"} {
+		"shopee_url": "https://shopee.co.id.evil.test/x", "tokopedia_url": "http://tokopedia.com/x",
+		"license": strings.Repeat("a", 121), "cancellation_policy": strings.Repeat("a", 3001), "document_requirements": " "} {
 		code, p := do("PATCH", "/v1/storefront-settings", map[string]any{field: bad})
 		assertProblem(t, code, p, 422, "validation_failed", field)
 	}

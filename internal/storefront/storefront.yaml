@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id Storefront API
-  version: 0.15.0
+  version: 0.16.0
   description: |
     The API a shop's own website is built on (`/v1/storefront`, `04-api-spec.md` §11). It is a
     separate document from the admin `openapi.yaml`, and the two share nothing by reference: a
@@ -41,6 +41,13 @@ info:
     Only a shop on the `jualan` plan takes orders on a website. On any other shop the cart,
     checkout, customer-account and order routes (`/carts…`, `/customers`, `/auth/…`, `/me…`,
     `/orders/…`) answer `403 permission_denied`; the catalog, the blog and `/config` stay open.
+
+    ## Umrah travel (BR-170–173)
+
+    An umrah and hajj travel agency's products are packages. A product's `package` carries the
+    departure, hotels, seats left and day plan, and a variant's `price_usd` a price in US cents to
+    show in place of rupiah. Such a shop takes no orders on any plan: its routes above answer
+    `403 permission_denied`, and pilgrims book over WhatsApp.
 
     ## Conventions
 
@@ -1043,7 +1050,7 @@ components:
     ProductListItem:
       type: object
       required: [slug, title, brand, categories, price_min, price_max, on_sale, regular_price_min, options,
-                 weight_grams_min, weight_grams_max, image]
+                 weight_grams_min, weight_grams_max, price_usd_min, package, image]
       properties:
         slug:
           type: string
@@ -1084,6 +1091,17 @@ components:
           description: The heaviest visible variant's `weight_grams`.
           type: integer
           examples: [2000]
+        price_usd_min:
+          description: >-
+            The lowest `price_usd` among the visible variants, in US cents, or `null` when none has
+            one (BR-171). A package priced only in dollars has `price_min` 0.
+          type: [integer, "null"]
+          format: int64
+        package:
+          description: A travel package's card details (BR-171); `null` without package details.
+          oneOf:
+            - $ref: "#/components/schemas/PackageSummary"
+            - type: "null"
         image:
           oneOf:
             - $ref: "#/components/schemas/Image"
@@ -1156,6 +1174,10 @@ components:
           type: boolean
         weight_grams:
           type: integer
+        price_usd:
+          description: US cents to show in place of rupiah; never charged (BR-171).
+          type: [integer, "null"]
+          format: int64
 
     ProductCategory:
       type: object
@@ -1170,7 +1192,7 @@ components:
 
     ProductDetail:
       type: object
-      required: [id, slug, title, description, brand, categories, attributes, option_names, images, variants, updated_at]
+      required: [id, slug, title, description, brand, categories, attributes, option_names, package, images, variants, updated_at]
       properties:
         id:
           type: string
@@ -1196,6 +1218,11 @@ components:
           type: array
           items:
             type: string
+        package:
+          description: A travel package's details (BR-171); `null` without them.
+          oneOf:
+            - $ref: "#/components/schemas/Package"
+            - type: "null"
         images:
           type: array
           items:
@@ -1207,6 +1234,117 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    PackageSummary:
+      type: object
+      description: The fields of `Package` a card needs.
+      required: [departure_date, departure_text, return_date, duration_days, airline, hotels,
+                 seats_left, seats_total]
+      properties:
+        departure_date:
+          type: [string, "null"]
+          format: date
+        departure_text:
+          type: [string, "null"]
+          examples: ["Desember 2026"]
+        return_date:
+          type: [string, "null"]
+          format: date
+        duration_days:
+          type: [integer, "null"]
+        airline:
+          type: [string, "null"]
+        hotels:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackageHotel"
+        seats_left:
+          description: What the owner typed; nothing counts it down (BR-017). 0 is full.
+          type: [integer, "null"]
+        seats_total:
+          type: [integer, "null"]
+
+    Package:
+      type: object
+      description: >-
+        BR-171. Every field is present; unset ones are `null`, and unset lists `[]`.
+      required: [departure_date, departure_text, return_date, duration_days, airline, route, hotels,
+                 seats_left, seats_total, itinerary, includes, excludes, bonus, price_note,
+                 cancellation_policy]
+      properties:
+        departure_date:
+          type: [string, "null"]
+          format: date
+        departure_text:
+          description: A departure not yet fixed to a day.
+          type: [string, "null"]
+          examples: ["Desember 2026"]
+        return_date:
+          type: [string, "null"]
+          format: date
+        duration_days:
+          type: [integer, "null"]
+        airline:
+          type: [string, "null"]
+        route:
+          type: [string, "null"]
+        hotels:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackageHotel"
+        seats_left:
+          description: What the owner typed; nothing counts it down (BR-017). 0 is full.
+          type: [integer, "null"]
+        seats_total:
+          type: [integer, "null"]
+        itinerary:
+          description: The days in order; day N is the Nth entry.
+          type: array
+          items:
+            $ref: "#/components/schemas/PackageDay"
+        includes:
+          type: array
+          items:
+            type: string
+        excludes:
+          type: array
+          items:
+            type: string
+        bonus:
+          type: array
+          items:
+            type: string
+        price_note:
+          type: [string, "null"]
+        cancellation_policy:
+          description: This package's own; when `null`, show the shop's from `/config`.
+          type: [string, "null"]
+
+    PackageHotel:
+      type: object
+      required: [city, name, stars, nights, variant]
+      properties:
+        city:
+          type: string
+          examples: ["Makkah"]
+        name:
+          type: string
+        stars:
+          type: [integer, "null"]
+        nights:
+          type: [integer, "null"]
+        variant:
+          description: The option value this hotel is for; `null` for every choice.
+          type: [string, "null"]
+
+    PackageDay:
+      type: object
+      required: [title, text]
+      properties:
+        title:
+          type: string
+        text:
+          type: [string, "null"]
 
     CategoryKind:
       type: string
@@ -1798,7 +1936,8 @@ components:
       type: object
       required: [shop_name, google_client_id, payment_methods, bank_transfer_instructions, midtrans,
                  theme, brand_color, logo_url, hero_url, whatsapp_number, tagline, instagram, address,
-                 opening_hours, shopee_url, tokopedia_url]
+                 opening_hours, shopee_url, tokopedia_url, license, cancellation_policy,
+                 document_requirements]
       properties:
         shop_name:
           type: string
@@ -1851,6 +1990,16 @@ components:
         tokopedia_url:
           type: [string, "null"]
           format: uri
+        license:
+          description: The business licence to show (BR-142).
+          type: [string, "null"]
+          examples: ["PPIU No. U.133 Tahun 2020"]
+        cancellation_policy:
+          description: Shown on a travel package without its own (BR-142, BR-171).
+          type: [string, "null"]
+        document_requirements:
+          description: The documents a pilgrim brings, shown on every travel package (BR-142).
+          type: [string, "null"]
 
     MidtransConfig:
       type: object

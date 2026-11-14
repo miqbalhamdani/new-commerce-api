@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -76,6 +77,8 @@ type StorefrontPatch struct {
 	MidtransEnvironment, MidtransClientKey, MidtransServerKey                Change[string]
 	LogoR2Key, HeroR2Key, WhatsappNumber, Tagline, BrandColor, Instagram     Change[string]
 	Address, OpeningHours, ShopeeURL, TokopediaURL                           Change[string]
+	License, CancellationPolicy, DocumentRequirements                        Change[string] // BR-142
+	RebuildHookURL                                                           Change[string] // BR-098
 	ShippingCouriers                                                         *[]string
 	BankTransferEnabled, MidtransEnabled                                     *bool
 	Theme                                                                    *string
@@ -141,6 +144,9 @@ func (s *Service) UpdateStorefrontSettings(ctx context.Context, p StorefrontPatc
 			Instagram: pick(p.Instagram, before.Instagram), Address: pick(p.Address, before.Address),
 			OpeningHours: pick(p.OpeningHours, before.OpeningHours), ShopeeUrl: pick(p.ShopeeURL, before.ShopeeUrl),
 			TokopediaUrl: pick(p.TokopediaURL, before.TokopediaUrl),
+			License:      pick(p.License, before.License), CancellationPolicy: pick(p.CancellationPolicy, before.CancellationPolicy),
+			DocumentRequirements: pick(p.DocumentRequirements, before.DocumentRequirements),
+			RebuildHookUrl:       pick(p.RebuildHookURL, before.RebuildHookUrl),
 		}
 		// A colour belongs to its theme: another theme without a colour starts on
 		// that theme's first (BR-142, BR-143).
@@ -226,6 +232,18 @@ func validStorefrontPatch(p StorefrontPatch) error {
 	if v := p.OpeningHours.Value; v != nil && utf8.RuneCountInString(strings.TrimSpace(*v)) > maxHoursRunes {
 		return fieldError("opening_hours", "opening_hours is at most 120 characters")
 	}
+	if v := p.RebuildHookURL.Value; v != nil && !ValidRebuildHook(strings.TrimSpace(*v)) {
+		return fieldError("rebuild_hook_url", "rebuild_hook_url is an https:// deploy hook on api.vercel.com, api.cloudflare.com or api.netlify.com, at most 500 characters")
+	}
+	for field, limit := range map[string]struct {
+		c   Change[string]
+		max int
+	}{"license": {p.License, 120}, "cancellation_policy": {p.CancellationPolicy, 3000},
+		"document_requirements": {p.DocumentRequirements, 3000}} {
+		if v := limit.c.Value; v != nil && utf8.RuneCountInString(strings.TrimSpace(*v)) > limit.max {
+			return fieldError(field, field+" is at most "+strconv.Itoa(limit.max)+" characters")
+		}
+	}
 	for field, link := range map[string]struct {
 		c    Change[string]
 		re   *regexp.Regexp
@@ -238,7 +256,8 @@ func validStorefrontPatch(p StorefrontPatch) error {
 		}
 	}
 	for field, c := range map[string]Change[string]{"google_client_id": p.GoogleClientID, "midtrans_client_key": p.MidtransClientKey,
-		"midtrans_server_key": p.MidtransServerKey, "tagline": p.Tagline, "address": p.Address, "opening_hours": p.OpeningHours} {
+		"midtrans_server_key": p.MidtransServerKey, "tagline": p.Tagline, "address": p.Address, "opening_hours": p.OpeningHours,
+		"license": p.License, "cancellation_policy": p.CancellationPolicy, "document_requirements": p.DocumentRequirements} {
 		if c.Value != nil && strings.TrimSpace(*c.Value) == "" {
 			return fieldError(field, field+" cannot be blank; send null to remove it")
 		}
@@ -287,6 +306,15 @@ func settingsDiff(a, b StorefrontSettings) (changed []string, before, after map[
 	add("opening_hours", a.OpeningHours, b.OpeningHours)
 	add("shopee_url", a.ShopeeUrl, b.ShopeeUrl)
 	add("tokopedia_url", a.TokopediaUrl, b.TokopediaUrl)
+	add("license", a.License, b.License)
+	add("cancellation_policy", a.CancellationPolicy, b.CancellationPolicy)
+	add("document_requirements", a.DocumentRequirements, b.DocumentRequirements)
+	// The hook is a credential of the owner's host: whether one is set, never
+	// the URL (BR-098).
+	if !equal(a.RebuildHookUrl, b.RebuildHookUrl) {
+		changed = append(changed, "rebuild_hook_url")
+		before["rebuild_hook_set"], after["rebuild_hook_set"] = a.RebuildHookUrl != nil, b.RebuildHookUrl != nil
+	}
 	if !slices.Equal(a.MidtransServerKey, b.MidtransServerKey) {
 		changed = append(changed, "midtrans_server_key")
 		before["midtrans_server_key_set"], after["midtrans_server_key_set"] = a.MidtransServerKey != nil, b.MidtransServerKey != nil
