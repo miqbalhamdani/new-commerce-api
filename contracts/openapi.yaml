@@ -901,9 +901,9 @@ paths:
       description: |
         BR-047: a new `draft` with ` (copy)` after the title, a slug derived from it, the same
         description, brand, categories, attributes, package and option names, each live variant
-        without its SKU and barcode, and every image copied to a new object with its
-        derivatives. Archived products can be copied. Requires `products:write`,
-        `variants:write` and `media:write`.
+        without its SKU and barcode, and every image, sharing its files with the original's.
+        Archived products can be copied. Requires `products:write`, `variants:write` and
+        `media:write`.
       responses:
         "201":
           description: The new product.

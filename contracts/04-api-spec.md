@@ -957,8 +957,8 @@ package with neither departure fails on `package.departure` (BR-172).
 
 **Duplicate.** `POST /v1/products/{id}/duplicate`, with no body, answers `201` with the new draft
 Product (BR-047): ` (copy)` after the title, a new slug, the same details and live variants without
-SKUs, and copies of the images. Copying takes up to a few seconds for a product with many images;
-the copies' derivatives are copied too, so they are ready at once. An unknown product is `404`.
+SKUs, and the same images, which share their files with the original's and are ready at once. An
+unknown product is `404`.
 
 **List.**
 

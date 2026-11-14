@@ -524,8 +524,9 @@ Any product, archived included, can be copied into a new `draft`: its title with
 a slug derived from that title (BR-042), and the same description, brand, categories, attributes,
 package details (BR-171) and option names. Each live variant is copied with its option values,
 prices, sale schedule, weight and USD price, but no SKU or barcode: the copy gets its SKUs when it
-is published (BR-038). Every image is copied to a new object under the new product (BR-053), with
-its derivatives, position and variant, so deleting an image from one never touches the other.
+is published (BR-038). Each image is copied as an image of the copy, with its position and its
+variant's counterpart, pointing at the same files: a file is deleted only when no image uses it any
+more, so deleting an image from one never touches the other.
 
 *Why:* a travel shop opens next month's departure from this month's package, and a shop adds a
 product much like one it already sells. Retyping either invites mistakes.
