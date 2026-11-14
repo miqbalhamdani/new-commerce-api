@@ -52,3 +52,8 @@ UPDATE variants SET archived_at = NULL, version = version + 1, updated_at = now(
 
 -- name: VariantBySKU :one
 SELECT v.*, variant_price(v)::bigint AS price FROM variants v WHERE v.sku = sqlc.arg(sku)::text;
+
+-- name: SetVariantSKU :exec
+-- BR-038: the SKU a variant without one is given on publish.
+UPDATE variants SET sku = sqlc.arg(sku), version = version + 1, updated_at = now()
+WHERE id = sqlc.arg(id) AND sku IS NULL;

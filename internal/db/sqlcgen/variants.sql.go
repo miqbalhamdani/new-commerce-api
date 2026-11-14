@@ -285,6 +285,22 @@ func (q *Queries) SKUHolder(ctx context.Context, sku string) (SKUHolderRow, erro
 	return i, err
 }
 
+const setVariantSKU = `-- name: SetVariantSKU :exec
+UPDATE variants SET sku = $1, version = version + 1, updated_at = now()
+WHERE id = $2 AND sku IS NULL
+`
+
+type SetVariantSKUParams struct {
+	Sku *string
+	ID  uuid.UUID
+}
+
+// BR-038: the SKU a variant without one is given on publish.
+func (q *Queries) SetVariantSKU(ctx context.Context, arg SetVariantSKUParams) error {
+	_, err := q.db.Exec(ctx, setVariantSKU, arg.Sku, arg.ID)
+	return err
+}
+
 const updateVariant = `-- name: UpdateVariant :one
 UPDATE variants SET
   sku                  = CASE WHEN $1::bool THEN $2 ELSE sku END,

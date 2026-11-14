@@ -194,3 +194,51 @@ func TestPublishingAPackage(t *testing.T) {
 		t.Errorf("publish with no weight and a USD price: %d %v", code, p)
 	}
 }
+
+// TestSKUOnPublish is P1-938's acceptance (BR-038, BR-039): publishing gives
+// each live variant without a SKU one, past any the shop already holds, and
+// leaves a SKU someone set alone.
+func TestSKUOnPublish(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	shopID := uuid.Must(uuid.NewV7())
+	owner := seedSignedInUserWithRole(ctx, t, store, shopID, auth.RoleOwner)
+	do := apiClient(t, owner)
+	_, cat := do("POST", "/v1/categories", map[string]any{"name": "Sprei"})
+	code, p := do("POST", "/v1/products", map[string]any{"title": "Sprei Katun Café", "category_ids": []any{cat["id"]}})
+	if code != http.StatusCreated {
+		t.Fatalf("product: %d %v", code, p)
+	}
+	id := p["id"].(string)
+	seedImage(ctx, t, store, shopID, id)
+	code, m := doWithHeaders(t, owner, http.MethodPut, "/v1/products/"+id+"/variant-matrix", map[string]any{
+		"option_names": []any{"Ukuran"}, "archive_missing": true,
+		"rows": []any{
+			map[string]any{"option_values": []any{"King Size"}, "regular_price": 100, "weight_grams": 900},
+			map[string]any{"option_values": []any{"Queen"}, "regular_price": 100, "weight_grams": 800},
+			map[string]any{"option_values": []any{"Single"}, "regular_price": 100, "weight_grams": 700, "sku": "MINE-1"},
+		}}, map[string]string{"If-Match": "1"})
+	if code != http.StatusOK || m["created"] != float64(3) {
+		t.Fatalf("matrix: %d %v", code, m)
+	}
+	// Another product already holds the Queen's SKU, so it gets -2.
+	_, other := do("POST", "/v1/products", map[string]any{"title": "Other"})
+	if code, v := do("POST", "/v1/products/"+other["id"].(string)+"/variants", map[string]any{"option_values": []any{},
+		"sku": "SPREI-KATUN-CAFE-QUEEN"}); code != http.StatusCreated {
+		t.Fatalf("other: %d %v", code, v)
+	}
+	code, p = doWithHeaders(t, owner, http.MethodPatch, "/v1/products/"+id, map[string]any{"status": "active"},
+		map[string]string{"If-Match": "2"})
+	if code != http.StatusOK {
+		t.Fatalf("publish: %d %v", code, p)
+	}
+	_, list := do("GET", "/v1/products/"+id+"/variants", nil)
+	got := map[string]any{}
+	for _, v := range list["data"].([]any) {
+		v := v.(map[string]any)
+		got[v["option_values"].([]any)[0].(string)] = v["sku"]
+	}
+	if got["King Size"] != "SPREI-KATUN-CAFE-KING-SIZE" || got["Queen"] != "SPREI-KATUN-CAFE-QUEEN-2" || got["Single"] != "MINE-1" {
+		t.Errorf("SKUs given: %v", got)
+	}
+}

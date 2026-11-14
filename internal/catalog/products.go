@@ -167,7 +167,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, version int, 
 			}
 		}
 		if p.Status != nil && *p.Status == "active" && before.Status != "active" {
-			if err := s.publishCheck(ctx, q, id); err != nil {
+			if err := s.publish(ctx, q, id); err != nil {
 				return err
 			}
 		}
@@ -277,6 +277,70 @@ func freeSlug(ctx context.Context, q *sqlcgen.Queries, title string) (string, er
 			return slug, err
 		}
 	}
+}
+
+// publish gives each live variant without a SKU one, then runs the publish
+// check (BR-038).
+func (s *Service) publish(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	if err := giveSKUs(ctx, q, id); err != nil {
+		return err
+	}
+	return s.publishCheck(ctx, q, id)
+}
+
+// maxSKU is the longest SKU publishing gives (BR-038).
+const maxSKU = 64
+
+// giveSKUs is BR-038's SKU on publish: the product's slug and the variant's
+// option values, slugified, joined by - and upper-cased, with -2, -3, ...
+// when the tenant already holds it (BR-039). A SKU someone set is untouched.
+func giveSKUs(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	variants, err := q.ListVariants(ctx, sqlcgen.ListVariantsParams{ProductID: id, Archived: false})
+	if err != nil {
+		return err
+	}
+	var product *sqlcgen.Product
+	for _, v := range variants {
+		if v.Sku != nil {
+			continue
+		}
+		if product == nil {
+			p, err := q.GetProduct(ctx, id)
+			if err != nil {
+				return err
+			}
+			product = &p
+		}
+		parts := []string{product.Slug}
+		for _, value := range v.OptionValues {
+			slug, err := q.Slugify(ctx, value)
+			if err != nil {
+				return err
+			}
+			if slug != "" {
+				parts = append(parts, slug)
+			}
+		}
+		base := strings.ToUpper(strings.Join(parts, "-"))
+		for n := 1; ; n++ {
+			suffix := ""
+			if n > 1 {
+				suffix = "-" + strconv.Itoa(n)
+			}
+			sku := strings.TrimRight(base[:min(len(base), maxSKU-len(suffix))], "-") + suffix
+			_, err := q.SKUHolder(ctx, sku)
+			if errors.Is(err, pgx.ErrNoRows) {
+				if err := q.SetVariantSKU(ctx, sqlcgen.SetVariantSKUParams{ID: v.ID, Sku: &sku}); err != nil {
+					return err
+				}
+				break
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // publishCheck is BR-038, run when a product goes active: every failure is
