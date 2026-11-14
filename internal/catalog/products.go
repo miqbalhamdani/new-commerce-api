@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db/sqlcgen"
 	apperrors "github.com/miqbalhamdani/new-commerce-api/internal/platform/errors"
@@ -279,8 +280,11 @@ func freeSlug(ctx context.Context, q *sqlcgen.Queries, title string) (string, er
 }
 
 // publishCheck is BR-038, run when a product goes active: every failure is
-// listed, so the client can link each to its field or matrix cell.
+// listed, so the client can link each to its field or matrix cell. In an
+// umrah shop BR-172 replaces its price and weight checks: a rupiah or USD
+// price, no weight, and a departure in the package.
 func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.UUID) error {
+	umrah := auth.Umrah(ctx)
 	variants, err := q.ListVariants(ctx, sqlcgen.ListVariantsParams{ProductID: id, Archived: false})
 	if err != nil {
 		return err
@@ -308,11 +312,23 @@ func (s *Service) publishCheck(ctx context.Context, q *sqlcgen.Queries, id uuid.
 		if v.Sku == nil {
 			add("sku", &v.ID, "Variant "+label+" has no SKU")
 		}
-		if v.RegularPriceAmount <= 0 {
+		switch {
+		case umrah && v.RegularPriceAmount <= 0 && (v.PriceUsd == nil || *v.PriceUsd <= 0):
+			add("price", &v.ID, "Variant "+label+": a rupiah or USD price is required")
+		case !umrah && v.RegularPriceAmount <= 0:
 			add("price", &v.ID, "Variant "+label+": price must be greater than zero")
 		}
-		if v.WeightGrams <= 0 {
+		if !umrah && v.WeightGrams <= 0 {
 			add("weight", &v.ID, "Variant "+label+": weight must be greater than zero")
+		}
+	}
+	if umrah {
+		product, err := q.GetProduct(ctx, id)
+		if err != nil {
+			return err
+		}
+		if p := LoadPackage(product.Package); p == nil || p.DepartureDate == nil && p.DepartureText == nil {
+			add("package.departure", nil, "A package needs a departure date or month")
 		}
 	}
 	if facts.Media == 0 {

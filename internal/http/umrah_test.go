@@ -14,8 +14,8 @@ import (
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
-// umrahOwner is a signed-in owner of a new umrah shop (BR-170).
-func umrahOwner(ctx context.Context, t *testing.T, store *db.Store) seeded {
+// umrahOwner is a signed-in owner of a new umrah shop (BR-170), and the shop.
+func umrahOwner(ctx context.Context, t *testing.T, store *db.Store) (seeded, uuid.UUID) {
 	t.Helper()
 	id := uuid.Must(uuid.NewV7())
 	owner := seedSignedInUserWithRole(ctx, t, store, id, auth.RoleOwner)
@@ -26,7 +26,7 @@ func umrahOwner(ctx context.Context, t *testing.T, store *db.Store) seeded {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return signInAgain(ctx, t, store, owner)
+	return signInAgain(ctx, t, store, owner), id
 }
 
 // TestPackages is P1-934's acceptance (BR-171): package details on an umrah
@@ -35,7 +35,7 @@ func TestPackages(t *testing.T) {
 	ctx := t.Context()
 	store := openAppStore(ctx, t)
 	retailOwner := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), auth.RoleOwner)
-	umrahShop := umrahOwner(ctx, t, store)
+	umrahShop, _ := umrahOwner(ctx, t, store)
 	retail, umrah := apiClient(t, retailOwner), apiClient(t, umrahShop)
 	patch := func(s seeded, id string, version int, body map[string]any) (int, map[string]any) {
 		t.Helper()
@@ -91,7 +91,7 @@ func TestUSDPrices(t *testing.T) {
 	ctx := t.Context()
 	store := openAppStore(ctx, t)
 	retailOwner := seedSignedInUserWithRole(ctx, t, store, uuid.Must(uuid.NewV7()), auth.RoleOwner)
-	umrahShop := umrahOwner(ctx, t, store)
+	umrahShop, _ := umrahOwner(ctx, t, store)
 	retail, umrah := apiClient(t, retailOwner), apiClient(t, umrahShop)
 	newProduct := func(do func(string, string, any) (int, map[string]any)) string {
 		t.Helper()
@@ -137,4 +137,60 @@ func TestUSDPrices(t *testing.T) {
 			t.Errorf("matrix: %d %v", code, m)
 		}
 	})
+}
+
+// seedImage gives a product one image, which publishing needs (BR-038).
+func seedImage(ctx context.Context, t *testing.T, store *db.Store, tenantID uuid.UUID, productID string) {
+	t.Helper()
+	tctx := tenant.NewContext(ctx, tenantID)
+	if err := store.InTenantTx(tctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(tctx, `INSERT INTO product_media (id, tenant_id, product_id, r2_key, mime_type, bytes, position)
+			VALUES (gen_random_uuid(), $1, $2, 'x/products/p/a.jpg', 'image/jpeg', 1, 0)`, tenantID, productID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestPublishingAPackage is P1-936's acceptance (BR-172): an umrah shop
+// publishes with no weight and a USD price, and needs a departure.
+func TestPublishingAPackage(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	owner, shopID := umrahOwner(ctx, t, store)
+	do := apiClient(t, owner)
+	_, cat := do("POST", "/v1/categories", map[string]any{"name": "Umrah"})
+	code, p := do("POST", "/v1/products", map[string]any{"title": "Haji Furoda", "category_ids": []any{cat["id"]},
+		"package": map[string]any{"seats_left": 3}})
+	if code != http.StatusCreated {
+		t.Fatalf("product: %d %v", code, p)
+	}
+	id := p["id"].(string)
+	seedImage(ctx, t, store, shopID, id)
+	if code, v := do("POST", "/v1/products/"+id+"/variants", map[string]any{"option_values": []any{}, "sku": "HF-1",
+		"price_usd": 1850000}); code != http.StatusCreated {
+		t.Fatalf("variant: %d %v", code, v)
+	}
+	publish := func(version int) (int, map[string]any) {
+		return doWithHeaders(t, owner, http.MethodPatch, "/v1/products/"+id, map[string]any{"status": "active"},
+			map[string]string{"If-Match": fmt.Sprint(version)})
+	}
+	code, p = publish(1)
+	fields := map[string]bool{}
+	if code == http.StatusUnprocessableEntity {
+		for _, e := range p["errors"].([]any) {
+			fields[e.(map[string]any)["field"].(string)] = true
+		}
+	}
+	if !fields["package.departure"] || fields["weight"] || fields["price"] || len(fields) != 1 {
+		t.Fatalf("publish without a departure: %d %v", code, p)
+	}
+	code, p = doWithHeaders(t, owner, http.MethodPatch, "/v1/products/"+id,
+		map[string]any{"package": map[string]any{"departure_text": "Juni 2027"}}, map[string]string{"If-Match": "1"})
+	if code != http.StatusOK {
+		t.Fatalf("set the departure: %d %v", code, p)
+	}
+	if code, p = publish(2); code != http.StatusOK || p["status"] != "active" {
+		t.Errorf("publish with no weight and a USD price: %d %v", code, p)
+	}
 }
