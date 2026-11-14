@@ -44,6 +44,9 @@ type Claims struct {
 	// working in TenantID, and Imp is their own shop, where the server checks
 	// them again on every request.
 	Imp *uuid.UUID `json:"imp,omitempty"`
+	// Plan is the shop's plan when the token was issued (BR-160), so every
+	// check can cap the role without reading the shop.
+	Plan string `json:"plan,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -70,28 +73,31 @@ func NewSigner(secret string) (*Signer, error) {
 	return &Signer{secret: []byte(secret)}, nil
 }
 
-// Issue returns a signed admin access token for a staff user.
-func (s *Signer) Issue(userID, tenantID uuid.UUID, role string, now time.Time) (string, error) {
-	return s.issue(AudienceAdmin, userID, tenantID, role, nil, AccessTokenTTL, now)
+// Issue returns a signed admin access token for a staff user of a shop on
+// plan.
+func (s *Signer) Issue(userID, tenantID uuid.UUID, role, plan string, now time.Time) (string, error) {
+	return s.issue(AudienceAdmin, userID, tenantID, role, plan, nil, AccessTokenTTL, now)
 }
 
-// IssueImpersonation returns an owner's admin token in target for the
-// platform admin adminID of shop home (BR-152), good for ImpersonationTTL.
-func (s *Signer) IssueImpersonation(adminID, home, target uuid.UUID, now time.Time) (string, error) {
-	return s.issue(AudienceAdmin, adminID, target, RoleOwner, &home, ImpersonationTTL, now)
+// IssueImpersonation returns an owner's admin token in target, a shop on
+// plan, for the platform admin adminID of shop home (BR-152), good for
+// ImpersonationTTL.
+func (s *Signer) IssueImpersonation(adminID, home, target uuid.UUID, plan string, now time.Time) (string, error) {
+	return s.issue(AudienceAdmin, adminID, target, RoleOwner, plan, &home, ImpersonationTTL, now)
 }
 
 // IssueCustomer returns a signed storefront access token for a shop's
 // customer (BR-093): sub is the customer, tid the shop, and no role.
 func (s *Signer) IssueCustomer(customerID, tenantID uuid.UUID, now time.Time) (string, error) {
-	return s.issue(AudienceStorefront, customerID, tenantID, "", nil, AccessTokenTTL, now)
+	return s.issue(AudienceStorefront, customerID, tenantID, "", "", nil, AccessTokenTTL, now)
 }
 
-func (s *Signer) issue(audience string, subject, tenantID uuid.UUID, role string, imp *uuid.UUID, ttl time.Duration, now time.Time) (string, error) {
+func (s *Signer) issue(audience string, subject, tenantID uuid.UUID, role, plan string, imp *uuid.UUID, ttl time.Duration, now time.Time) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		TenantID: tenantID,
 		Role:     role,
 		Imp:      imp,
+		Plan:     plan,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   subject.String(),
 			Audience:  jwt.ClaimStrings{audience},

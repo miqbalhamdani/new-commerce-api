@@ -11,7 +11,7 @@ import (
 
 const getTenantBySlug = `-- name: GetTenantBySlug :one
 
-SELECT id, name, slug, timezone, status, created_at, order_prefix FROM tenants
+SELECT id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until FROM tenants
 WHERE slug = $1
 `
 
@@ -33,6 +33,8 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (Tenant, err
 		&i.Status,
 		&i.CreatedAt,
 		&i.OrderPrefix,
+		&i.Plan,
+		&i.PlanUntil,
 	)
 	return i, err
 }

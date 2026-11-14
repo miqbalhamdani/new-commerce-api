@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ApiKey struct {
@@ -368,6 +369,8 @@ type Tenant struct {
 	Status      string
 	CreatedAt   time.Time
 	OrderPrefix string
+	Plan        string
+	PlanUntil   pgtype.Date
 }
 
 type User struct {

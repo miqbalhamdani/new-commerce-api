@@ -101,7 +101,7 @@ func TestStorefrontAuthMatrix(t *testing.T) {
 
 	customer := signUp(t, a, "matrix@example.com")["access_token"].(string)
 	otherShop := signUp(t, b, "matrix@example.com")["access_token"].(string)
-	staff, _ := a.signer.Issue(uuid.New(), tenantA, "owner", time.Now())
+	staff, _ := a.signer.Issue(uuid.New(), tenantA, "owner", "jualan", time.Now())
 	tokens := map[string]string{
 		"no token":                "",
 		"a customer":              customer,

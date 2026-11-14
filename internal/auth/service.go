@@ -60,6 +60,7 @@ type SessionTenant struct {
 	ID       uuid.UUID
 	Name     string
 	Timezone string
+	Plan     string // BR-160
 }
 
 // Service is the auth use cases. Everything it does that touches a tenant's
@@ -222,10 +223,6 @@ func (s *Service) Logout(ctx context.Context, presented string) error {
 func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role string, rotatedFrom *uuid.UUID) (Session, error) {
 	now := s.now()
 
-	access, err := s.signer.Issue(userID, tenantID, role, now)
-	if err != nil {
-		return Session{}, err
-	}
 	refresh, refreshHash, err := NewRefreshToken()
 	if err != nil {
 		return Session{}, err
@@ -267,6 +264,12 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 		if row.TenantStatus != "active" {
 			return ErrUnauthenticated
 		}
+		// The plan comes from the shop's row, so the token is minted here,
+		// after reading it (BR-160).
+		access, err := s.signer.Issue(userID, tenantID, role, row.Plan, now)
+		if err != nil {
+			return err
+		}
 		out = Session{
 			AccessToken:  access,
 			ExpiresIn:    int(AccessTokenTTL.Seconds()),
@@ -278,13 +281,14 @@ func (s *Service) issue(ctx context.Context, tenantID, userID uuid.UUID, role st
 				// The client hides actions it does not find here rather than
 				// disabling them, so this list is part of the UI contract and
 				// not merely informational.
-				Permissions:   PermissionsFor(row.Role),
+				Permissions:   PermissionsIn(row.Role, row.Plan),
 				PlatformAdmin: s.admins.Has(row.Email),
 			},
 			Tenant: SessionTenant{
 				ID:       row.TenantID,
 				Name:     row.TenantName,
 				Timezone: row.Timezone,
+				Plan:     row.Plan,
 			},
 		}
 		return nil
@@ -467,20 +471,22 @@ func (s *Service) Impersonate(ctx context.Context, target uuid.UUID) (Session, e
 	}); err != nil {
 		return Session{}, err
 	}
-	now := s.now()
-	access, err := s.signer.IssueImpersonation(actor.UserID, home, target, now)
-	if err != nil {
-		return Session{}, err
-	}
-	out := Session{AccessToken: access, ExpiresIn: int(ImpersonationTTL.Seconds()),
-		User: SessionUser{ID: actor.UserID, Name: name, Role: RoleOwner, Permissions: ImpersonationPermissions(), Impersonating: true}}
+	var out Session
 	tctx := tenant.NewContext(ctx, target)
-	err = s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
+	err := s.store.InTenantTx(tctx, func(tx pgx.Tx) error {
 		shop, err := sqlcgen.New(tx).GetTenant(tctx, target)
 		if err != nil {
 			return err
 		}
-		out.Tenant = SessionTenant{ID: shop.ID, Name: shop.Name, Timezone: shop.Timezone}
+		// The shop's plan caps the impersonation as it caps its owner (BR-160).
+		access, err := s.signer.IssueImpersonation(actor.UserID, home, target, shop.Plan, s.now())
+		if err != nil {
+			return err
+		}
+		out = Session{AccessToken: access, ExpiresIn: int(ImpersonationTTL.Seconds()),
+			User: SessionUser{ID: actor.UserID, Name: name, Role: RoleOwner,
+				Permissions: ImpersonationPermissions(shop.Plan), Impersonating: true},
+			Tenant: SessionTenant{ID: shop.ID, Name: shop.Name, Timezone: shop.Timezone, Plan: shop.Plan}}
 		return db.Audit(tctx, tx, db.AuditEntry{Action: "platform.impersonate", SubjectType: "tenant", SubjectID: target.String()})
 	})
 	return out, err

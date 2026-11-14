@@ -47,6 +47,9 @@ func TestPlatformSchema(t *testing.T) {
 			// the ERD; rebuilding tenants to move it would mean dropping
 			// every foreign key that points at it.
 			{"order_prefix", "text", false},
+			// 000031 adds both, so they sit last too (BR-160).
+			{"plan", "text", false},
+			{"plan_until", "date", true},
 		}},
 		{"users", []column{
 			{"id", "uuid", false},

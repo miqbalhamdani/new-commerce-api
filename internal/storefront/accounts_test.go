@@ -101,7 +101,7 @@ func TestCustomerAccounts(t *testing.T) {
 		code, p, _ := a.do(t, "POST", "/v1/storefront/auth/logout", body)
 		assertProblem(t, "no token", code, p, 401, "customer_auth_required", "")
 
-		staff, _ := a.signer.Issue(uuid.New(), tenantA, "owner", time.Now())
+		staff, _ := a.signer.Issue(uuid.New(), tenantA, "owner", "jualan", time.Now())
 		code, p, _ = a.do(t, "POST", "/v1/storefront/auth/logout", body, "Authorization", "Bearer "+staff)
 		assertProblem(t, "a staff token (BR-086)", code, p, 401, "customer_auth_required", "")
 
