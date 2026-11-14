@@ -488,8 +488,8 @@ checkout settings appear, and only then does the storefront API take a cart.
 | P1-923 | Accounts per plan | BE | 922 | An invitation or a re-enable past 1 / 2 / 5 active and invited accounts, the owner included, is `422`; disabled users do not count, and a downgrade signs no one out (BR-162) | done | Iqbal Hamdani |
 | P1-924 | Storefront orders need `jualan` | BE | 922 | On a shop not on `jualan`, cart, checkout, customer-account and order routes are `403` with a shop key or the platform key, within the key cache's 60 s; the catalog, blog and `/config` answer on every plan (BR-161) | done | Iqbal Hamdani |
 | P1-925 | Plans in the platform console | BE | 922 | `PATCH /v1/platform/shops/{id}/plan` sets `plan` and `plan_until`, audited `tenant.plan`; `POST /v1/platform/shops` takes `plan` (`mulai` when left out); the report shows both per shop (BR-160, BR-151) | done | Iqbal Hamdani |
-| P1-926 | The admin follows the plan | FE | 922 | Without `orders:read` the dashboard sends the user to Products, so `mulai` and `katalog` never land on a screen they cannot use; the storefront's Checkout tab, and its fields, only on `jualan` (BR-160) | todo | Iqbal Hamdani |
-| P1-927 | Plans on the Platform page | FE | 925 | A plan column with its paid-until date, counts per plan and of plans ending within 7 days, a Change plan action (plan and an optional date) and a plan choice in New shop, `mulai` by default (BR-160) | todo | Iqbal Hamdani |
+| P1-926 | The admin follows the plan | FE | 922 | Without `orders:read` the dashboard sends the user to Products, so `mulai` and `katalog` never land on a screen they cannot use; the storefront's Checkout tab, and its fields, only on `jualan` (BR-160) | done | Iqbal Hamdani |
+| P1-927 | Plans on the Platform page | FE | 925 | A plan column with its paid-until date, counts per plan and of plans ending within 7 days, a Change plan action (plan and an optional date) and a plan choice in New shop, `mulai` by default (BR-160) | done | Iqbal Hamdani |
 
 ## Dropped in v2
 
