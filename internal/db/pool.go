@@ -87,17 +87,19 @@ func (s *Store) TenantIDs(ctx context.Context) ([]uuid.UUID, error) {
 	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
-// ActiveTenantBySlug is the shop the hosted website's X-Shop names, and its
-// plan (BR-161), before any tenant context exists (BR-003, BR-141). tenants
+// ActiveTenantBySlug is the shop the hosted website's X-Shop names, its plan
+// (BR-161) and business type (BR-173), before any tenant context exists
+// (BR-003, BR-141). tenants
 // has no RLS, so this needs no SECURITY DEFINER function; a shop that is not
 // active is ErrNotFound, like one that does not exist (BR-140).
-func (s *Store) ActiveTenantBySlug(ctx context.Context, slug string) (id uuid.UUID, plan string, err error) {
-	err = s.pool.QueryRow(ctx, "SELECT id, plan FROM tenants WHERE slug = $1 AND status = 'active'", slug).Scan(&id, &plan)
+func (s *Store) ActiveTenantBySlug(ctx context.Context, slug string) (id uuid.UUID, plan, businessType string, err error) {
+	err = s.pool.QueryRow(ctx, "SELECT id, plan, business_type FROM tenants WHERE slug = $1 AND status = 'active'", slug).
+		Scan(&id, &plan, &businessType)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, "", ErrNotFound
+		return uuid.Nil, "", "", ErrNotFound
 	}
 	if err != nil {
-		return uuid.Nil, "", fmt.Errorf("tenant by slug: %w", err)
+		return uuid.Nil, "", "", fmt.Errorf("tenant by slug: %w", err)
 	}
-	return id, plan, nil
+	return id, plan, businessType, nil
 }
