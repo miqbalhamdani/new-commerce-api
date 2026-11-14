@@ -171,7 +171,7 @@ func productOut(v catalog.ProductView) Product {
 	if p.Attributes == nil {
 		p.Attributes = map[string]any{}
 	}
-	p.Package = packageOut(catalog.LoadPackage(v.Product.Package))
+	p.Package = packageOut(catalog.LoadPackage(v.Package))
 	return p
 }
 
