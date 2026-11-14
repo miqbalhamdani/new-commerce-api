@@ -17,14 +17,19 @@ type TenantRow struct {
 	Name      string
 	Slug      string
 	Status    string
+	Plan      string     // BR-160
+	PlanUntil *time.Time // a date; display only
 	CreatedAt time.Time
 }
+
+// tenantColumns are TenantRow's, in its order.
+const tenantColumns = "id, name, slug, status, plan, plan_until, created_at"
 
 // Tenants is every shop, newest first, for BR-150's report. tenants has no
 // RLS; everything else the report reads runs in each shop's own InTenantTx.
 func (s *Store) Tenants(ctx context.Context) ([]TenantRow, error) {
 	rows, err := s.pool.Query(ctx,
-		"SELECT id, name, slug, status, created_at FROM tenants ORDER BY created_at DESC, id DESC")
+		"SELECT "+tenantColumns+" FROM tenants ORDER BY created_at DESC, id DESC")
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
@@ -34,7 +39,7 @@ func (s *Store) Tenants(ctx context.Context) ([]TenantRow, error) {
 // Tenant is one shop by id, for a platform action (BR-151); ErrNotFound when
 // there is none.
 func (s *Store) Tenant(ctx context.Context, id uuid.UUID) (TenantRow, error) {
-	rows, err := s.pool.Query(ctx, "SELECT id, name, slug, status, created_at FROM tenants WHERE id = $1", id)
+	rows, err := s.pool.Query(ctx, "SELECT "+tenantColumns+" FROM tenants WHERE id = $1", id)
 	if err != nil {
 		return TenantRow{}, fmt.Errorf("get tenant: %w", err)
 	}

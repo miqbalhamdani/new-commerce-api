@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -35,7 +36,15 @@ func (s *Server) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &body) {
 			return
 		}
-		id, err := s.team.OpenShopForPlatform(r.Context(), body.ShopName, body.OwnerName, string(body.OwnerEmail), body.SendInvite)
+		plan := auth.PlanMulai
+		if body.Plan != nil {
+			if !body.Plan.Valid() {
+				writeError(w, r, planErr())
+				return
+			}
+			plan = string(*body.Plan)
+		}
+		id, err := s.team.OpenShopForPlatform(r.Context(), body.ShopName, body.OwnerName, string(body.OwnerEmail), plan, body.SendInvite)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -63,6 +72,35 @@ func (s *Server) UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id I
 		}
 		s.writePlatformShop(w, r, http.StatusOK, id)
 	})(w, r)
+}
+
+// UpdatePlatformShopPlan handles PATCH /v1/platform/shops/{id}/plan (P1-925,
+// §14.1): the plan and its paid-until date, set together (BR-160).
+func (s *Server) UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		var body PlatformShopPlanUpdate
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		if !body.Plan.Valid() {
+			writeError(w, r, planErr())
+			return
+		}
+		var until *time.Time
+		if body.PlanUntil != nil {
+			until = &body.PlanUntil.Time
+		}
+		if err := s.platform.SetPlan(r.Context(), id, string(body.Plan), until); err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		s.writePlatformShop(w, r, http.StatusOK, id)
+	})(w, r)
+}
+
+func planErr() error {
+	return apperrors.ValidationFailed("plan is mulai, katalog or jualan").
+		WithFields(apperrors.Field{Name: "plan", Detail: "is mulai, katalog or jualan"})
 }
 
 // UpdatePlatformShopOwner handles PATCH /v1/platform/shops/{id}/owner
@@ -172,13 +210,17 @@ func platformOut(rep platformadmin.Report) PlatformShops {
 func platformShopOut(sh platformadmin.Shop) PlatformShop {
 	st := sh.Stats
 	shop := PlatformShop{
-		Id: sh.ID, Name: sh.Name, Slug: sh.Slug, Status: PlatformShopStatus(sh.Status), CreatedAt: sh.CreatedAt,
-		Source: PlatformShopSource(sh.Source),
+		Id: sh.ID, Name: sh.Name, Slug: sh.Slug, Status: PlatformShopStatus(sh.Status), Plan: ShopPlan(sh.Plan),
+		CreatedAt: sh.CreatedAt,
+		Source:    PlatformShopSource(sh.Source),
 		Website: PlatformShopWebsite{Theme: sh.Website.Theme, Logo: sh.Website.Logo, Whatsapp: sh.Website.WhatsApp,
 			SetUp: sh.Website.SetUp},
 		Products:       PlatformShopProducts{Active: int(st.ProductsActive), Total: int(st.ProductsTotal), FirstAt: st.FirstProductAt},
 		Orders:         PlatformShopOrders{Total: int(st.OrdersTotal), Last30d: int(st.Orders30d), FirstAt: st.FirstOrderAt, LastAt: st.LastOrderAt},
 		LastActivityAt: sh.LastActivityAt,
+	}
+	if sh.PlanUntil != nil {
+		shop.PlanUntil = &openapi_types.Date{Time: *sh.PlanUntil}
 	}
 	if o := sh.Owner; o != nil {
 		shop.Owner = &PlatformShopOwner{Name: o.Name, Email: openapi_types.Email(o.Email), Status: PlatformShopOwnerStatus(o.Status), LastLoginAt: o.LastLoginAt}
