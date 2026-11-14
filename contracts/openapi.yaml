@@ -3600,9 +3600,12 @@ components:
     Package:
       type: object
       description: |
-        BR-171. Every field is optional on a write and `null` (`[]` for a list) on a read when
-        unset. A field not listed here, or one that breaks its rule, is `422` on
-        `package.{field}`.
+        BR-171. A read has every field, `null` (`[]` for a list) when unset. A write may leave
+        any out, which unsets it, since the object is replaced whole. A field not listed here,
+        or one that breaks its rule, is `422` on `package.{field}`.
+      required: [departure_date, departure_text, return_date, duration_days, airline, route, hotels,
+                 seats_left, seats_total, itinerary, includes, excludes, bonus, price_note,
+                 cancellation_policy]
       additionalProperties: false
       properties:
         departure_date:
@@ -3676,7 +3679,7 @@ components:
 
     PackageHotel:
       type: object
-      required: [city, name]
+      required: [city, name, stars, nights, variant]
       additionalProperties: false
       properties:
         city:
@@ -3698,11 +3701,11 @@ components:
           maximum: 60
         variant:
           type: [string, "null"]
-          description: An option value of the product, for a hotel only that choice uses; `null` for all.
+          description: The option value (such as `Promo`) whose choice uses this hotel; `null` for every choice.
 
     PackageDay:
       type: object
-      required: [title]
+      required: [title, text]
       additionalProperties: false
       properties:
         title:

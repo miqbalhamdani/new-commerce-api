@@ -1312,7 +1312,7 @@ A product in an `umrah` shop may carry `package`, one object whose fields are al
 | `departure_text` | Up to 40 characters, for a departure not yet fixed to a day, such as `Desember 2026` |
 | `duration_days` | 1–60 |
 | `airline`, `route` | Up to 80 and 120 characters |
-| `hotels` | Up to 10, each `{city, name, stars, nights, variant}`: `city` (up to 40 characters) and `name` (up to 120) required; `stars` 1–5 and `nights` 1–60 optional; `variant` optional, an option value of the product, for a hotel only that choice uses |
+| `hotels` | Up to 10, each `{city, name, stars, nights, variant}`: `city` (up to 40 characters) and `name` (up to 120) required; `stars` 1–5 and `nights` 1–60 optional; `variant` optional, the option value (such as `Promo`) whose choice uses this hotel, none for every choice |
 | `seats_left`, `seats_total` | Whole numbers from 0; `seats_left` is not above `seats_total` when both are set |
 | `itinerary` | Up to 40 days in order, each `{title, text}`: `title` 1–120 characters, `text` up to 1500 |
 | `includes`, `excludes`, `bonus` | Up to 30 entries each, of 1–200 characters |
