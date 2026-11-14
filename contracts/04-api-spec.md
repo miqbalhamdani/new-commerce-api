@@ -126,13 +126,16 @@ POST /v1/auth/login
   "user":   { "id": "0192…", "name": "Budi", "role": "ops",
               "permissions": ["orders:read", "orders:write", "…"], "platform_admin": false,
               "impersonating": false },
-  "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta", "plan": "jualan" } }
+  "tenant": { "id": "0192…", "name": "Erigo", "timezone": "Asia/Jakarta", "plan": "jualan",
+              "business_type": "retail" } }
 ```
 
 This body is a **Session**; `refresh` and `accept-invite` return it too. The tenant comes from the
 user row (BR-020): there is no tenant, workspace or subdomain parameter. Wrong password, unknown
 email and disabled account all return the same `401` (BR-021). `platform_admin` is `true` only for an
 email in `PLATFORM_ADMIN_EMAILS` (BR-150, §14); it is not a role and grants nothing in the shop.
+`business_type` is `retail` or `umrah`; the admin shows an `umrah` shop's products as packages
+(BR-170).
 `permissions` are the role's less whatever the shop's `plan` leaves out (BR-160).
 
 ### Refresh and logout
@@ -368,7 +371,8 @@ There is no currency setting: every amount is IDR (BR-029).
 
 How the shop's website sells and looks: contact email, Google sign-in, shipping origin and
 couriers, payment methods, and the theme, brand colour, logo, hero photo, WhatsApp number, tagline,
-Instagram, address, opening hours and marketplace links.
+Instagram, address, opening hours, marketplace links, licence and an umrah shop's policies, and a
+static website's rebuild hook.
 
 ```json
 GET /v1/storefront-settings
@@ -397,6 +401,12 @@ GET /v1/storefront-settings
   "opening_hours": "Setiap hari 09.00–21.00",
   "shopee_url": "https://shopee.co.id/tokoabc",
   "tokopedia_url": null,
+  "license": "PPIU No. U.133 Tahun 2020",
+  "cancellation_policy": null,
+  "document_requirements": null,
+  "rebuild_hook_url": "https://api.vercel.com/v1/integrations/deploy/prj_…/…",
+  "rebuild_last_at": "2026-10-06T16:16:02+07:00",   ← null until the first call (BR-098)
+  "rebuild_last_status": 201,                         ← null when the host did not answer
   "updated_at": "2026-10-06T16:15:00+07:00" }
 
 PATCH /v1/storefront-settings
@@ -421,7 +431,11 @@ PATCH /v1/storefront-settings
   `logo_url` and `hero_url` are read-only. `whatsapp_number` is `62` and 8–13 digits, `tagline` at
   most 160 characters, `instagram` a handle without `@`, `address` at most 300 characters,
   `opening_hours` at most 120, and `shopee_url` / `tokopedia_url` an `https://` link on
-  `shopee.co.id` / `tokopedia.com` of at most 300.
+  `shopee.co.id` / `tokopedia.com` of at most 300. `license` is at most 120 characters, and
+  `cancellation_policy` and `document_requirements` at most 3000 each; any shop may set them.
+- `rebuild_hook_url` is an `https://` URL on `api.vercel.com`, `api.cloudflare.com` or
+  `api.netlify.com`, at most 500 characters, else `422`; `null` turns rebuilds off (BR-098).
+  `rebuild_last_at` and `rebuild_last_status` are read-only.
 - No `If-Match` (BR-010).
 
 ### Roles
@@ -846,8 +860,9 @@ DELETE /v1/categories/{id}
 | `GET` | `/v1/products?status=&brand_id=&category_id=&q=&sort=&limit=&cursor=&page=` | `products:read` | — |
 | `POST` | `/v1/products` | `products:write` | 009, 037, 042 |
 | `GET` | `/v1/products/{id}` | `products:read` | — |
-| `PATCH` | `/v1/products/{id}` | `products:write` | 009, 010, 037, 038, 042 |
+| `PATCH` | `/v1/products/{id}` | `products:write` | 009, 010, 037, 038, 042, 171, 172 |
 | `DELETE` | `/v1/products/{id}` | `products:write` | 012, 045 |
+| `POST` | `/v1/products/{id}/duplicate` | `products:write` + `variants:write` + `media:write` | 042, 047 |
 | `GET` | `/v1/products/{id}/variants?archived=false` | `variants:read` | — |
 | `POST` | `/v1/products/{id}/variants` | `variants:write` | 039, 040 |
 | `PATCH` | `/v1/variants/{id}` | `variants:write` | 009, 010, 039 |
@@ -881,6 +896,7 @@ Only what the user supplied: `status`, `slug` and `version` are **absent**, not 
                     "path": "apparel.tees" }, … ],
   "attributes": { "material": "Cotton Combed 30s" },
   "option_names": [],
+  "package": null,                                    ← an umrah shop's package details (BR-171)
   "variant_count": 0,
   "media": [],                                        ← Media objects in position order (§8)
   "archived_at": null,
@@ -888,6 +904,28 @@ Only what the user supplied: `status`, `slug` and `version` are **absent**, not 
 ```
 
 `GET /v1/products/{id}` returns the same body.
+
+In an `umrah` shop (BR-170) a product may carry `package` on `POST` and `PATCH`:
+
+```json
+PATCH /v1/products/{id}        If-Match: 4
+{ "package": {
+    "departure_date": "2026-12-14", "return_date": "2026-12-22", "duration_days": 9,
+    "airline": "Saudia", "route": "CGK–MED / JED–CGK",
+    "hotels": [ { "city": "Makkah", "name": "Hilton Convention", "stars": 4, "nights": 5 },
+                { "city": "Madinah", "name": "Dar Al Taqwa", "stars": 4, "nights": 3,
+                  "variant": "Promo" } ],
+    "seats_left": 12, "seats_total": 45,
+    "itinerary": [ { "title": "Jakarta – Madinah", "text": "Berangkat dari Soekarno-Hatta…" } ],
+    "includes": ["Tiket pesawat PP", "Visa umrah"], "excludes": ["Paspor"], "bonus": ["Koper"],
+    "price_note": "Harga per orang, kamar Quad",
+    "cancellation_policy": null } }
+200 OK   ← Product, version 5
+```
+
+Every field is optional and the rules are BR-171's; a broken one is `422` on `package.{field}`
+(`package.hotels.0.name`). `package` is `null` on every product of a `retail` shop, and sending it
+there is `422`.
 
 ```json
 PATCH /v1/products/{id}        If-Match: 1
@@ -898,20 +936,29 @@ PATCH /v1/products/{id}        If-Match: 1
 - **Slug.** Editable; must be lower-case `a-z0-9-` and unique in the tenant, archived products
   included, else `422` on `slug`. Changing `title` never changes `slug` (BR-042).
 - **Clearing.** `null` clears `description` or `brand_id` (BR-009).
-- **Replaced whole.** `category_ids` replaces all assignments; `attributes` replaces the object.
+- **Replaced whole.** `category_ids` replaces all assignments; `attributes` and `package` replace
+  the object.
 - **`option_names`** changes only through the variant matrix (§7.3); sending it here is `422`.
-- **Status.** `"active"` runs the publish check (BR-038); `"draft"` unpublishes; `DELETE` archives.
+- **Status.** `"active"` gives a SKU to each live variant without one, then runs the publish check
+  (BR-038; BR-172 in an `umrah` shop); `"draft"` unpublishes; `DELETE` archives.
 
 ```json
 422 publish_check_failed
 { …, "errors": [
     { "field": "variants",   "detail": "At least one live variant is required" },
-    { "field": "sku",        "variant_id": "0192…", "detail": "Variant Black / XL has no SKU" },
     { "field": "price",      "variant_id": "0192…", "detail": "Price must be greater than zero" },
     { "field": "weight",     "variant_id": "0192…", "detail": "Weight must be greater than zero" },
     { "field": "media",      "detail": "At least one image is required" },
     { "field": "categories", "detail": "At least one category of kind category is required" } ] }
 ```
+
+In an `umrah` shop there is no `weight` failure, `price` accepts a `price_usd` instead, and a
+package with neither departure fails on `package.departure` (BR-172).
+
+**Duplicate.** `POST /v1/products/{id}/duplicate`, with no body, answers `201` with the new draft
+Product (BR-047): ` (copy)` after the title, a new slug, the same details and live variants without
+SKUs, and copies of the images. Copying takes up to a few seconds for a product with many images;
+the copies' derivatives are copied too, so they are ready at once. An unknown product is `404`.
 
 **List.**
 
@@ -926,11 +973,14 @@ GET /v1/products?status=active&category_id=0192-apparel&q=tee&sort=-updated_at
       "price_min": 19900000,
       "price_max": 21900000,
       "cover_url": "https://img.{domain}/…/200.webp",
+      "package": null,
       "updated_at": "2026-10-06T16:15:00+07:00" } ],
   "next_cursor": "eyJ…",
   "total": 57 }
 ```
 
+- `package` is `null` for a product without package details, else its summary: `departure_date`,
+  `departure_text`, `seats_left` and `seats_total` (BR-171).
 - `categories` lists only the product's categories of kind `category` (the main tree), as
   `{id, name, path}`, sorted by `path`. Series, collections and the other kinds appear in
   `GET /v1/products/{id}`. An empty array means the product is not in the main tree yet, which is
@@ -959,6 +1009,7 @@ POST /v1/products/{id}/variants
   "price": 19900000,   ← read-only: what a shopper pays now
   "on_sale": false,
   "weight_grams": 200,
+  "price_usd": null,   ← US cents, an umrah shop's display price (BR-171)
   "archived_at": null, "created_at": "…", "updated_at": "…" }
 
 PATCH /v1/variants/{id}        If-Match: 1
@@ -979,6 +1030,8 @@ GET /v1/products/{id}/variants
   read-only and computed by `variant_price()`. A `sale_price` not lower than `regular_price`, or a
   `sale_ends_at` not after `sale_starts_at`, is `422`. `"sale_price": null` ends the sale; the
   schedule fields are optional.
+- **`price_usd`** (BR-171) is writable here and in a matrix row in an `umrah` shop only, else
+  `422`; it is above zero, and `null` clears it. Nothing charges it.
 
 ### 7.3 Variant matrix
 
@@ -1322,9 +1375,9 @@ Every storefront request runs this before any handler (BR-083, BR-085):
    the origin and add `Vary: Origin`. Browser rate limits apply.
 3. **No `Origin`** (from a server): accepted; server rate limits apply (BR-014).
 4. Set the tenant from the key; every query then runs through `InTenantTx` like any admin query.
-5. **A shop not on `jualan`** (BR-161): the cart, checkout, customer-account and order routes
-   (`/carts…`, `/customers`, `/auth/…`, `/me…`, `/orders/…`) are `403 permission_denied`. The plan
-   is cached with the key.
+5. **A shop not on `jualan`, or an `umrah` shop** (BR-161, BR-173): the cart, checkout,
+   customer-account and order routes (`/carts…`, `/customers`, `/auth/…`, `/me…`, `/orders/…`) are
+   `403 permission_denied`. The plan and business type are cached with the key.
 
 Preflight `OPTIONS` carries no key and is answered for any origin with the allowed methods and
 headers (`X-Api-Key`, `Authorization`, `X-Order-Token`, `Content-Type`).
@@ -1378,11 +1431,19 @@ GET /v1/storefront/products?category=apparel.tees&sort=-updated_at&limit=24
                    { "name": "Size", "values": ["S", "M", "L"] } ],
       "weight_grams_min": 200,
       "weight_grams_max": 250,
+      "price_usd_min": null,
+      "package": null,
       "image": { "url": "https://img.{domain}/…/800.webp",
                  "sizes": { "1600": "…", "800": "…", "200": "…" } } } ],
   "next_cursor": "eyJ…",
   "total": 57 }
 ```
+
+- `package` is `null` for a product without package details (BR-171), else its summary for a card:
+  `departure_date`, `departure_text`, `return_date`, `duration_days`, `airline`, `hotels`,
+  `seats_left` and `seats_total`, each `null` (`[]` for `hotels`) when unset. `price_usd_min` is the
+  lowest `price_usd` among the visible variants, `null` when none has one; a package priced only in
+  dollars has `price_min` 0.
 
 - `category` takes a category `path` and includes descendants; `brand` takes a brand slug; `q` is
   a trigram match on title.
@@ -1408,6 +1469,7 @@ GET /v1/storefront/products/erigo-basic-tee
   "categories": [ { "kind": "category", "name": "Tees", "path": "apparel.tees" } ],
   "attributes": { "material": "Cotton Combed 30s" },
   "option_names": ["Colour", "Size"],
+  "package": null,                ← an umrah shop's package details, whole (BR-171)
   "images": [ { "variant_id": null, "url": "https://img.{domain}/…/1600.webp",
                 "sizes": { "1600": "…", "800": "…", "200": "…" } } ],
   "variants": [
@@ -1415,11 +1477,13 @@ GET /v1/storefront/products/erigo-basic-tee
       "price": 14900000,          ← what the shopper pays now
       "regular_price": 19900000,  ← show crossed out when on_sale
       "on_sale": true,
-      "weight_grams": 200 } ],
+      "weight_grams": 200,
+      "price_usd": null } ],      ← US cents to show in place of rupiah (BR-171)
   "updated_at": "2026-10-06T16:15:00+07:00" }
 ```
 
 A draft, archived or unknown slug is `404`. No field outside the storefront views appears (BR-081).
+`package` has every field of BR-171, `null` (`[]` for a list) when unset.
 
 ```json
 GET /v1/storefront/categories?kind=category
@@ -1449,7 +1513,10 @@ GET /v1/storefront/config
   "address": "Jl. Braga No. 10, Bandung",
   "opening_hours": "Setiap hari 09.00–21.00",
   "shopee_url": "https://shopee.co.id/tokoabc",
-  "tokopedia_url": null }      ← the rest of the look is null field by field when unset (BR-142)
+  "tokopedia_url": null,
+  "license": null,
+  "cancellation_policy": null,
+  "document_requirements": null }   ← the rest of the look is null field by field when unset (BR-142)
 ```
 
 Everything here is public by design; the website reads it once to render sign-in buttons, the
@@ -1884,6 +1951,7 @@ DELETE /v1/blog/posts/{id}
 | `POST` | `/v1/platform/shops` | the same | 020, 151 |
 | `PATCH` | `/v1/platform/shops/{id}` | the same | 140, 151 |
 | `PATCH` | `/v1/platform/shops/{id}/plan` | the same | 151, 160 |
+| `PATCH` | `/v1/platform/shops/{id}/business-type` | the same | 151, 170 |
 | `PATCH` | `/v1/platform/shops/{id}/owner` | the same | 020, 151 |
 | `POST` | `/v1/platform/shops/{id}/invite` | the same | 026, 151 |
 | `POST` | `/v1/platform/shops/{id}/impersonate` | the same | 003, 152 |
@@ -1896,7 +1964,7 @@ GET /v1/platform/shops
                "with_products": 7, "with_orders": 2, "active_7d": 5, "sleeping": 3 },
   "shops": [
     { "id": "0192…", "name": "Lelap", "slug": "lelap-3f9a1c", "status": "active",
-      "plan": "mulai", "plan_until": null,
+      "plan": "mulai", "plan_until": null, "business_type": "retail",
       "created_at": "2026-11-04T10:12:00+07:00", "source": "google",
       "owner": { "name": "Rina", "email": "rina@lelap.id", "status": "active",
                  "last_login_at": "2026-11-05T08:30:00+07:00" },
@@ -1911,7 +1979,8 @@ The report is BR-150's: one entry per shop, newest first, unpaginated. `source` 
 first owner, `null` if it has none. `website.theme` is `null` until the shop first opens its
 storefront settings. `products.total` leaves out archived products. `last_activity_at` is the
 latest staff sign-in or audit-log entry, `null` when there is neither. `plan` is BR-160's, and
-`plan_until` the date its paid period is expected to end, or `null`. Anyone else, and everyone when
+`plan_until` the date its paid period is expected to end, or `null`. `business_type` is BR-170's.
+Anyone else, and everyone when
 `PLATFORM_ADMIN_EMAILS` is empty, gets `403` with that requirement in `detail` (BR-024). The
 website address is `https://{slug}.belli.id` (BR-140).
 
@@ -1920,7 +1989,7 @@ website address is `https://{slug}.belli.id` (BR-140).
 ```json
 POST /v1/platform/shops
 { "shop_name": "Toko Klien", "owner_name": "Rina", "owner_email": "rina@klien.id",
-  "send_invite": false, "plan": "katalog" }
+  "send_invite": false, "plan": "katalog", "business_type": "umrah" }
 201 Created
 { "id": "0192…", "name": "Toko Klien", "slug": "toko-klien-a1b2c3", "status": "active",
   "source": "platform", "owner": { "name": "Rina", "email": "rina@klien.id", "status": "invited",
@@ -1929,6 +1998,7 @@ POST /v1/platform/shops
 PATCH /v1/platform/shops/{id}          { "status": "suspended" }      → 200, the shop
 PATCH /v1/platform/shops/{id}/owner    { "email": "owner@klien.id" }  → 200, the shop
 PATCH /v1/platform/shops/{id}/plan     { "plan": "jualan", "plan_until": "2027-11-30" } → 200, the shop
+PATCH /v1/platform/shops/{id}/business-type   { "business_type": "umrah" }   → 200, the shop
 POST  /v1/platform/shops/{id}/invite                                  → 204
 ```
 
@@ -1938,8 +2008,9 @@ and nothing is emailed unless `send_invite` is true. A taken email is `422` on `
 `status` is `active`, `suspended` or `closed`; anything but `active` signs the shop's staff out,
 refuses their sign-ins (`401`, as for a disabled account, BR-021) and takes the website and the
 storefront API offline (`404`, BR-140). `plan` is `mulai` unless given, and `…/plan` sets the plan
-and `plan_until` together, audited `tenant.plan`; `plan_until` is a date or `null` (BR-160). A
-shop that does not exist is `404`.
+and `plan_until` together, audited `tenant.plan`; `plan_until` is a date or `null` (BR-160).
+`business_type` is `retail` unless given, and `…/business-type` changes it, audited
+`tenant.business_type` (BR-170). A shop that does not exist is `404`.
 
 ### 14.2 Impersonation (BR-152)
 

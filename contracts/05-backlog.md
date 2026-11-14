@@ -8,7 +8,7 @@ Acceptance cites the rules it proves (`BR-xxx`, `02-business-rules.md`); the rul
 there. Section references (`§7.3`) point into `04-api-spec.md` unless another file is named.
 
 **Status** `todo` · `wip` · `review` · `done` · `blocked` · `dropped`
-**Repo** `BE` backend · `FE` frontend · `SF` hosted website (`belli-storefront`) · `LP` landing page (`landing-page`) · `CT` contracts · `OPS` infrastructure
+**Repo** `BE` backend · `FE` frontend · `SF` hosted website (`belli-storefront`) · `LP` landing page (`landing-page`) · `JG` a jadigampang client site · `CT` contracts · `OPS` infrastructure
 
 Ids keep the `P1-` prefix from v1 so branches, commits and PR history stay readable. Phases follow
 the v2 delivery plan (about 28 weeks).
@@ -490,6 +490,38 @@ checkout settings appear, and only then does the storefront API take a cart.
 | P1-925 | Plans in the platform console | BE | 922 | `PATCH /v1/platform/shops/{id}/plan` sets `plan` and `plan_until`, audited `tenant.plan`; `POST /v1/platform/shops` takes `plan` (`mulai` when left out); the report shows both per shop (BR-160, BR-151) | done | Iqbal Hamdani |
 | P1-926 | The admin follows the plan | FE | 922 | Without `orders:read` the dashboard sends the user to Products, so `mulai` and `katalog` never land on a screen they cannot use; the storefront's Checkout tab, and its fields, only on `jualan` (BR-160) | done | Iqbal Hamdani |
 | P1-927 | Plans on the Platform page | FE | 925 | A plan column with its paid-until date, counts per plan and of plans ending within 7 days, a Change plan action (plan and an optional date) and a plan choice in New shop, `mulai` by default (BR-160) | done | Iqbal Hamdani |
+
+## Phase 13 · Umrah packages
+
+Added in v2.28 so an umrah and hajj travel agency can run on Belli: a shop the founder marks
+`umrah` keeps packages with their departure, hotels, seats left, day plan and USD prices, publishes
+them without weights, and takes bookings over WhatsApp only (BR-170–173). For every shop, a SKU is
+given on publish, a product can be duplicated, and a static website is rebuilt when the shop changes
+(BR-038, BR-047, BR-098). The `umrah` theme for `{slug}.belli.id` and custom domains come after.
+
+**Exit:** from Platform the founder makes Rawikara an `umrah` shop; its owner edits a package's
+seats left and day plan in Packages, publishes one with no weights, duplicates it for next month,
+and umrah.jadigampang.com shows the change about two minutes later without its nightly build.
+
+| ID | Item | Repo | Depends | Acceptance | Status | Owner |
+|---|---|---|---|---|---|---|
+| P1-931 | Umrah packages contracts | CT | 927 | v2.28.0: BR-170–173, BR-047, BR-098, BR-038's SKU on publish, BR-142's licence and policies, BR-161 for `umrah`; `03-erd.md` §3.2, §3.3, §3.5 and §4; §2, §4, §7, §11 and §14 in `04-api-spec.md`; `openapi.yaml`: `BusinessType`, `Package`, `price_usd`, `POST /v1/products/{id}/duplicate`, `PATCH /v1/platform/shops/{id}/business-type`, the storefront settings fields; `storefront.yaml` 0.16.0 | done | Iqbal Hamdani |
+| P1-932 | Business type | BE | 931 | Migration `000032_umrah` matches `03-erd.md`; `POST /v1/platform/shops` takes `business_type` (`retail` when left out) and `PATCH …/business-type` changes it, audited `tenant.business_type`; the report, login, refresh and impersonation carry it, and the access token holds it as it holds the plan (BR-170, BR-151) | todo | Iqbal Hamdani |
+| P1-933 | Umrah shops take no orders | BE | 932 | On an `umrah` shop on any plan, cart, checkout, customer-account and order routes are `403` with a shop key or the platform key, within the key cache's 60 s; the catalog, blog and `/config` answer (BR-173, BR-161) | todo | Iqbal Hamdani |
+| P1-934 | Package details | BE | 932 | `package` on `POST` and `PATCH /v1/products` in an `umrah` shop, checked as BR-171 with `422` on `package.{field}`, `422` in a `retail` shop; returned on the product, as a brief in the admin list, and through `storefront_products` as the whole object on the storefront detail and a summary in its list (BR-171) | todo | Iqbal Hamdani |
+| P1-935 | USD prices | BE | 932 | `price_usd` on variant create, `PATCH` and matrix rows in an `umrah` shop, `422` (a failed row in the matrix) in a `retail` one; returned on every variant, on the storefront variant and as `price_usd_min` in its list; `variant_price()` and every rupiah amount ignore it (BR-171, BR-046) | todo | Iqbal Hamdani |
+| P1-936 | Publishing a package | BE | 934, 935 | In an `umrah` shop the publish check takes a rupiah price or `price_usd`, skips weights and needs a departure (`package.departure`); a `retail` shop's check is unchanged (BR-172, BR-038) | todo | Iqbal Hamdani |
+| P1-937 | Licence and policies | BE | 931 | Storefront settings read and write `license` (≤ 120), `cancellation_policy` and `document_requirements` (≤ 3000), `null` clearing each; `/config` returns all three (BR-142) | todo | Iqbal Hamdani |
+| P1-938 | A SKU on publish | BE | 931 | Publishing gives each live variant without a SKU `SLUG-VALUE-VALUE`, upper-case, at most 64 characters, with `-2`, `-3` … when the tenant holds it; a SKU already set is untouched (BR-038, BR-039) | todo | Iqbal Hamdani |
+| P1-939 | Duplicate a product | BE | 934, 935 | `POST /v1/products/{id}/duplicate` answers `201` with a draft as BR-047: ` (copy)`, a new slug, the same details and live variants without SKUs, and each image copied to a new object under the new product with its derivatives; deleting a copy's image leaves the original's object (BR-047, BR-053) | todo | Iqbal Hamdani |
+| P1-940 | Rebuild hook | BE | 937 | `rebuild_hook_url` accepted only on the three hosts (`422` otherwise); a catalog, blog or storefront-settings write asks for a rebuild, the worker `POST`s the hook once about 60 s after the first ask with writes in between joining it, and records `rebuild_last_at` and `rebuild_last_status`; a failure is not retried (BR-098) | todo | Iqbal Hamdani |
+| P1-941 | Packages in the admin | FE | 934, 935, 936 | In an `umrah` shop Products reads Packages: the list shows departure and seats; the editor has Schedule and seats, Flight, Hotels (each optionally for one option value), Prices with USD and no weights, an Itinerary of days to add, move and remove, Included, Not included, Bonus, Price note and Cancellation policy; a `retail` shop's screens are unchanged (BR-170, BR-171) | todo | Iqbal Hamdani |
+| P1-942 | Duplicate, SKUs, licence and hook in the admin | FE | 932, 937, 938, 939, 940 | A Duplicate action on a product opens the copy; the SKU cell says it is given on publish; storefront settings edit the licence, the rebuild hook with its last call and status, and in an `umrah` shop the cancellation policy and document requirements; New shop and the shop's actions on Platform set the business type (BR-047, BR-038, BR-098, BR-142, BR-170) | todo | Iqbal Hamdani |
+| P1-943 | Rawikara on package details | OPS | 941, 942 | Rawikara (`rawikara-42566c`) is `umrah`; its packages' attributes and `Hari N:` descriptions are moved into `package` (the old attributes kept until P1-944 is live); its rebuild hook is the Vercel deploy hook of `rawikara-umrah` | todo | Iqbal Hamdani |
+| P1-944 | umrah.jadigampang.com reads packages | JG | 943 | `src/lib/paket.ts` reads `package` and `price_usd`, falling back to the attributes; its tests pass; after it is live the old attributes are removed from Rawikara | todo | Iqbal Hamdani |
+
+> **`JG` here** is `~/escape/jadigampang/umrah` (GitHub `rawikara-umrah`); a push to `main` is live
+> on Vercel.
 
 ## Dropped in v2
 

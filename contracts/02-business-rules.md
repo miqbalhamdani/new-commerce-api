@@ -10,8 +10,8 @@ lives in the ERD or the API spec.
 Ids are grouped by area and never reused: `001–019` platform · `020–029` auth & team ·
 `030–049` catalog · `050–059` media · `060–069` jobs, export & reporting · `070–079` orders ·
 `080–099` storefront · `100–119` marketplace import · `120–129` shipping, payments & email ·
-`130–139` blog · `140–149` hosted website · `150–159` platform admin · `160–169` plans. A rule
-that no longer applies is marked
+`130–139` blog · `140–149` hosted website · `150–159` platform admin · `160–169` plans ·
+`170–179` umrah travel. A rule that no longer applies is marked
 **retired** and keeps its number.
 
 ---
@@ -431,13 +431,22 @@ Moving a product from `draft` to `active` requires:
 4. at least one image;
 5. at least one category of kind `category`.
 
+In an `umrah` shop, BR-172 replaces checks 2 and 3.
+
 On failure the product stays `draft` and the response lists every failure, so the client can link
 to the offending cell (`422 publish_check_failed`). This is a check on the publish path, **not** a
 table constraint.
 
+**A SKU is given on publish.** Before the check, every unarchived variant with no SKU gets one: the
+product's slug and the variant's option values, slugified, joined by `-` and upper-cased
+(`UMRAH-REGULER-9-HARI-QUAD`), cut to 64 characters. If the tenant already holds it, `-2`, `-3`, …
+is added until it is free (BR-039). A SKU someone set is never changed. A publish that then fails
+keeps the SKUs it gave.
+
 *Why:* drafts must be quick to create. But a variant without a SKU cannot be bulk-upserted,
 CSV-imported or matched by a marketplace import (BR-043, BR-044, BR-103), and a shopper must never
-see a zero price, so the publish path is where those are caught.
+see a zero price, so the publish path is where those are caught. An owner who sells only through
+WhatsApp has no use for SKUs, so the publish path writes one rather than refusing.
 
 ### BR-039 SKU is optional while drafting and unique once set
 Any number of variants may lack a SKU. A SKU that is set is unique within the tenant, across all
@@ -509,6 +518,17 @@ price to a shopper who saw the sale price. With one function, there is no second
 ### BR-045 Archiving never touches order history
 Archiving a product or variant removes it from the storefront and from new carts and checkouts,
 and changes nothing on existing orders. Order lines keep their own snapshot (BR-076).
+
+### BR-047 Duplicating a product
+Any product, archived included, can be copied into a new `draft`: its title with ` (copy)` added,
+a slug derived from that title (BR-042), and the same description, brand, categories, attributes,
+package details (BR-171) and option names. Each live variant is copied with its option values,
+prices, sale schedule, weight and USD price, but no SKU or barcode: the copy gets its SKUs when it
+is published (BR-038). Every image is copied to a new object under the new product (BR-053), with
+its derivatives, position and variant, so deleting an image from one never touches the other.
+
+*Why:* a travel shop opens next month's departure from this month's package, and a shop adds a
+product much like one it already sells. Retyping either invites mistakes.
 
 ---
 
@@ -825,6 +845,25 @@ storage expires within 7 days (BR-053).
 
 *Why:* Indonesia's PDP law gives data subjects that right; it must be a job, not a migration.
 
+### BR-098 Rebuild hook
+A website built ahead of time, one that reads this API when it is built, can be rebuilt when the
+shop changes. The owner sets `rebuild_hook_url` in storefront settings: the deploy-hook URL its host
+gave, `https://` on `api.vercel.com`, `api.cloudflare.com` or `api.netlify.com`, at most 500
+characters. Any other URL is `422`.
+
+While it is set, any write to the catalog (products, variants, product images, categories, brands),
+to the blog, or to storefront settings asks for a rebuild. The API sends one `POST` with an empty
+body about 60 seconds after the first request; requests that arrive before it is sent join it. The
+call has 10 seconds, is not retried, and its time and HTTP status (`null` when it got no answer)
+are kept as `rebuild_last_at` and `rebuild_last_status`. The next write asks again.
+
+The URL is a credential of the owner's host: it is shown to those who may read storefront settings
+and appears nowhere else, `/config` included.
+
+*Why:* a static website showed the seats left as of its nightly build. One call per minute at most
+keeps an editing session from starting a build per save, and the host list keeps the API from being
+pointed at its own network.
+
 ---
 
 ## 8. Marketplace import
@@ -1093,6 +1132,8 @@ Every field but the theme is optional:
 | Address | Up to 300 characters; the website shows it with a map |
 | Opening hours | Up to 120 characters of free text, such as `Setiap hari 09.00–21.00` |
 | Shopee, Tokopedia | An `https://` link on `shopee.co.id` or `tokopedia.com` (or a subdomain of either), up to 300 characters |
+| Licence | Up to 120 characters, such as `PPIU No. U.133 Tahun 2020`: the business licence the website shows |
+| Cancellation policy, document requirements | Up to 3000 characters each of plain text, shown on an `umrah` shop's packages (BR-171) |
 
 `/config` always returns a brand colour: the chosen one or the theme's first.
 
@@ -1166,6 +1207,8 @@ there, with the platform admin as the actor.
   keeps working until it expires, so the address is changed before the email is sent.
 - **Plan:** `mulai`, `katalog` or `jualan`, picked when the shop is opened and changed at any time,
   with an optional `plan_until` date (BR-160).
+- **Business type:** `retail` or `umrah`, picked when the shop is opened and changed at any time
+  (BR-170).
 
 *Why:* the founder sets up shops for client demos before the client has an account, and needs to
 take a shop offline without a database console.
@@ -1220,10 +1263,11 @@ other (BR-024).
 every route already has, instead of a second set of checks that could disagree with it.
 
 ### BR-161 Only `jualan` takes orders on a website
-On a shop not on `jualan`, the storefront API's cart, checkout, customer-account and order routes
+On a shop not on `jualan`, and on any `umrah` shop (BR-173), the storefront API's cart, checkout,
+customer-account and order routes
 (`/carts…`, `/customers`, `/auth/…`, `/me…`, `/orders/…`) answer `403 permission_denied`,
 whichever credential is used. The catalog, the blog and `/config` stay open on every plan. The plan
-is read with the key and cached with it, for at most 60 seconds (BR-085).
+and business type are read with the key and cached with it, for at most 60 seconds (BR-085).
 
 *Why:* the cheaper plans take orders through WhatsApp, as the hosted website already does
 (BR-140). A shop's own website should not take orders its plan does not include.
@@ -1236,6 +1280,79 @@ invitation and frees its account; the link stops working, as an accepted one doe
 downgrade signs no one out; it only stops new accounts until the shop is back under its limit.
 
 *Why:* the pricing page promises these numbers.
+
+## 14. Umrah travel
+
+### BR-170 Business type
+Every shop is `retail` or `umrah`, an umrah and hajj travel agency. Only a platform admin sets it
+(BR-151): when opening a shop, `retail` unless they choose, and at any time after, audited
+`tenant.business_type` in the shop. Signups, shops from before it, and shops made by `create-tenant`
+or `demo-seed` are `retail`. It travels in the access token with the plan, so a change applies at
+the next sign-in or refresh (BR-160).
+
+In an `umrah` shop the products are travel packages:
+
+- they carry package details and USD prices (BR-171), and the admin shows them as packages, without
+  weights;
+- they are published by BR-172;
+- the website takes no orders (BR-173).
+
+Changing the type deletes nothing. Package details and USD prices stay on the products while the
+shop is `retail`, unused, and are back when it is `umrah` again.
+
+*Why:* a travel agency sells departures, not parcels. One setting, made by whoever opens the shop,
+changes the product form and the rules that assume shipping, and leaves every retail shop as it was.
+
+### BR-171 Package details
+A product in an `umrah` shop may carry `package`, one object whose fields are all optional:
+
+| Field | Rule |
+|---|---|
+| `departure_date`, `return_date` | Dates; the return is not before the departure |
+| `departure_text` | Up to 40 characters, for a departure not yet fixed to a day, such as `Desember 2026` |
+| `duration_days` | 1–60 |
+| `airline`, `route` | Up to 80 and 120 characters |
+| `hotels` | Up to 10, each `{city, name, stars, nights, variant}`: `city` (up to 40 characters) and `name` (up to 120) required; `stars` 1–5 and `nights` 1–60 optional; `variant` optional, an option value of the product, for a hotel only that choice uses |
+| `seats_left`, `seats_total` | Whole numbers from 0; `seats_left` is not above `seats_total` when both are set |
+| `itinerary` | Up to 40 days in order, each `{title, text}`: `title` 1–120 characters, `text` up to 1500 |
+| `includes`, `excludes`, `bonus` | Up to 30 entries each, of 1–200 characters |
+| `price_note` | Up to 160 characters, such as `Harga per orang, kamar Quad` |
+| `cancellation_policy` | Up to 3000 characters; for this package, in place of the shop's (BR-142) |
+
+A field not in the table, or a value that breaks its rule, is `422` naming it. `package` on a
+product of a `retail` shop is `422`. A `PATCH` replaces it whole, as it does `attributes`, and
+`null` clears it.
+
+`seats_left` is what the owner types. Nothing counts it down: pilgrims book over WhatsApp, and Belli
+keeps no stock (BR-017). A package with no seats left is still shown, as full.
+
+Each variant may have a `price_usd` in US cents, for the website to show in place of rupiah: hajj
+packages are sold in dollars. It is display only. Carts, checkout, orders and every rupiah amount
+ignore it (BR-046), and it is `422` in a `retail` shop.
+
+*Why:* the departure, hotels, seats and day plan are what a pilgrim compares, and the owner changes
+the seats left from a phone. Free-form attributes could not be checked, sorted by date or edited as
+a day plan.
+
+### BR-172 Publishing a package
+In an `umrah` shop, BR-038's checks 2 and 3 are, instead:
+
+2. every unarchived variant has a regular price or a `price_usd` greater than zero;
+3. the package has a `departure_date` or a `departure_text` (`package.departure`).
+
+Weights are not checked. The variant, SKU, image and category checks stay, and a missing SKU is
+still given on publish.
+
+*Why:* a package is not shipped, and one priced in dollars has no rupiah price to give. A package
+with no departure is not something a pilgrim can book.
+
+### BR-173 Umrah shops take no orders
+On an `umrah` shop, on every plan, the storefront API's cart, checkout, customer-account and order
+routes are `403 permission_denied`, as on a shop not on `jualan` (BR-161). Pilgrims book over
+WhatsApp, as on the hosted website (BR-140).
+
+*Why:* package variants have no weight, so no shipping quote could be made for them, and signing up
+for a departure takes documents and instalments that a checkout does not model.
 
 ---
 
@@ -1291,3 +1408,6 @@ downgrade signs no one out; it only stops new accounts until the shop is back un
 | 150 | platform admin page | P1-901–903 |
 | 151–152 | platform console | P1-911–917 |
 | 160–162 | every admin route, storefront orders, team, platform | P1-921–927 |
+| 038 (SKU on publish), 047 | publish, duplicate | P1-938, P1-939, P1-942 |
+| 098 | storefront settings, static websites | P1-940, P1-942, P1-943 |
+| 170–173 | platform, product editor, publish, storefront | P1-931–937, P1-941–944 |

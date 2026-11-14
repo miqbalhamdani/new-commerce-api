@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Belli.id API
-  version: 2.27.0
+  version: 2.28.0
   description: |
     Ecommerce Backoffice v2 — the admin API (`/v1`). The storefront API (`/v1/storefront`) is its
     own document, `storefront.yaml`, published at `/v1/storefront/openapi.json` by `P1-213`.
@@ -847,9 +847,10 @@ paths:
         `If-Match` is required (BR-010). `null` clears `description` or `brand_id`;
         `category_ids` and `attributes` replace the whole value. `slug` must be lower-case
         `a-z0-9-` and unique in the tenant. `option_names` changes only through the variant
-        matrix and is `422` here. `status: "active"` runs the publish check (`422
-        publish_check_failed`, BR-038); `"draft"` unpublishes; archiving is `DELETE`.
-        Requires `products:write`.
+        matrix and is `422` here. `package` replaces the object in an `umrah` shop and is `422`
+        in any other (BR-171). `status: "active"` gives each live variant without a SKU one,
+        then runs the publish check (`422 publish_check_failed`, BR-038, BR-172); `"draft"`
+        unpublishes; archiving is `DELETE`. Requires `products:write`.
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       requestBody:
@@ -884,6 +885,32 @@ paths:
       responses:
         "204":
           description: Archived.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/duplicate:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: duplicateProduct
+      summary: Copy a product into a new draft
+      description: |
+        BR-047: a new `draft` with ` (copy)` after the title, a slug derived from it, the same
+        description, brand, categories, attributes, package and option names, each live variant
+        without its SKU and barcode, and every image copied to a new object with its
+        derivatives. Archived products can be copied. Requires `products:write`,
+        `variants:write` and `media:write`.
+      responses:
+        "201":
+          description: The new product.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2227,6 +2254,38 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /platform/shops/{id}/business-type:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updatePlatformShopBusinessType
+      summary: Set a shop's business type
+      description: |
+        BR-170: `retail` or `umrah`, audited `tenant.business_type` in the shop. Nothing is
+        deleted. The shop's staff get it at their next sign-in or refresh, within 15 minutes, and
+        the storefront API within 60 seconds. Platform admins only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformShopBusinessTypeUpdate"
+      responses:
+        "200":
+          description: The shop, as the report shows it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformShop"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
   /platform/shops/{id}/invite:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -2754,7 +2813,7 @@ components:
 
     SessionTenant:
       type: object
-      required: [id, name, timezone, plan]
+      required: [id, name, timezone, plan, business_type]
       properties:
         id:
           type: string
@@ -2767,6 +2826,15 @@ components:
           examples: ["Asia/Jakarta"]
         plan:
           $ref: "#/components/schemas/ShopPlan"
+        business_type:
+          $ref: "#/components/schemas/BusinessType"
+
+    BusinessType:
+      type: string
+      enum: [retail, umrah]
+      description: |
+        BR-170: an `umrah` shop's products are travel packages, with package details and USD
+        prices and without weights, and its website takes no orders.
 
     ShopPlan:
       type: string
@@ -2826,8 +2894,8 @@ components:
 
     PlatformShop:
       type: object
-      required: [id, name, slug, status, plan, plan_until, created_at, source, owner, website,
-                 products, orders, last_activity_at]
+      required: [id, name, slug, status, plan, plan_until, business_type, created_at, source, owner,
+                 website, products, orders, last_activity_at]
       properties:
         id:
           type: string
@@ -2846,6 +2914,8 @@ components:
           type: [string, "null"]
           format: date
           description: When the paid period is expected to end. Display only (BR-160).
+        business_type:
+          $ref: "#/components/schemas/BusinessType"
         created_at:
           type: string
           format: date-time
@@ -2890,6 +2960,9 @@ components:
         plan:
           $ref: "#/components/schemas/ShopPlan"
           description: The shop's plan; `mulai` when left out (BR-160).
+        business_type:
+          $ref: "#/components/schemas/BusinessType"
+          description: "`retail` when left out (BR-170)."
 
     PlatformShopUpdate:
       type: object
@@ -2911,6 +2984,14 @@ components:
           type: [string, "null"]
           format: date
           description: When the paid period is expected to end, or `null`. Display only (BR-160).
+
+    PlatformShopBusinessTypeUpdate:
+      type: object
+      required: [business_type]
+      additionalProperties: false
+      properties:
+        business_type:
+          $ref: "#/components/schemas/BusinessType"
 
     PlatformShopOwnerUpdate:
       type: object
@@ -3206,7 +3287,7 @@ components:
     Product:
       type: object
       required: [id, version, title, slug, description, status, brand, categories, attributes,
-                 option_names, variant_count, media, archived_at, created_at, updated_at]
+                 option_names, package, variant_count, media, archived_at, created_at, updated_at]
       properties:
         id:
           type: string
@@ -3239,6 +3320,11 @@ components:
           type: array
           items:
             type: string
+        package:
+          description: An umrah shop's package details (BR-171); `null` for every other product.
+          oneOf:
+            - $ref: "#/components/schemas/Package"
+            - type: "null"
         variant_count:
           type: integer
           description: Live variants.
@@ -3277,6 +3363,9 @@ components:
         attributes:
           type: object
           additionalProperties: true
+        package:
+          $ref: "#/components/schemas/Package"
+          description: Only in an `umrah` shop, else `422` (BR-171).
 
     ProductUpdate:
       type: object
@@ -3301,6 +3390,11 @@ components:
         attributes:
           type: object
           additionalProperties: true
+        package:
+          description: Replaces the object; `null` clears it. Only in an `umrah` shop, else `422` (BR-171).
+          oneOf:
+            - $ref: "#/components/schemas/Package"
+            - type: "null"
         status:
           type: string
           enum: [draft, active]
@@ -3308,7 +3402,7 @@ components:
     Variant:
       type: object
       required: [id, product_id, version, option_values, sku, barcode, regular_price, sale_price,
-                 sale_starts_at, sale_ends_at, price, on_sale, weight_grams, archived_at,
+                 sale_starts_at, sale_ends_at, price, on_sale, weight_grams, price_usd, archived_at,
                  created_at, updated_at]
       properties:
         id:
@@ -3346,6 +3440,10 @@ components:
           description: Read-only. True while the sale's schedule is running (BR-046).
         weight_grams:
           type: integer
+        price_usd:
+          type: [integer, "null"]
+          format: int64
+          description: US cents an umrah shop shows in place of rupiah; never charged (BR-171).
         archived_at:
           type: [string, "null"]
           format: date-time
@@ -3391,6 +3489,11 @@ components:
         weight_grams:
           type: integer
           minimum: 0
+        price_usd:
+          type: integer
+          format: int64
+          minimum: 1
+          description: US cents; only in an `umrah` shop, else `422` (BR-171).
 
     VariantUpdate:
       type: object
@@ -3415,6 +3518,11 @@ components:
         weight_grams:
           type: integer
           minimum: 0
+        price_usd:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
+          description: US cents; only in an `umrah` shop, else `422`. `null` clears it (BR-171).
 
     CategoryBrief:
       type: object
@@ -3431,7 +3539,7 @@ components:
     ProductListItem:
       type: object
       required: [id, version, title, slug, status, brand, categories, variant_count, price_min,
-                 price_max, cover_url, updated_at]
+                 price_max, cover_url, package, updated_at]
       properties:
         id:
           type: string
@@ -3466,9 +3574,144 @@ components:
         cover_url:
           type: [string, "null"]
           description: The first image's 200 px derivative, once made (BR-052).
+        package:
+          description: The package's departure and seats (BR-171); `null` without package details.
+          oneOf:
+            - $ref: "#/components/schemas/PackageBrief"
+            - type: "null"
         updated_at:
           type: string
           format: date-time
+
+    PackageBrief:
+      type: object
+      required: [departure_date, departure_text, seats_left, seats_total]
+      properties:
+        departure_date:
+          type: [string, "null"]
+          format: date
+        departure_text:
+          type: [string, "null"]
+        seats_left:
+          type: [integer, "null"]
+        seats_total:
+          type: [integer, "null"]
+
+    Package:
+      type: object
+      description: |
+        BR-171. Every field is optional on a write and `null` (`[]` for a list) on a read when
+        unset. A field not listed here, or one that breaks its rule, is `422` on
+        `package.{field}`.
+      additionalProperties: false
+      properties:
+        departure_date:
+          type: [string, "null"]
+          format: date
+        return_date:
+          type: [string, "null"]
+          format: date
+          description: Not before `departure_date`.
+        departure_text:
+          type: [string, "null"]
+          maxLength: 40
+          description: A departure not yet fixed to a day, such as `Desember 2026`.
+          examples: ["Desember 2026"]
+        duration_days:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 60
+        airline:
+          type: [string, "null"]
+          maxLength: 80
+        route:
+          type: [string, "null"]
+          maxLength: 120
+        hotels:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/PackageHotel"
+        seats_left:
+          type: [integer, "null"]
+          minimum: 0
+          description: What the owner types; nothing counts it down (BR-017). Not above `seats_total`.
+        seats_total:
+          type: [integer, "null"]
+          minimum: 0
+        itinerary:
+          type: array
+          maxItems: 40
+          description: The days in order; day N is the Nth entry.
+          items:
+            $ref: "#/components/schemas/PackageDay"
+        includes:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        excludes:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        bonus:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        price_note:
+          type: [string, "null"]
+          maxLength: 160
+        cancellation_policy:
+          type: [string, "null"]
+          maxLength: 3000
+          description: For this package, in place of the shop's (BR-142).
+
+    PackageHotel:
+      type: object
+      required: [city, name]
+      additionalProperties: false
+      properties:
+        city:
+          type: string
+          minLength: 1
+          maxLength: 40
+          examples: ["Makkah"]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        stars:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 5
+        nights:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 60
+        variant:
+          type: [string, "null"]
+          description: An option value of the product, for a hotel only that choice uses; `null` for all.
+
+    PackageDay:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        text:
+          type: [string, "null"]
+          maxLength: 1500
 
     ProductPage:
       type: object
@@ -3552,6 +3795,11 @@ components:
         weight_grams:
           type: integer
           minimum: 0
+        price_usd:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
+          description: US cents; only in an `umrah` shop, else the row fails (BR-171).
 
     VariantMatrix:
       type: object
@@ -4302,7 +4550,9 @@ components:
                  midtrans_environment, midtrans_client_key, midtrans_server_key_set,
                  midtrans_notification_url, theme, brand_color, logo_r2_key, logo_url,
                  hero_r2_key, hero_url, whatsapp_number, tagline, instagram, address,
-                 opening_hours, shopee_url, tokopedia_url, updated_at]
+                 opening_hours, shopee_url, tokopedia_url, license, cancellation_policy,
+                 document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status,
+                 updated_at]
       properties:
         contact_email:
           type: [string, "null"]
@@ -4376,6 +4626,23 @@ components:
         tokopedia_url:
           type: [string, "null"]
           format: uri
+        license:
+          type: [string, "null"]
+          examples: ["PPIU No. U.133 Tahun 2020"]
+        cancellation_policy:
+          type: [string, "null"]
+        document_requirements:
+          type: [string, "null"]
+        rebuild_hook_url:
+          type: [string, "null"]
+          description: A static website's deploy hook (BR-098); shown here and nowhere else.
+        rebuild_last_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the hook was last called; `null` before the first call (BR-098).
+        rebuild_last_status:
+          type: [integer, "null"]
+          description: The HTTP status the hook answered; `null` when it did not answer (BR-098).
         updated_at:
           type: string
           format: date-time
@@ -4449,6 +4716,21 @@ components:
           type: [string, "null"]
           maxLength: 300
           pattern: "^https://([a-z0-9-]+\\.)*tokopedia\\.com(/\\S*)?$"
+        license:
+          type: [string, "null"]
+          maxLength: 120
+        cancellation_policy:
+          type: [string, "null"]
+          maxLength: 3000
+        document_requirements:
+          type: [string, "null"]
+          maxLength: 3000
+        rebuild_hook_url:
+          type: [string, "null"]
+          maxLength: 500
+          description: >-
+            An `https://` URL on `api.vercel.com`, `api.cloudflare.com` or `api.netlify.com`,
+            else `422`; `null` turns rebuilds off (BR-098).
 
     ApiKey:
       type: object
