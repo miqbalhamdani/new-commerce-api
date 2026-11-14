@@ -2,16 +2,20 @@ package httpapi_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/miqbalhamdani/new-commerce-api/internal/auth"
 	"github.com/miqbalhamdani/new-commerce-api/internal/db"
+	"github.com/miqbalhamdani/new-commerce-api/internal/team"
 	"github.com/miqbalhamdani/new-commerce-api/internal/tenant"
 )
 
@@ -331,5 +335,73 @@ func TestDuplicateProduct(t *testing.T) {
 	}
 	if code, _ := do("POST", "/v1/products/"+uuid.NewString()+"/duplicate", nil); code != http.StatusNotFound {
 		t.Errorf("unknown product: %d", code)
+	}
+}
+
+// TestRebuildHook is P1-940's acceptance (BR-098): only a deploy hook on the
+// three hosts is accepted, and the worker calls it once a minute after the
+// first change, with later changes joining that call.
+func TestRebuildHook(t *testing.T) {
+	ctx := t.Context()
+	store := openAppStore(ctx, t)
+	shopID := uuid.Must(uuid.NewV7())
+	owner := seedSignedInUserWithRole(ctx, t, store, shopID, auth.RoleOwner)
+	cleanSettings(t, store, shopID)
+	do := apiClient(t, owner)
+	for _, bad := range []string{"http://api.vercel.com/x", "https://api.vercel.com.evil.test/x", "https://localhost/x",
+		"https://user:pw@api.vercel.com/x", "https://api.vercel.com:8443/x", "https://api.vercel.com/" + strings.Repeat("a", 500)} {
+		code, p := do("PATCH", "/v1/storefront-settings", map[string]any{"rebuild_hook_url": bad})
+		assertProblem(t, code, p, 422, "validation_failed", "rebuild_hook_url")
+	}
+	hook := "https://api.vercel.com/v1/integrations/deploy/prj_" + uuid.NewString()
+	code, st := do("PATCH", "/v1/storefront-settings", map[string]any{"rebuild_hook_url": hook})
+	if code != 200 || st["rebuild_hook_url"] != hook || st["rebuild_last_at"] != nil {
+		t.Fatalf("set the hook: %d %v", code, st)
+	}
+
+	calls := 0
+	post := func(_ context.Context, url string) (int, error) {
+		if url == hook {
+			calls++
+		}
+		return 201, nil
+	}
+	tick := func(delay time.Duration, post team.Poster) {
+		t.Helper()
+		if err := team.RebuildTick(ctx, store, []uuid.UUID{shopID}, time.Now(), delay, post); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if shops, err := team.HookShops(ctx, store); err != nil || !slices.Contains(shops, shopID) {
+		t.Fatalf("shops with a hook: %v %v", shops, err)
+	}
+	tick(team.RebuildDelay, post)
+	if calls != 0 {
+		t.Fatalf("called before the change was a minute old: %d", calls)
+	}
+	tick(0, post)
+	tick(0, post)
+	if calls != 1 {
+		t.Fatalf("calls once the change is old enough: %d, want 1", calls)
+	}
+	_, st = do("GET", "/v1/storefront-settings", nil)
+	if st["rebuild_last_status"] != float64(201) || st["rebuild_last_at"] == nil {
+		t.Errorf("last call: %v %v", st["rebuild_last_at"], st["rebuild_last_status"])
+	}
+	// Two changes after the call are one more call.
+	do("POST", "/v1/products", map[string]any{"title": "Satu"})
+	do("POST", "/v1/products", map[string]any{"title": "Dua"})
+	tick(team.RebuildDelay, post)
+	tick(0, post)
+	if calls != 2 {
+		t.Errorf("calls after two more changes: %d, want 2", calls)
+	}
+	// A failed call is recorded with no status, and not retried.
+	do("POST", "/v1/products", map[string]any{"title": "Tiga"})
+	tick(0, func(context.Context, string) (int, error) { calls++; return 0, errors.New("timeout") })
+	tick(0, post)
+	_, st = do("GET", "/v1/storefront-settings", nil)
+	if calls != 3 || st["rebuild_last_status"] != nil {
+		t.Errorf("after a failure: %d calls, status %v", calls, st["rebuild_last_status"])
 	}
 }

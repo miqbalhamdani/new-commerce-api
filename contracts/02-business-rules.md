@@ -856,7 +856,8 @@ While it is set, any write to the catalog (products, variants, product images, c
 to the blog, or to storefront settings asks for a rebuild. The API sends one `POST` with an empty
 body about 60 seconds after the first request; requests that arrive before it is sent join it. The
 call has 10 seconds, is not retried, and its time and HTTP status (`null` when it got no answer)
-are kept as `rebuild_last_at` and `rebuild_last_status`. The next write asks again.
+are kept as `rebuild_last_at` and `rebuild_last_status`. The next write asks again. A hook just set
+is first called within about five minutes, the time the worker takes to notice it.
 
 The URL is a credential of the owner's host: it is shown to those who may read storefront settings
 and appears nowhere else, `/config` included.

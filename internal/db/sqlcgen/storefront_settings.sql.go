@@ -7,9 +7,31 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const claimRebuild = `-- name: ClaimRebuild :one
+UPDATE storefront_settings SET rebuild_last_at = $1, rebuild_last_status = NULL
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_hook_url IS NOT NULL
+   AND rebuild_last_at IS NOT DISTINCT FROM $2::timestamptz
+RETURNING rebuild_hook_url
+`
+
+type ClaimRebuildParams struct {
+	At   *time.Time
+	Seen *time.Time
+}
+
+// One worker calls the hook: the claim holds only if no other moved
+// rebuild_last_at since this one read it. Not audited, so it is no change.
+func (q *Queries) ClaimRebuild(ctx context.Context, arg ClaimRebuildParams) (*string, error) {
+	row := q.db.QueryRow(ctx, claimRebuild, arg.At, arg.Seen)
+	var rebuild_hook_url *string
+	err := row.Scan(&rebuild_hook_url)
+	return rebuild_hook_url, err
+}
 
 const ensureStorefrontSettings = `-- name: EnsureStorefrontSettings :exec
 
@@ -25,6 +47,24 @@ ON CONFLICT (tenant_id) DO NOTHING
 func (q *Queries) EnsureStorefrontSettings(ctx context.Context, webhookID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, ensureStorefrontSettings, webhookID)
 	return err
+}
+
+const firstChangeSince = `-- name: FirstChangeSince :one
+SELECT created_at FROM audit_log
+ WHERE created_at > $1::timestamptz
+   AND split_part(action, '.', 1) IN ('product', 'variant', 'media', 'category', 'brand',
+                                      'blog_post', 'blog_category', 'channel', 'storefront_settings')
+ ORDER BY created_at
+ LIMIT 1
+`
+
+// BR-098: the oldest write since the last rebuild that a static website shows:
+// the catalog, the blog, marketplace imports and the storefront settings.
+func (q *Queries) FirstChangeSince(ctx context.Context, since time.Time) (time.Time, error) {
+	row := q.db.QueryRow(ctx, firstChangeSince, since)
+	var created_at time.Time
+	err := row.Scan(&created_at)
+	return created_at, err
 }
 
 const getStorefrontSettings = `-- name: GetStorefrontSettings :one
@@ -111,6 +151,21 @@ func (q *Queries) LockStorefrontSettings(ctx context.Context) (StorefrontSetting
 		&i.RebuildLastStatus,
 	)
 	return i, err
+}
+
+const setRebuildStatus = `-- name: SetRebuildStatus :exec
+UPDATE storefront_settings SET rebuild_last_status = $1
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_last_at = $2
+`
+
+type SetRebuildStatusParams struct {
+	Status *int32
+	At     *time.Time
+}
+
+func (q *Queries) SetRebuildStatus(ctx context.Context, arg SetRebuildStatusParams) error {
+	_, err := q.db.Exec(ctx, setRebuildStatus, arg.Status, arg.At)
+	return err
 }
 
 const storefrontConfig = `-- name: StorefrontConfig :one
@@ -207,6 +262,7 @@ UPDATE storefront_settings SET
     license = $22,
     cancellation_policy = $23,
     document_requirements = $24,
+    rebuild_hook_url = $25,
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url, license, cancellation_policy, document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status
@@ -237,6 +293,7 @@ type UpdateStorefrontSettingsParams struct {
 	License                  *string
 	CancellationPolicy       *string
 	DocumentRequirements     *string
+	RebuildHookUrl           *string
 }
 
 func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStorefrontSettingsParams) (StorefrontSetting, error) {
@@ -265,6 +322,7 @@ func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStoref
 		arg.License,
 		arg.CancellationPolicy,
 		arg.DocumentRequirements,
+		arg.RebuildHookUrl,
 	)
 	var i StorefrontSetting
 	err := row.Scan(

@@ -42,6 +42,7 @@ UPDATE storefront_settings SET
     license = sqlc.narg(license),
     cancellation_policy = sqlc.narg(cancellation_policy),
     document_requirements = sqlc.narg(document_requirements),
+    rebuild_hook_url = sqlc.narg(rebuild_hook_url),
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
 RETURNING *;
@@ -59,3 +60,25 @@ SELECT t.name AS shop_name, s.google_client_id,
 FROM tenants t
 LEFT JOIN storefront_settings s ON s.tenant_id = t.id
 WHERE t.id = current_setting('app.tenant_id')::uuid;
+
+-- name: FirstChangeSince :one
+-- BR-098: the oldest write since the last rebuild that a static website shows:
+-- the catalog, the blog, marketplace imports and the storefront settings.
+SELECT created_at FROM audit_log
+ WHERE created_at > sqlc.arg(since)::timestamptz
+   AND split_part(action, '.', 1) IN ('product', 'variant', 'media', 'category', 'brand',
+                                      'blog_post', 'blog_category', 'channel', 'storefront_settings')
+ ORDER BY created_at
+ LIMIT 1;
+
+-- name: ClaimRebuild :one
+-- One worker calls the hook: the claim holds only if no other moved
+-- rebuild_last_at since this one read it. Not audited, so it is no change.
+UPDATE storefront_settings SET rebuild_last_at = sqlc.arg(at), rebuild_last_status = NULL
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_hook_url IS NOT NULL
+   AND rebuild_last_at IS NOT DISTINCT FROM sqlc.narg(seen)::timestamptz
+RETURNING rebuild_hook_url;
+
+-- name: SetRebuildStatus :exec
+UPDATE storefront_settings SET rebuild_last_status = sqlc.narg(status)
+ WHERE tenant_id = current_setting('app.tenant_id')::uuid AND rebuild_last_at = sqlc.arg(at);

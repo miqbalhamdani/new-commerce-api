@@ -50,8 +50,10 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			License                  optional[string]   `json:"license"`
 			CancellationPolicy       optional[string]   `json:"cancellation_policy"`
 			DocumentRequirements     optional[string]   `json:"document_requirements"`
+			RebuildHookURL           optional[string]   `json:"rebuild_hook_url"`
 		}
-		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id", "logo_url", "hero_url") {
+		if !decodeJSON(w, r, &body, "midtrans_server_key_set", "midtrans_notification_url", "midtrans_webhook_id", "logo_url", "hero_url",
+			"rebuild_last_at", "rebuild_last_status") {
 			return
 		}
 		if err := rejectNull(map[string]bool{"shipping_couriers": body.ShippingCouriers.Null,
@@ -70,7 +72,7 @@ func (s *Server) UpdateStorefrontSettings(w http.ResponseWriter, r *http.Request
 			Address: change(body.Address), OpeningHours: change(body.OpeningHours),
 			ShopeeURL: change(body.ShopeeURL), TokopediaURL: change(body.TokopediaURL),
 			License: change(body.License), CancellationPolicy: change(body.CancellationPolicy),
-			DocumentRequirements: change(body.DocumentRequirements),
+			DocumentRequirements: change(body.DocumentRequirements), RebuildHookURL: change(body.RebuildHookURL),
 		}
 		if body.Theme.Set {
 			p.Theme = &body.Theme.Value
@@ -114,6 +116,7 @@ func (s *Server) storefrontSettingsOut(st team.StorefrontSettings) StorefrontSet
 		WhatsappNumber: st.WhatsappNumber, Tagline: st.Tagline, Instagram: st.Instagram,
 		Address: st.Address, OpeningHours: st.OpeningHours, ShopeeUrl: st.ShopeeUrl, TokopediaUrl: st.TokopediaUrl,
 		License: st.License, CancellationPolicy: st.CancellationPolicy, DocumentRequirements: st.DocumentRequirements,
+		RebuildHookUrl: st.RebuildHookUrl, RebuildLastAt: st.RebuildLastAt, RebuildLastStatus: intPtr(st.RebuildLastStatus),
 		UpdatedAt: st.UpdatedAt,
 	}
 	if st.ContactEmail != nil {
@@ -128,4 +131,12 @@ func (s *Server) storefrontSettingsOut(st team.StorefrontSettings) StorefrontSet
 		out.ShippingCouriers = append(out.ShippingCouriers, CourierCode(c))
 	}
 	return out
+}
+
+func intPtr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	n := int(*v)
+	return &n
 }

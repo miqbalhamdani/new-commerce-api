@@ -78,6 +78,7 @@ type StorefrontPatch struct {
 	LogoR2Key, HeroR2Key, WhatsappNumber, Tagline, BrandColor, Instagram     Change[string]
 	Address, OpeningHours, ShopeeURL, TokopediaURL                           Change[string]
 	License, CancellationPolicy, DocumentRequirements                        Change[string] // BR-142
+	RebuildHookURL                                                           Change[string] // BR-098
 	ShippingCouriers                                                         *[]string
 	BankTransferEnabled, MidtransEnabled                                     *bool
 	Theme                                                                    *string
@@ -145,6 +146,7 @@ func (s *Service) UpdateStorefrontSettings(ctx context.Context, p StorefrontPatc
 			TokopediaUrl: pick(p.TokopediaURL, before.TokopediaUrl),
 			License:      pick(p.License, before.License), CancellationPolicy: pick(p.CancellationPolicy, before.CancellationPolicy),
 			DocumentRequirements: pick(p.DocumentRequirements, before.DocumentRequirements),
+			RebuildHookUrl:       pick(p.RebuildHookURL, before.RebuildHookUrl),
 		}
 		// A colour belongs to its theme: another theme without a colour starts on
 		// that theme's first (BR-142, BR-143).
@@ -230,6 +232,9 @@ func validStorefrontPatch(p StorefrontPatch) error {
 	if v := p.OpeningHours.Value; v != nil && utf8.RuneCountInString(strings.TrimSpace(*v)) > maxHoursRunes {
 		return fieldError("opening_hours", "opening_hours is at most 120 characters")
 	}
+	if v := p.RebuildHookURL.Value; v != nil && !ValidRebuildHook(strings.TrimSpace(*v)) {
+		return fieldError("rebuild_hook_url", "rebuild_hook_url is an https:// deploy hook on api.vercel.com, api.cloudflare.com or api.netlify.com, at most 500 characters")
+	}
 	for field, limit := range map[string]struct {
 		c   Change[string]
 		max int
@@ -304,6 +309,12 @@ func settingsDiff(a, b StorefrontSettings) (changed []string, before, after map[
 	add("license", a.License, b.License)
 	add("cancellation_policy", a.CancellationPolicy, b.CancellationPolicy)
 	add("document_requirements", a.DocumentRequirements, b.DocumentRequirements)
+	// The hook is a credential of the owner's host: whether one is set, never
+	// the URL (BR-098).
+	if !equal(a.RebuildHookUrl, b.RebuildHookUrl) {
+		changed = append(changed, "rebuild_hook_url")
+		before["rebuild_hook_set"], after["rebuild_hook_set"] = a.RebuildHookUrl != nil, b.RebuildHookUrl != nil
+	}
 	if !slices.Equal(a.MidtransServerKey, b.MidtransServerKey) {
 		changed = append(changed, "midtrans_server_key")
 		before["midtrans_server_key_set"], after["midtrans_server_key_set"] = a.MidtransServerKey != nil, b.MidtransServerKey != nil
