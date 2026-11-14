@@ -44,7 +44,16 @@ func (s *Server) CreatePlatformShop(w http.ResponseWriter, r *http.Request) {
 			}
 			plan = string(*body.Plan)
 		}
-		id, err := s.team.OpenShopForPlatform(r.Context(), body.ShopName, body.OwnerName, string(body.OwnerEmail), plan, body.SendInvite)
+		businessType := auth.BusinessRetail
+		if body.BusinessType != nil {
+			if !body.BusinessType.Valid() {
+				writeError(w, r, businessTypeErr())
+				return
+			}
+			businessType = string(*body.BusinessType)
+		}
+		id, err := s.team.OpenShopForPlatform(r.Context(), body.ShopName, body.OwnerName, string(body.OwnerEmail), plan,
+			businessType, body.SendInvite)
 		if err != nil {
 			writeError(w, r, err)
 			return
@@ -96,6 +105,32 @@ func (s *Server) UpdatePlatformShopPlan(w http.ResponseWriter, r *http.Request, 
 		}
 		s.writePlatformShop(w, r, http.StatusOK, id)
 	})(w, r)
+}
+
+// UpdatePlatformShopBusinessType handles PATCH
+// /v1/platform/shops/{id}/business-type (P1-932, §14.1): retail or umrah
+// (BR-170).
+func (s *Server) UpdatePlatformShopBusinessType(w http.ResponseWriter, r *http.Request, id Id) {
+	s.requirePlatformAdmin(func(w http.ResponseWriter, r *http.Request) {
+		var body PlatformShopBusinessTypeUpdate
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		if !body.BusinessType.Valid() {
+			writeError(w, r, businessTypeErr())
+			return
+		}
+		if err := s.platform.SetBusinessType(r.Context(), id, string(body.BusinessType)); err != nil {
+			writeError(w, r, notFoundShop(err))
+			return
+		}
+		s.writePlatformShop(w, r, http.StatusOK, id)
+	})(w, r)
+}
+
+func businessTypeErr() error {
+	return apperrors.ValidationFailed("business_type is retail or umrah").
+		WithFields(apperrors.Field{Name: "business_type", Detail: "is retail or umrah"})
 }
 
 func planErr() error {
@@ -211,8 +246,9 @@ func platformShopOut(sh platformadmin.Shop) PlatformShop {
 	st := sh.Stats
 	shop := PlatformShop{
 		Id: sh.ID, Name: sh.Name, Slug: sh.Slug, Status: PlatformShopStatus(sh.Status), Plan: ShopPlan(sh.Plan),
-		CreatedAt: sh.CreatedAt,
-		Source:    PlatformShopSource(sh.Source),
+		BusinessType: BusinessType(sh.BusinessType),
+		CreatedAt:    sh.CreatedAt,
+		Source:       PlatformShopSource(sh.Source),
 		Website: PlatformShopWebsite{Theme: sh.Website.Theme, Logo: sh.Website.Logo, Whatsapp: sh.Website.WhatsApp,
 			SetUp: sh.Website.SetUp},
 		Products:       PlatformShopProducts{Active: int(st.ProductsActive), Total: int(st.ProductsTotal), FirstAt: st.FirstProductAt},

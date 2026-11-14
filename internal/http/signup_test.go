@@ -151,7 +151,10 @@ func TestRegister(t *testing.T) {
 				Role        string
 				Permissions []string
 			}
-			Tenant struct{ ID, Plan string }
+			Tenant struct {
+				ID, Plan     string
+				BusinessType string `json:"business_type"`
+			}
 		}
 		_ = json.Unmarshal(rec.Body.Bytes(), &session)
 		if rec.Code != 200 || session.User.Role != "owner" || session.Tenant.ID != s.tenantID.String() {
@@ -160,6 +163,10 @@ func TestRegister(t *testing.T) {
 		// A signup opens on mulai (BR-160).
 		if session.Tenant.Plan != auth.PlanMulai || slices.Contains(session.User.Permissions, auth.PermOrdersRead) {
 			t.Errorf("a new shop's plan %q, permissions %v", session.Tenant.Plan, session.User.Permissions)
+		}
+		// ... and is retail (BR-170).
+		if session.Tenant.BusinessType != auth.BusinessRetail {
+			t.Errorf("a new shop's business type %q", session.Tenant.BusinessType)
 		}
 		before := emails()
 		if rec := register(map[string]any{"shop_name": "Erigo", "name": "Budi", "email": address}); rec.Code != 202 {

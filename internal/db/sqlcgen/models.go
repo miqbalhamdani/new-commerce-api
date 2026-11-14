@@ -247,6 +247,7 @@ type Product struct {
 	ArchivedAt  *time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	Package     []byte
 }
 
 type ProductCategory struct {
@@ -308,6 +309,7 @@ type StorefrontProduct struct {
 	Attributes  []byte
 	OptionNames []string
 	UpdatedAt   time.Time
+	Package     []byte
 }
 
 type StorefrontSetting struct {
@@ -335,6 +337,12 @@ type StorefrontSetting struct {
 	OpeningHours             *string
 	ShopeeUrl                *string
 	TokopediaUrl             *string
+	License                  *string
+	CancellationPolicy       *string
+	DocumentRequirements     *string
+	RebuildHookUrl           *string
+	RebuildLastAt            *time.Time
+	RebuildLastStatus        *int32
 }
 
 type StorefrontVariant struct {
@@ -349,6 +357,7 @@ type StorefrontVariant struct {
 	Currency           string
 	WeightGrams        int32
 	ProductTitle       string
+	PriceUsd           *int64
 }
 
 type StorefrontVariantLabel struct {
@@ -362,15 +371,16 @@ type StorefrontVariantLabel struct {
 }
 
 type Tenant struct {
-	ID          uuid.UUID
-	Name        string
-	Slug        string
-	Timezone    string
-	Status      string
-	CreatedAt   time.Time
-	OrderPrefix string
-	Plan        string
-	PlanUntil   pgtype.Date
+	ID           uuid.UUID
+	Name         string
+	Slug         string
+	Timezone     string
+	Status       string
+	CreatedAt    time.Time
+	OrderPrefix  string
+	Plan         string
+	PlanUntil    pgtype.Date
+	BusinessType string
 }
 
 type User struct {
@@ -403,4 +413,5 @@ type Variant struct {
 	Version            int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PriceUsd           *int64
 }

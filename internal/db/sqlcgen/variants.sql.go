@@ -13,7 +13,7 @@ import (
 )
 
 const allVariants = `-- name: AllVariants :many
-SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v WHERE v.product_id = $1 ORDER BY v.id
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, v.price_usd, variant_price(v)::bigint AS price FROM variants v WHERE v.product_id = $1 ORDER BY v.id
 `
 
 type AllVariantsRow struct {
@@ -33,6 +33,7 @@ type AllVariantsRow struct {
 	Version            int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PriceUsd           *int64
 	Price              int64
 }
 
@@ -63,6 +64,7 @@ func (q *Queries) AllVariants(ctx context.Context, productID uuid.UUID) ([]AllVa
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PriceUsd,
 			&i.Price,
 		); err != nil {
 			return nil, err
@@ -132,7 +134,7 @@ func (q *Queries) CreateVariant(ctx context.Context, arg CreateVariantParams) (u
 }
 
 const getVariant = `-- name: GetVariant :one
-SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v WHERE v.id = $1
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, v.price_usd, variant_price(v)::bigint AS price FROM variants v WHERE v.id = $1
 `
 
 type GetVariantRow struct {
@@ -152,6 +154,7 @@ type GetVariantRow struct {
 	Version            int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PriceUsd           *int64
 	Price              int64
 }
 
@@ -175,13 +178,14 @@ func (q *Queries) GetVariant(ctx context.Context, id uuid.UUID) (GetVariantRow, 
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PriceUsd,
 		&i.Price,
 	)
 	return i, err
 }
 
 const listVariants = `-- name: ListVariants :many
-SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, v.price_usd, variant_price(v)::bigint AS price FROM variants v
 WHERE v.product_id = $1 AND (v.archived_at IS NOT NULL) = $2::bool
 ORDER BY v.id
 `
@@ -208,6 +212,7 @@ type ListVariantsRow struct {
 	Version            int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PriceUsd           *int64
 	Price              int64
 }
 
@@ -238,6 +243,7 @@ func (q *Queries) ListVariants(ctx context.Context, arg ListVariantsParams) ([]L
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PriceUsd,
 			&i.Price,
 		); err != nil {
 			return nil, err
@@ -332,7 +338,7 @@ func (q *Queries) UpdateVariant(ctx context.Context, arg UpdateVariantParams) (u
 }
 
 const variantBySKU = `-- name: VariantBySKU :one
-SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, variant_price(v)::bigint AS price FROM variants v WHERE v.sku = $1::text
+SELECT v.id, v.tenant_id, v.product_id, v.sku, v.barcode, v.option_values, v.regular_price_amount, v.sale_price_amount, v.sale_starts_at, v.sale_ends_at, v.currency, v.weight_grams, v.archived_at, v.version, v.created_at, v.updated_at, v.price_usd, variant_price(v)::bigint AS price FROM variants v WHERE v.sku = $1::text
 `
 
 type VariantBySKURow struct {
@@ -352,6 +358,7 @@ type VariantBySKURow struct {
 	Version            int32
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+	PriceUsd           *int64
 	Price              int64
 }
 
@@ -375,6 +382,7 @@ func (q *Queries) VariantBySKU(ctx context.Context, sku string) (VariantBySKURow
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PriceUsd,
 		&i.Price,
 	)
 	return i, err

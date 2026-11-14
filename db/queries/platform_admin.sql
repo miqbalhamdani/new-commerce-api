@@ -50,3 +50,10 @@ UPDATE tenants t SET plan = sqlc.arg(plan), plan_until = sqlc.narg(plan_until)
   FROM (SELECT plan, plan_until FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
  WHERE t.id = current_setting('app.tenant_id')::uuid
 RETURNING old.plan, old.plan_until;
+
+-- name: SetShopBusinessType :one
+-- BR-170. Returns the type it replaced.
+UPDATE tenants t SET business_type = sqlc.arg(business_type)
+  FROM (SELECT business_type FROM tenants WHERE id = current_setting('app.tenant_id')::uuid FOR UPDATE) old
+ WHERE t.id = current_setting('app.tenant_id')::uuid
+RETURNING old.business_type;

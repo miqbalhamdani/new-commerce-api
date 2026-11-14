@@ -28,6 +28,7 @@ func init() {
 		{http.MethodPost, "/v1/platform/shops"},
 		{http.MethodPatch, "/v1/platform/shops/{id}"},
 		{http.MethodPatch, "/v1/platform/shops/{id}/plan"},
+		{http.MethodPatch, "/v1/platform/shops/{id}/business-type"},
 		{http.MethodPatch, "/v1/platform/shops/{id}/owner"},
 		{http.MethodPost, "/v1/platform/shops/{id}/invite"},
 		{http.MethodPost, "/v1/platform/shops/{id}/impersonate"},
@@ -189,6 +190,59 @@ func TestPlatformConsole(t *testing.T) {
 		}
 		if rec := call(http.MethodPatch, "/v1/platform/shops/"+homeID.String()+"/plan", other.accessToken,
 			map[string]any{"plan": "mulai", "plan_until": nil}); rec.Code != http.StatusForbidden {
+			t.Errorf("not an admin: %d %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("business type: retail unless given, set and audited; the next session carries it", func(t *testing.T) {
+		if shop, _ := open(t, false); shop.BusinessType != auth.BusinessRetail {
+			t.Errorf("default business type %q", shop.BusinessType)
+		}
+		shop, _ := open(t, false, "business_type", "umrah")
+		if shop.BusinessType != auth.BusinessUmrah {
+			t.Fatalf("opened as %q, want umrah", shop.BusinessType)
+		}
+		shopID := uuid.MustParse(shop.ID)
+		path := "/v1/platform/shops/" + shop.ID + "/business-type"
+		rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"business_type": "retail"})
+		var got platformShop
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || got.BusinessType != auth.BusinessRetail {
+			t.Fatalf("set retail: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"business_type": "umrah"}); rec.Code != http.StatusOK {
+			t.Fatalf("set umrah: %d %s", rec.Code, rec.Body)
+		}
+		if n := audits(shopID, "tenant.business_type"); n != 2 {
+			t.Errorf("%d tenant.business_type rows, want 2", n)
+		}
+		rec = call(http.MethodPost, "/v1/platform/shops/"+shop.ID+"/impersonate", founder.accessToken, nil)
+		var session struct {
+			Tenant struct {
+				BusinessType string `json:"business_type"`
+			} `json:"tenant"`
+		}
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &session) != nil || session.Tenant.BusinessType != auth.BusinessUmrah {
+			t.Errorf("impersonating an umrah shop: %d %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("business type: an unknown one is 422, an unknown shop 404, anyone else 403", func(t *testing.T) {
+		path := "/v1/platform/shops/" + homeID.String() + "/business-type"
+		if rec := call(http.MethodPatch, path, founder.accessToken, map[string]any{"business_type": "hotel"}); rec.Code != http.StatusUnprocessableEntity ||
+			!bytes.Contains(rec.Body.Bytes(), []byte(`"business_type"`)) {
+			t.Errorf("unknown type: %d %s", rec.Code, rec.Body)
+		}
+		rec := call(http.MethodPost, "/v1/platform/shops", founder.accessToken, map[string]any{
+			"shop_name": "Toko", "owner_name": "Rina", "owner_email": "x-" + uuid.NewString() + "@example.com",
+			"send_invite": false, "business_type": "hotel"})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("open with an unknown type: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, "/v1/platform/shops/"+uuid.NewString()+"/business-type", founder.accessToken,
+			map[string]any{"business_type": "umrah"}); rec.Code != http.StatusNotFound {
+			t.Errorf("unknown shop: %d %s", rec.Code, rec.Body)
+		}
+		if rec := call(http.MethodPatch, path, other.accessToken, map[string]any{"business_type": "umrah"}); rec.Code != http.StatusForbidden {
 			t.Errorf("not an admin: %d %s", rec.Code, rec.Body)
 		}
 	})

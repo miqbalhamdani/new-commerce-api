@@ -113,16 +113,18 @@ func (q *Queries) CreateActiveOwner(ctx context.Context, arg CreateActiveOwnerPa
 }
 
 const createTenant = `-- name: CreateTenant :one
-INSERT INTO tenants (id, name, slug, order_prefix, plan)
-VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4)
-RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until
+INSERT INTO tenants (id, name, slug, order_prefix, plan, business_type)
+VALUES (current_setting('app.tenant_id')::uuid, $1, $2, $3, $4,
+        $5)
+RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until, business_type
 `
 
 type CreateTenantParams struct {
-	Name        string
-	Slug        string
-	OrderPrefix string
-	Plan        string
+	Name         string
+	Slug         string
+	OrderPrefix  string
+	Plan         string
+	BusinessType string
 }
 
 // Signup (P1-084). tenants has no RLS; the id is the one the transaction set
@@ -133,6 +135,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		arg.Slug,
 		arg.OrderPrefix,
 		arg.Plan,
+		arg.BusinessType,
 	)
 	var i Tenant
 	err := row.Scan(
@@ -145,12 +148,13 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.OrderPrefix,
 		&i.Plan,
 		&i.PlanUntil,
+		&i.BusinessType,
 	)
 	return i, err
 }
 
 const getTenant = `-- name: GetTenant :one
-SELECT id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until FROM tenants WHERE id = $1
+SELECT id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until, business_type FROM tenants WHERE id = $1
 `
 
 // tenants has no RLS; the id comes from the caller's own tenant context.
@@ -167,6 +171,7 @@ func (q *Queries) GetTenant(ctx context.Context, id uuid.UUID) (Tenant, error) {
 		&i.OrderPrefix,
 		&i.Plan,
 		&i.PlanUntil,
+		&i.BusinessType,
 	)
 	return i, err
 }
@@ -422,7 +427,7 @@ UPDATE tenants SET
   timezone     = coalesce($3, timezone),
   order_prefix = coalesce($4, order_prefix)
 WHERE id = current_setting('app.tenant_id')::uuid
-RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until
+RETURNING id, name, slug, timezone, status, created_at, order_prefix, plan, plan_until, business_type
 `
 
 type UpdateSettingsParams struct {
@@ -451,6 +456,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.OrderPrefix,
 		&i.Plan,
 		&i.PlanUntil,
+		&i.BusinessType,
 	)
 	return i, err
 }

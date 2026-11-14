@@ -30,7 +30,7 @@ const archiveProduct = `-- name: ArchiveProduct :one
 UPDATE products SET status = 'archived', archived_at = coalesce(archived_at, now()),
        version = version + 1, updated_at = now()
 WHERE id = $1
-RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at
+RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
 `
 
 func (q *Queries) ArchiveProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -50,6 +50,7 @@ func (q *Queries) ArchiveProduct(ctx context.Context, id uuid.UUID) (Product, er
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Package,
 	)
 	return i, err
 }
@@ -86,7 +87,7 @@ const createProduct = `-- name: CreateProduct :one
 INSERT INTO products (id, tenant_id, title, slug, description, brand_id, attributes)
 VALUES ($1, current_setting('app.tenant_id')::uuid, $2, $3,
         $4, $5, $6)
-RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at
+RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
 `
 
 type CreateProductParams struct {
@@ -122,12 +123,13 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Package,
 	)
 	return i, err
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at FROM products WHERE id = $1
+SELECT id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package FROM products WHERE id = $1
 `
 
 func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -147,6 +149,7 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Package,
 	)
 	return i, err
 }
@@ -174,7 +177,7 @@ func (q *Queries) LiveVariantCount(ctx context.Context, productID uuid.UUID) (in
 }
 
 const lockProduct = `-- name: LockProduct :one
-SELECT id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at FROM products WHERE id = $1 FOR UPDATE
+SELECT id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package FROM products WHERE id = $1 FOR UPDATE
 `
 
 // The matrix holds the product row for its whole transaction, so two grid
@@ -196,6 +199,7 @@ func (q *Queries) LockProduct(ctx context.Context, id uuid.UUID) (Product, error
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Package,
 	)
 	return i, err
 }
@@ -304,7 +308,7 @@ UPDATE products SET
   version     = version + 1,
   updated_at  = now()
 WHERE id = $9 AND version = $10
-RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at
+RETURNING id, tenant_id, title, slug, description, brand_id, status, attributes, option_names, version, archived_at, created_at, updated_at, package
 `
 
 type UpdateProductParams struct {
@@ -349,6 +353,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Package,
 	)
 	return i, err
 }

@@ -93,6 +93,24 @@ func (e BulkRowResultStatus) Valid() bool {
 	}
 }
 
+// Defines values for BusinessType.
+const (
+	Retail BusinessType = "retail"
+	Umrah  BusinessType = "umrah"
+)
+
+// Valid indicates whether the value is a known member of the BusinessType enum.
+func (e BusinessType) Valid() bool {
+	switch e {
+	case Retail:
+		return true
+	case Umrah:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CategoryKind.
 const (
 	CategoryKindActivity   CategoryKind = "activity"
@@ -1302,6 +1320,10 @@ type BulkRowResult struct {
 // BulkRowResultStatus defines model for BulkRowResult.Status.
 type BulkRowResultStatus string
 
+// BusinessType BR-170: an `umrah` shop's products are travel packages, with package details and USD
+// prices and without weights, and its website takes no orders.
+type BusinessType string
+
 // Category defines model for Category.
 type Category struct {
 	ArchivedAt *time.Time         `json:"archived_at"`
@@ -1976,8 +1998,70 @@ type OrderUpdateRequest struct {
 	ShippingAddress *ShippingAddressWrite `json:"shipping_address,omitempty"`
 }
 
+// Package BR-171. Every field is optional on a write and `null` (`[]` for a list) on a read when
+// unset. A field not listed here, or one that breaks its rule, is `422` on
+// `package.{field}`.
+type Package struct {
+	Airline *string   `json:"airline,omitempty"`
+	Bonus   *[]string `json:"bonus,omitempty"`
+
+	// CancellationPolicy For this package, in place of the shop's (BR-142).
+	CancellationPolicy *string             `json:"cancellation_policy,omitempty"`
+	DepartureDate      *openapi_types.Date `json:"departure_date,omitempty"`
+
+	// DepartureText A departure not yet fixed to a day, such as `Desember 2026`.
+	//
+	// Examples: Desember 2026
+	DepartureText *string         `json:"departure_text,omitempty"`
+	DurationDays  *int            `json:"duration_days,omitempty"`
+	Excludes      *[]string       `json:"excludes,omitempty"`
+	Hotels        *[]PackageHotel `json:"hotels,omitempty"`
+	Includes      *[]string       `json:"includes,omitempty"`
+
+	// Itinerary The days in order; day N is the Nth entry.
+	Itinerary *[]PackageDay `json:"itinerary,omitempty"`
+	PriceNote *string       `json:"price_note,omitempty"`
+
+	// ReturnDate Not before `departure_date`.
+	ReturnDate *openapi_types.Date `json:"return_date,omitempty"`
+	Route      *string             `json:"route,omitempty"`
+
+	// SeatsLeft What the owner types; nothing counts it down (BR-017). Not above `seats_total`.
+	SeatsLeft  *int `json:"seats_left,omitempty"`
+	SeatsTotal *int `json:"seats_total,omitempty"`
+}
+
+// PackageBrief defines model for PackageBrief.
+type PackageBrief struct {
+	DepartureDate *openapi_types.Date `json:"departure_date"`
+	DepartureText *string             `json:"departure_text"`
+	SeatsLeft     *int                `json:"seats_left"`
+	SeatsTotal    *int                `json:"seats_total"`
+}
+
+// PackageDay defines model for PackageDay.
+type PackageDay struct {
+	Text  *string `json:"text,omitempty"`
+	Title string  `json:"title"`
+}
+
+// PackageHotel defines model for PackageHotel.
+type PackageHotel struct {
+	// City Examples: Makkah
+	City   string `json:"city"`
+	Name   string `json:"name"`
+	Nights *int   `json:"nights,omitempty"`
+	Stars  *int   `json:"stars,omitempty"`
+
+	// Variant An option value of the product, for a hotel only that choice uses; `null` for all.
+	Variant *string `json:"variant,omitempty"`
+}
+
 // PlatformShop defines model for PlatformShop.
 type PlatformShop struct {
+	// BusinessType BR-170: an `umrah` shop's products are travel packages, with package details and USD
+	// prices and without weights, and its website takes no orders.
+	BusinessType   BusinessType       `json:"business_type"`
 	CreatedAt      time.Time          `json:"created_at"`
 	Id             openapi_types.UUID `json:"id"`
 	LastActivityAt *time.Time         `json:"last_activity_at"`
@@ -2011,10 +2095,19 @@ type PlatformShopSource string
 // PlatformShopStatus defines model for PlatformShop.Status.
 type PlatformShopStatus string
 
+// PlatformShopBusinessTypeUpdate defines model for PlatformShopBusinessTypeUpdate.
+type PlatformShopBusinessTypeUpdate struct {
+	// BusinessType BR-170: an `umrah` shop's products are travel packages, with package details and USD
+	// prices and without weights, and its website takes no orders.
+	BusinessType BusinessType `json:"business_type"`
+}
+
 // PlatformShopCreate defines model for PlatformShopCreate.
 type PlatformShopCreate struct {
-	OwnerEmail openapi_types.Email `json:"owner_email"`
-	OwnerName  string              `json:"owner_name"`
+	// BusinessType `retail` when left out (BR-170).
+	BusinessType *BusinessType       `json:"business_type,omitempty"`
+	OwnerEmail   openapi_types.Email `json:"owner_email"`
+	OwnerName    string              `json:"owner_name"`
 
 	// Plan The shop's plan; `mulai` when left out (BR-160).
 	Plan *ShopPlan `json:"plan,omitempty"`
@@ -2202,6 +2295,9 @@ type Product struct {
 	Media       []Media            `json:"media"`
 	OptionNames []string           `json:"option_names"`
 
+	// Package An umrah shop's package details (BR-171); `null` for every other product.
+	Package *Package `json:"package"`
+
 	// Slug Examples: erigo-basic-tee
 	Slug      string        `json:"slug"`
 	Status    ProductStatus `json:"status"`
@@ -2221,7 +2317,10 @@ type ProductCreate struct {
 	BrandId     *openapi_types.UUID     `json:"brand_id,omitempty"`
 	CategoryIds *[]openapi_types.UUID   `json:"category_ids,omitempty"`
 	Description *string                 `json:"description,omitempty"`
-	Title       string                  `json:"title"`
+
+	// Package Only in an `umrah` shop, else `422` (BR-171).
+	Package *Package `json:"package,omitempty"`
+	Title   string   `json:"title"`
 }
 
 // ProductListItem defines model for ProductListItem.
@@ -2232,16 +2331,19 @@ type ProductListItem struct {
 	Categories []CategoryBrief `json:"categories"`
 
 	// CoverUrl The first image's 200 px derivative, once made (BR-052).
-	CoverUrl     *string            `json:"cover_url"`
-	Id           openapi_types.UUID `json:"id"`
-	PriceMax     *Money             `json:"price_max"`
-	PriceMin     *Money             `json:"price_min"`
-	Slug         string             `json:"slug"`
-	Status       ProductStatus      `json:"status"`
-	Title        string             `json:"title"`
-	UpdatedAt    time.Time          `json:"updated_at"`
-	VariantCount int                `json:"variant_count"`
-	Version      int                `json:"version"`
+	CoverUrl *string            `json:"cover_url"`
+	Id       openapi_types.UUID `json:"id"`
+
+	// Package The package's departure and seats (BR-171); `null` without package details.
+	Package      *PackageBrief `json:"package"`
+	PriceMax     *Money        `json:"price_max"`
+	PriceMin     *Money        `json:"price_min"`
+	Slug         string        `json:"slug"`
+	Status       ProductStatus `json:"status"`
+	Title        string        `json:"title"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	VariantCount int           `json:"variant_count"`
+	Version      int           `json:"version"`
 }
 
 // ProductPage defines model for ProductPage.
@@ -2262,9 +2364,12 @@ type ProductUpdate struct {
 	BrandId     *openapi_types.UUID     `json:"brand_id,omitempty"`
 	CategoryIds *[]openapi_types.UUID   `json:"category_ids,omitempty"`
 	Description *string                 `json:"description,omitempty"`
-	Slug        *string                 `json:"slug,omitempty"`
-	Status      *ProductUpdateStatus    `json:"status,omitempty"`
-	Title       *string                 `json:"title,omitempty"`
+
+	// Package Replaces the object; `null` clears it. Only in an `umrah` shop, else `422` (BR-171).
+	Package *Package             `json:"package,omitempty"`
+	Slug    *string              `json:"slug,omitempty"`
+	Status  *ProductUpdateStatus `json:"status,omitempty"`
+	Title   *string              `json:"title,omitempty"`
 }
 
 // ProductUpdateStatus defines model for ProductUpdate.Status.
@@ -2323,8 +2428,11 @@ type Session struct {
 
 // SessionTenant defines model for SessionTenant.
 type SessionTenant struct {
-	Id   openapi_types.UUID `json:"id"`
-	Name string             `json:"name"`
+	// BusinessType BR-170: an `umrah` shop's products are travel packages, with package details and USD
+	// prices and without weights, and its website takes no orders.
+	BusinessType BusinessType       `json:"business_type"`
+	Id           openapi_types.UUID `json:"id"`
+	Name         string             `json:"name"`
 
 	// Plan BR-160: the shop's plan, a ceiling on every role. `permissions` already leave out what it
 	// does not include; the admin reads it only for what no permission covers, such as the
@@ -2479,10 +2587,12 @@ type StorefrontSettings struct {
 	// BrandColor One of the theme's four colours; `null` means its first (BR-143).
 	//
 	// Examples: #9a4e3a
-	BrandColor *string `json:"brand_color"`
+	BrandColor         *string `json:"brand_color"`
+	CancellationPolicy *string `json:"cancellation_policy"`
 
 	// ContactEmail Reply-To on every email the shop sends (BR-128).
-	ContactEmail *openapi_types.Email `json:"contact_email"`
+	ContactEmail         *openapi_types.Email `json:"contact_email"`
+	DocumentRequirements *string              `json:"document_requirements"`
 
 	// GoogleClientId The shop's own Google OAuth client; `null` turns Google sign-in off (BR-127).
 	GoogleClientId *string `json:"google_client_id"`
@@ -2495,6 +2605,9 @@ type StorefrontSettings struct {
 
 	// Instagram The handle, without `@`.
 	Instagram *string `json:"instagram"`
+
+	// License Examples: PPIU No. U.133 Tahun 2020
+	License *string `json:"license"`
 
 	// LogoR2Key A key from `POST /media/presign` with `purpose: shop_logo` (BR-142).
 	LogoR2Key *string `json:"logo_r2_key"`
@@ -2513,10 +2626,19 @@ type StorefrontSettings struct {
 	OpeningHours *string `json:"opening_hours"`
 
 	// OriginPostalCode Examples: 40115
-	OriginPostalCode *string       `json:"origin_postal_code"`
-	ShippingCouriers []CourierCode `json:"shipping_couriers"`
-	ShopeeUrl        *string       `json:"shopee_url"`
-	Tagline          *string       `json:"tagline"`
+	OriginPostalCode *string `json:"origin_postal_code"`
+
+	// RebuildHookUrl A static website's deploy hook (BR-098); shown here and nowhere else.
+	RebuildHookUrl *string `json:"rebuild_hook_url"`
+
+	// RebuildLastAt When the hook was last called; `null` before the first call (BR-098).
+	RebuildLastAt *time.Time `json:"rebuild_last_at"`
+
+	// RebuildLastStatus The HTTP status the hook answered; `null` when it did not answer (BR-098).
+	RebuildLastStatus *int          `json:"rebuild_last_status"`
+	ShippingCouriers  []CourierCode `json:"shipping_couriers"`
+	ShopeeUrl         *string       `json:"shopee_url"`
+	Tagline           *string       `json:"tagline"`
 
 	// Theme The hosted website's theme (BR-143).
 	Theme        ShopTheme `json:"theme"`
@@ -2537,13 +2659,16 @@ type StorefrontSettingsUpdate struct {
 	BankTransferInstructions *string `json:"bank_transfer_instructions,omitempty"`
 
 	// BrandColor One of the theme's four colours (BR-143). A change of `theme` without it clears it.
-	BrandColor     *string              `json:"brand_color,omitempty"`
-	ContactEmail   *openapi_types.Email `json:"contact_email,omitempty"`
-	GoogleClientId *string              `json:"google_client_id,omitempty"`
+	BrandColor           *string              `json:"brand_color,omitempty"`
+	CancellationPolicy   *string              `json:"cancellation_policy,omitempty"`
+	ContactEmail         *openapi_types.Email `json:"contact_email,omitempty"`
+	DocumentRequirements *string              `json:"document_requirements,omitempty"`
+	GoogleClientId       *string              `json:"google_client_id,omitempty"`
 
 	// HeroR2Key A key from `POST /media/presign` with `purpose: shop_hero`, uploaded (BR-142).
 	HeroR2Key *string `json:"hero_r2_key,omitempty"`
 	Instagram *string `json:"instagram,omitempty"`
+	License   *string `json:"license,omitempty"`
 
 	// LogoR2Key A key from `POST /media/presign` with `purpose: shop_logo`, uploaded (BR-142).
 	LogoR2Key           *string                                      `json:"logo_r2_key,omitempty"`
@@ -2552,12 +2677,15 @@ type StorefrontSettingsUpdate struct {
 	MidtransEnvironment *StorefrontSettingsUpdateMidtransEnvironment `json:"midtrans_environment,omitempty"`
 
 	// MidtransServerKey Write-only; `null` removes it (and so needs Midtrans off).
-	MidtransServerKey *string        `json:"midtrans_server_key,omitempty"`
-	OpeningHours      *string        `json:"opening_hours,omitempty"`
-	OriginPostalCode  *string        `json:"origin_postal_code,omitempty"`
-	ShippingCouriers  *[]CourierCode `json:"shipping_couriers,omitempty"`
-	ShopeeUrl         *string        `json:"shopee_url,omitempty"`
-	Tagline           *string        `json:"tagline,omitempty"`
+	MidtransServerKey *string `json:"midtrans_server_key,omitempty"`
+	OpeningHours      *string `json:"opening_hours,omitempty"`
+	OriginPostalCode  *string `json:"origin_postal_code,omitempty"`
+
+	// RebuildHookUrl An `https://` URL on `api.vercel.com`, `api.cloudflare.com` or `api.netlify.com`, else `422`; `null` turns rebuilds off (BR-098).
+	RebuildHookUrl   *string        `json:"rebuild_hook_url,omitempty"`
+	ShippingCouriers *[]CourierCode `json:"shipping_couriers,omitempty"`
+	ShopeeUrl        *string        `json:"shopee_url,omitempty"`
+	Tagline          *string        `json:"tagline,omitempty"`
 
 	// Theme The hosted website's theme (BR-143).
 	Theme          *ShopTheme `json:"theme,omitempty"`
@@ -2623,7 +2751,10 @@ type Variant struct {
 	//
 	//
 	// Examples: 19900000
-	Price     Money              `json:"price"`
+	Price Money `json:"price"`
+
+	// PriceUsd US cents an umrah shop shows in place of rupiah; never charged (BR-171).
+	PriceUsd  *int64             `json:"price_usd"`
 	ProductId openapi_types.UUID `json:"product_id"`
 
 	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
@@ -2646,6 +2777,9 @@ type Variant struct {
 type VariantCreate struct {
 	Barcode      *string  `json:"barcode,omitempty"`
 	OptionValues []string `json:"option_values"`
+
+	// PriceUsd US cents; only in an `umrah` shop, else `422` (BR-171).
+	PriceUsd *int64 `json:"price_usd,omitempty"`
 
 	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only
@@ -2700,6 +2834,9 @@ type VariantMatrixRow struct {
 	Barcode      *string  `json:"barcode,omitempty"`
 	OptionValues []string `json:"option_values"`
 
+	// PriceUsd US cents; only in an `umrah` shop, else the row fails (BR-171).
+	PriceUsd *int64 `json:"price_usd,omitempty"`
+
 	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only
 	// one currency (BR-006, BR-029). Clients divide by 100 to display.
@@ -2732,6 +2869,9 @@ type VariantMatrixRowResultStatus string
 // VariantUpdate defines model for VariantUpdate.
 type VariantUpdate struct {
 	Barcode *string `json:"barcode,omitempty"`
+
+	// PriceUsd US cents; only in an `umrah` shop, else `422`. `null` clears it (BR-171).
+	PriceUsd *int64 `json:"price_usd,omitempty"`
 
 	// RegularPrice An amount in **minor units**, always IDR: `2000000` is Rp 20.000. A plain integer, never
 	// a float, a decimal string or an object; there is no currency field because there is only
@@ -3107,6 +3247,9 @@ type CreatePlatformShopJSONRequestBody = PlatformShopCreate
 
 // UpdatePlatformShopJSONRequestBody defines body for UpdatePlatformShop for application/json ContentType.
 type UpdatePlatformShopJSONRequestBody = PlatformShopUpdate
+
+// UpdatePlatformShopBusinessTypeJSONRequestBody defines body for UpdatePlatformShopBusinessType for application/json ContentType.
+type UpdatePlatformShopBusinessTypeJSONRequestBody = PlatformShopBusinessTypeUpdate
 
 // UpdatePlatformShopOwnerJSONRequestBody defines body for UpdatePlatformShopOwner for application/json ContentType.
 type UpdatePlatformShopOwnerJSONRequestBody = PlatformShopOwnerUpdate
@@ -3551,6 +3694,9 @@ type ServerInterface interface {
 	// UpdatePlatformShop Suspend, close or reopen a shop
 	// (PATCH /platform/shops/{id})
 	UpdatePlatformShop(w http.ResponseWriter, r *http.Request, id Id)
+	// UpdatePlatformShopBusinessType Set a shop's business type
+	// (PATCH /platform/shops/{id}/business-type)
+	UpdatePlatformShopBusinessType(w http.ResponseWriter, r *http.Request, id Id)
 	// ImpersonatePlatformShop Open the shop's admin as its owner
 	// (POST /platform/shops/{id}/impersonate)
 	ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id)
@@ -3584,6 +3730,9 @@ type ServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams)
+	// DuplicateProduct Copy a product into a new draft
+	// (POST /products/{id}/duplicate)
+	DuplicateProduct(w http.ResponseWriter, r *http.Request, id Id)
 	// OrderMedia Reorder a product's images
 	// (PATCH /products/{id}/media/order)
 	OrderMedia(w http.ResponseWriter, r *http.Request, id Id)
@@ -3998,6 +4147,12 @@ func (_ Unimplemented) UpdatePlatformShop(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// UpdatePlatformShopBusinessType Set a shop's business type
+// (PATCH /platform/shops/{id}/business-type)
+func (_ Unimplemented) UpdatePlatformShopBusinessType(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // ImpersonatePlatformShop Open the shop's admin as its owner
 // (POST /platform/shops/{id}/impersonate)
 func (_ Unimplemented) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
@@ -4061,6 +4216,12 @@ func (_ Unimplemented) GetProduct(w http.ResponseWriter, r *http.Request, id Id)
 // UpdateProduct Edit a product
 // (PATCH /products/{id})
 func (_ Unimplemented) UpdateProduct(w http.ResponseWriter, r *http.Request, id Id, params UpdateProductParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DuplicateProduct Copy a product into a new draft
+// (POST /products/{id}/duplicate)
+func (_ Unimplemented) DuplicateProduct(w http.ResponseWriter, r *http.Request, id Id) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5901,6 +6062,32 @@ func (siw *ServerInterfaceWrapper) UpdatePlatformShop(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// UpdatePlatformShopBusinessType operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlatformShopBusinessType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlatformShopBusinessType(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ImpersonatePlatformShop operation middleware
 func (siw *ServerInterfaceWrapper) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request) {
 
@@ -6268,6 +6455,32 @@ func (siw *ServerInterfaceWrapper) UpdateProduct(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProduct(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DuplicateProduct operation middleware
+func (siw *ServerInterfaceWrapper) DuplicateProduct(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DuplicateProduct(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6983,6 +7196,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/products/{id}", wrapper.UpdateProduct)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/products/{id}/duplicate", wrapper.DuplicateProduct)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/products/{id}/variants", wrapper.ListVariants)
 	})
 	r.Group(func(r chi.Router) {
@@ -7113,6 +7329,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/platform/shops/{id}/plan", wrapper.UpdatePlatformShopPlan)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/platform/shops/{id}/business-type", wrapper.UpdatePlatformShopBusinessType)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/platform/shops/{id}/invite", wrapper.SendPlatformShopInvite)
@@ -11459,6 +11678,93 @@ func (response UpdatePlatformShop422ApplicationProblemPlusJSONResponse) VisitUpd
 	return err
 }
 
+type UpdatePlatformShopBusinessTypeRequestObject struct {
+	Id   Id `json:"id"`
+	Body *UpdatePlatformShopBusinessTypeJSONRequestBody
+}
+
+type UpdatePlatformShopBusinessTypeResponseObject interface {
+	VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error
+}
+
+type UpdatePlatformShopBusinessType200JSONResponse PlatformShop
+
+func (response UpdatePlatformShopBusinessType200JSONResponse) VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopBusinessType401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopBusinessType401ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopBusinessType403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopBusinessType403ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopBusinessType404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopBusinessType404ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePlatformShopBusinessType422ApplicationProblemPlusJSONResponse struct {
+	UnprocessableEntityApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePlatformShopBusinessType422ApplicationProblemPlusJSONResponse) VisitUpdatePlatformShopBusinessTypeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ImpersonatePlatformShopRequestObject struct {
 	Id Id `json:"id"`
 }
@@ -12297,6 +12603,76 @@ func (response UpdateProduct422ApplicationProblemPlusJSONResponse) VisitUpdatePr
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateProductRequestObject struct {
+	Id Id `json:"id"`
+}
+
+type DuplicateProductResponseObject interface {
+	VisitDuplicateProductResponse(w http.ResponseWriter) error
+}
+
+type DuplicateProduct201JSONResponse Product
+
+func (response DuplicateProduct201JSONResponse) VisitDuplicateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateProduct401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response DuplicateProduct401ApplicationProblemPlusJSONResponse) VisitDuplicateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateProduct403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DuplicateProduct403ApplicationProblemPlusJSONResponse) VisitDuplicateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DuplicateProduct404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DuplicateProduct404ApplicationProblemPlusJSONResponse) VisitDuplicateProductResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -13848,6 +14224,9 @@ type StrictServerInterface interface {
 	// UpdatePlatformShop Suspend, close or reopen a shop
 	// (PATCH /platform/shops/{id})
 	UpdatePlatformShop(ctx context.Context, request UpdatePlatformShopRequestObject) (UpdatePlatformShopResponseObject, error)
+	// UpdatePlatformShopBusinessType Set a shop's business type
+	// (PATCH /platform/shops/{id}/business-type)
+	UpdatePlatformShopBusinessType(ctx context.Context, request UpdatePlatformShopBusinessTypeRequestObject) (UpdatePlatformShopBusinessTypeResponseObject, error)
 	// ImpersonatePlatformShop Open the shop's admin as its owner
 	// (POST /platform/shops/{id}/impersonate)
 	ImpersonatePlatformShop(ctx context.Context, request ImpersonatePlatformShopRequestObject) (ImpersonatePlatformShopResponseObject, error)
@@ -13881,6 +14260,9 @@ type StrictServerInterface interface {
 	// UpdateProduct Edit a product
 	// (PATCH /products/{id})
 	UpdateProduct(ctx context.Context, request UpdateProductRequestObject) (UpdateProductResponseObject, error)
+	// DuplicateProduct Copy a product into a new draft
+	// (POST /products/{id}/duplicate)
+	DuplicateProduct(ctx context.Context, request DuplicateProductRequestObject) (DuplicateProductResponseObject, error)
 	// OrderMedia Reorder a product's images
 	// (PATCH /products/{id}/media/order)
 	OrderMedia(ctx context.Context, request OrderMediaRequestObject) (OrderMediaResponseObject, error)
@@ -15679,6 +16061,39 @@ func (sh *strictHandler) UpdatePlatformShop(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// UpdatePlatformShopBusinessType operation middleware
+func (sh *strictHandler) UpdatePlatformShopBusinessType(w http.ResponseWriter, r *http.Request, id Id) {
+	var request UpdatePlatformShopBusinessTypeRequestObject
+
+	request.Id = id
+
+	var body UpdatePlatformShopBusinessTypeJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePlatformShopBusinessType(ctx, request.(UpdatePlatformShopBusinessTypeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePlatformShopBusinessType")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePlatformShopBusinessTypeResponseObject); ok {
+		if err := validResponse.VisitUpdatePlatformShopBusinessTypeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ImpersonatePlatformShop operation middleware
 func (sh *strictHandler) ImpersonatePlatformShop(w http.ResponseWriter, r *http.Request, id Id) {
 	var request ImpersonatePlatformShopRequestObject
@@ -15995,6 +16410,32 @@ func (sh *strictHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProductResponseObject); ok {
 		if err := validResponse.VisitUpdateProductResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DuplicateProduct operation middleware
+func (sh *strictHandler) DuplicateProduct(w http.ResponseWriter, r *http.Request, id Id) {
+	var request DuplicateProductRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DuplicateProduct(ctx, request.(DuplicateProductRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DuplicateProduct")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DuplicateProductResponseObject); ok {
+		if err := validResponse.VisitDuplicateProductResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

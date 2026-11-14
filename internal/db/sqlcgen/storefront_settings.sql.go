@@ -28,7 +28,7 @@ func (q *Queries) EnsureStorefrontSettings(ctx context.Context, webhookID uuid.U
 }
 
 const getStorefrontSettings = `-- name: GetStorefrontSettings :one
-SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid
+SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url, license, cancellation_policy, document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid
 `
 
 func (q *Queries) GetStorefrontSettings(ctx context.Context) (StorefrontSetting, error) {
@@ -59,12 +59,18 @@ func (q *Queries) GetStorefrontSettings(ctx context.Context) (StorefrontSetting,
 		&i.OpeningHours,
 		&i.ShopeeUrl,
 		&i.TokopediaUrl,
+		&i.License,
+		&i.CancellationPolicy,
+		&i.DocumentRequirements,
+		&i.RebuildHookUrl,
+		&i.RebuildLastAt,
+		&i.RebuildLastStatus,
 	)
 	return i, err
 }
 
 const lockStorefrontSettings = `-- name: LockStorefrontSettings :one
-SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid FOR UPDATE
+SELECT tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url, license, cancellation_policy, document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status FROM storefront_settings WHERE tenant_id = current_setting('app.tenant_id')::uuid FOR UPDATE
 `
 
 // A PATCH validates the merged row under this lock, so two owners saving at
@@ -97,6 +103,12 @@ func (q *Queries) LockStorefrontSettings(ctx context.Context) (StorefrontSetting
 		&i.OpeningHours,
 		&i.ShopeeUrl,
 		&i.TokopediaUrl,
+		&i.License,
+		&i.CancellationPolicy,
+		&i.DocumentRequirements,
+		&i.RebuildHookUrl,
+		&i.RebuildLastAt,
+		&i.RebuildLastStatus,
 	)
 	return i, err
 }
@@ -187,7 +199,7 @@ UPDATE storefront_settings SET
     tokopedia_url = $21,
     updated_at = now()
 WHERE tenant_id = current_setting('app.tenant_id')::uuid
-RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url
+RETURNING tenant_id, contact_email, google_client_id, origin_postal_code, shipping_couriers, bank_transfer_enabled, bank_transfer_instructions, midtrans_enabled, midtrans_environment, midtrans_client_key, midtrans_server_key, midtrans_webhook_id, updated_at, logo_r2_key, whatsapp_number, tagline, brand_color, instagram, theme, hero_r2_key, address, opening_hours, shopee_url, tokopedia_url, license, cancellation_policy, document_requirements, rebuild_hook_url, rebuild_last_at, rebuild_last_status
 `
 
 type UpdateStorefrontSettingsParams struct {
@@ -264,6 +276,12 @@ func (q *Queries) UpdateStorefrontSettings(ctx context.Context, arg UpdateStoref
 		&i.OpeningHours,
 		&i.ShopeeUrl,
 		&i.TokopediaUrl,
+		&i.License,
+		&i.CancellationPolicy,
+		&i.DocumentRequirements,
+		&i.RebuildHookUrl,
+		&i.RebuildLastAt,
+		&i.RebuildLastStatus,
 	)
 	return i, err
 }

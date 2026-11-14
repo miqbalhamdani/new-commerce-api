@@ -57,6 +57,7 @@ func TestCatalogSchema(t *testing.T) {
 			{"archived_at", "timestamp with time zone", true},
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
+			{"package", "jsonb", true}, // 000032, BR-171
 		}},
 		{"variants", []column{
 			{"id", "uuid", false},
@@ -75,6 +76,7 @@ func TestCatalogSchema(t *testing.T) {
 			{"version", "integer", false},
 			{"created_at", "timestamp with time zone", false},
 			{"updated_at", "timestamp with time zone", false},
+			{"price_usd", "bigint", true}, // 000032, BR-171
 		}},
 		{"product_media", []column{
 			{"id", "uuid", false},
@@ -421,7 +423,7 @@ func TestVariants(t *testing.T) {
 		} {
 			var got int64
 			err := tx.QueryRow(ctx, `SELECT variant_price(ROW(gen_random_uuid(), $1, $2, NULL, NULL, '{}',
-				200, 150, `+tt.starts+`, `+tt.ends+`, 'IDR', 0, NULL, 1, now(), now())::variants)`,
+				200, 150, `+tt.starts+`, `+tt.ends+`, 'IDR', 0, NULL, 1, now(), now(), NULL)::variants)`,
 				tenantID, p2).Scan(&got)
 			if err != nil {
 				t.Fatalf("variant_price: %v", err)
